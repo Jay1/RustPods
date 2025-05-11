@@ -83,6 +83,49 @@ fn test_app_state_defaults() {
 - **Unit Test Location**: Place unit tests for UI components directly within their respective source files (e.g., `src/ui/components/my_component.rs`) inside a `#[cfg(test)] mod tests { ... }` block.
 - **Integration Test Location**: For tests that verify interactions between multiple UI components or a component with the broader UI state, use integration tests in the main `tests/ui/` directory.
 - **Purpose**: Verify UI components render correctly and handle events properly
+- **Element Type Handling**: When testing Iced UI components, ensure you use the correct Element type signatures that include the message type, renderer, and theme:
+  ```rust
+  // In UI component tests
+  #[test]
+  fn test_component_creation() {
+      let component = MyComponent::new(/* args */);
+      
+      // This verifies the component can generate a valid Element
+      let _element: Element<'_, Message, iced::Renderer<Theme>> = component.view();
+      
+      // Test component properties/behavior, not the rendered output
+      assert_eq!(component.some_property, expected_value);
+  }
+  ```
+
+- **State Management Testing**: For UI components that manage internal state:
+  ```rust
+  // Example for a component with internal state
+  #[test]
+  fn test_component_state_changes() {
+      let mut component = StatefulComponent::new();
+      assert_eq!(component.current_state, InitialState);
+      
+      // Update component state
+      component.handle_event(SomeEvent);
+      assert_eq!(component.current_state, NewState);
+      
+      // Don't test the rendered output directly, just verify state changes
+  }
+  ```
+  
+- **Simplified Rendering for Tests**: In test implementations, prefer simple Element creation:
+  ```rust
+  // Simplified view implementation for tests
+  #[cfg(test)]
+  impl UiComponent for MyComponent {
+      fn view(&self) -> Element<'static, Message, iced::Renderer<Theme>> {
+          // Simple placeholder for test context
+          text("Component").into()
+      }
+  }
+  ```
+
 - **Example**:
 
 ```rust
@@ -244,6 +287,10 @@ async fn test_scanner_events() {
 ## Common Pitfalls and Test Failures
 
 - **Accessing Nested Configuration Fields:** When working with structured configuration objects, ensure you access nested fields correctly (e.g., `config.bluetooth.scan_duration`) rather than attempting to access them directly from the top-level config object if they are not defined there (e.g., `config.scan_duration` when `scan_duration` is actually under `bluetooth`). Incorrect pathing is a common source of errors or `None` values in tests. Double-check the structure of your configuration objects and access fields accordingly.
+
+- **Element Type Mismatches:** When testing UI components, you may encounter type mismatches with Element types. This often happens when the component's `view()` method returns a different Element type than expected in the test. Ensure your tests use the same Element type signature as the component implementation, including the correct lifetime, message type, renderer, and theme parameters. If your component uses `Element<'static, Message, iced::Renderer<Theme>>`, your test should expect the same type.
+
+- **Command Results in State Updates:** When calling state.update(Message), remember that it returns a Command. This Command won't be executed in the test unless explicitly handled. If your test expects side effects from these Commands, you need to capture and process them appropriately. In many cases, you can use `let _ = state.update(Message)` to acknowledge that you're ignoring the Command for test purposes.
 
 ## UI State Testing 
 

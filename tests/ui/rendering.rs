@@ -124,17 +124,19 @@ fn test_update_and_view_integration() {
 fn test_system_tray_integration() {
     use std::sync::mpsc;
     use rustpods::ui::{Message, SystemTray};
+    use rustpods::config::AppConfig;
     
     // Skip this test in CI environments without a GUI
     if std::env::var("CI").is_ok() {
         return;
     }
     
-    // Create channel
+    // Create channel and config
     let (tx, rx) = mpsc::channel();
+    let config = AppConfig::default();
     
     // Create system tray
-    let mut tray = match SystemTray::new(tx) {
+    let mut tray = match SystemTray::new(tx, config) {
         Ok(tray) => tray,
         Err(_) => {
             // Skip test if we can't create a tray (no GUI)
@@ -146,9 +148,9 @@ fn test_system_tray_integration() {
     let result = tray.update_icon(true);
     assert!(result.is_ok());
     
-    // Test that tooltip can be updated
-    let result = tray.update_tooltip("Test tooltip");
-    assert!(result.is_ok());
+    // Commented out as this method is no longer available
+    // let result = tray.update_tooltip("Test tooltip");
+    // assert!(result.is_ok());
 }
 */
 

@@ -1,128 +1,80 @@
-# RustPods
+<p align="center">
+  <img src="assets/icons/app/logo.png" alt="RustPods Logo" width="400">
+</p>
+
+<h1 align="center">RustPods</h1>
+
+<p align="center">
+  A simple, elegant battery monitor for Apple AirPods on Windows
+</p>
+
+---
 
 Hi there! 👋 This little project came about because I wanted a simple, no-fuss way to check my AirPods battery on Windows. I found that many existing tools were either a bit complicated to set up, weren't free, or just didn't quite fit what I needed.
 
 So, I built this: an open-source application crafted with Rust 🦀, designed to monitor Apple AirPods (and hopefully other Bluetooth headphones too!) easily and reliably.
 
-## Project Overview
+## ✨ Features
 
-RustPods is designed to provide a cross-platform desktop application that:
-- Displays real-time status of connected AirPods/Bluetooth headphones
-- Monitors battery levels for AirPods devices
-- Provides system tray integration for easy access
-- Detects AirPods devices using Bluetooth Low Energy scanning
-- Offers a configurable settings interface
+- 🔋 **Real-time battery monitoring** for AirPods and case
+- 🖥️ **Sleek UI** with Catppuccin Mocha theme
+- 🔍 **Automatic device detection** with Bluetooth LE
+- 🔔 **System tray integration** for quick access
+- ⚙️ **Customizable settings** for your preferences
+- 🚀 **Lightweight and efficient** with minimal resource usage
 
-## Setup
+## 📥 Installation
 
-1. Ensure you have Rust and Cargo installed. See https://www.rust-lang.org/tools/install
-2. Clone this repository:
-   ```sh
-   git clone https://github.com/your-username/RustPods.git
-   cd RustPods
-   ```
-3. The project uses the following dependencies (already configured in `Cargo.toml`):
-   - btleplug - Bluetooth Low Energy library
-   - iced - Modern GUI library for Rust (Catppuccin Mocha theme)
-   - tokio - Async runtime
-   - thiserror - Error handling
-   - async-stream - Async stream utilities
-4. Build the project:
-   ```sh
-   cargo build
-   ```
+1. Download the latest release from the [Releases](https://github.com/yourusername/rustpods/releases) page
+2. Extract the ZIP file to any location
+3. Run `RustPods.exe` - no installation required!
 
-## Usage
+*For detailed instructions, see our [Getting Started Guide](docs/user-guide/getting-started.md).*
 
-- Run the application:
-  ```sh
-  cargo run
-  ```
-- The application will initialize the system tray icon
-- Use the system tray menu to:
-  - Start/stop Bluetooth scanning
-  - Open the main application window
-  - Access settings for customization
-  - Exit the application
+## 🚀 Quick Start
 
-## Project Structure
+1. Launch RustPods - it will appear in your system tray
+2. Make sure your AirPods are paired with Windows
+3. Open the AirPods case or take them out to make them discoverable
+4. RustPods will automatically scan and show battery levels
 
-- `src/` - Main source code directory
-  - `main.rs` - Application entry point
-  - `lib.rs` - Library exports
-  - `app_controller.rs` - Main application controller
-  - `app/` - Core application logic
-  - `bluetooth/` - Bluetooth scanning and event system
-    - `adapter.rs` - Bluetooth adapter management
-    - `events.rs` - Event broker system for Bluetooth events
-    - `scanner.rs` - BLE scanning functionality
-    - `scanner_config.rs` - Configuration for BLE scanning
-    - `battery.rs` - Battery information extraction
-    - `examples.rs` - Example usages of BLE scanning
-  - `airpods/` - AirPods-specific functionality
-    - `detector.rs` - AirPods detection from BLE advertisements
-    - `filter.rs` - Filtering functions for AirPods devices
-    - `mod.rs` - Type definitions and data parsing
-  - `config/` - Configuration and settings management
-  - `ui/` - User interface implementation
-    - `app.rs` - Main UI application
-    - `state.rs` - Application state management
-    - `message.rs` - UI message definitions
-    - `main_window.rs` - Main application window
-    - `settings_window.rs` - Settings configuration window
-    - `system_tray.rs` - System tray integration
-    - `theme.rs` - UI theming (Catppuccin Mocha)
-    - `components/` - Reusable UI components
-  - `error.rs` - Error handling utilities
+## 📖 Documentation
 
-## Event System
+Visit our [documentation](docs/index.md) for detailed guides:
 
-The project implements a flexible event system for handling Bluetooth device events:
-- `EventBroker` manages subscribers and distributes events
-- `EventFilter` allows for filtering events by type, device, or custom criteria
-- Subscribers can receive only the events they're interested in
+- [User Guide](docs/user-guide/getting-started.md)
+- [Development Guide](docs/development/assets.md)
+- [Technical Documentation](docs/development/assets.md)
 
-## AirPods Detection
+## 🔧 Building from Source
 
-RustPods can detect various AirPods models:
-- AirPods (1st and 2nd generation)
-- AirPods Pro (1st and 2nd generation)
-- AirPods 3
-- AirPods Max
+```sh
+# Clone the repository
+git clone https://github.com/yourusername/RustPods.git
+cd RustPods
 
-The detection system decodes manufacturer data from BLE advertisements to extract:
-- Device type identification
-- Battery levels for left, right, and case
-- Charging status
+# Build the project
+cargo build --release
 
-## UI Implementation
+# Run the application
+cargo run --release
+```
 
-This project uses iced for the user interface with the Catppuccin Mocha theme. Key aspects of our implementation:
+## 🤝 Contributing
 
-- **Declarative UI**: The interface is built by composing widgets in a functional, declarative style
-- **Message-based Architecture**: All UI state changes are driven by messages processed in the update function
-- **System Tray Integration**: A non-intrusive system tray icon provides access to application functions
-- **Settings Window**: A tabbed interface for configuring Bluetooth, Interface, and System settings
-- **Theming**: Consistent application of the Catppuccin Mocha theme across all components
+Contributions are welcome! Check out our [contribution guidelines](docs/development/contributing.md) to get started.
 
-Our implementation follows the patterns documented in our [icedPatterns.mdc](.cursor/rules/icedPatterns.mdc) file.
+## 🛠️ Development Status
 
-## Development Status
-
-The project has implemented:
+The project currently implements:
 - Bluetooth device scanning and discovery
 - AirPods device detection and identification
-- Event broker system for Bluetooth events
-- UI with main and settings windows
+- User interface with dark theme
 - System tray integration
 - Configuration persistence
 
-Active development continues with a focus on:
-- Improving UI functionality
-- Enhancing AirPods detection reliability
-- Adding support for more Bluetooth headphone types
-- Cross-platform testing and optimization
+Active development continues with a focus on reliability and adding support for more headphone models.
 
-## License
+## 📄 License
 
 MIT 

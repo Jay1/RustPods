@@ -6,6 +6,7 @@ pub mod config;
 pub mod app;
 pub mod error;
 pub mod app_controller;
+pub mod assets;
 
 // Re-export common items for convenience
 pub use bluetooth::{BleScanner, BleEvent, EventBroker, EventFilter};

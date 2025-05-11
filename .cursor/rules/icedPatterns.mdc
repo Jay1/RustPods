@@ -124,6 +124,82 @@ alwaysApply: false
   }
   ```
 
+## Element Type Handling and Testing
+
+- **Proper Element Type Signatures**
+  - Always specify the complete Element type with lifetime, message type, and renderer
+  - Include the theme type when using themed renderers
+  ```rust
+  // ✅ DO: Use the full Element type signature
+  fn view(&self) -> Element<'static, Message, iced::Renderer<Theme>> {
+      // Component view logic
+      text("Component").into()
+  }
+  
+  // ❌ DON'T: Use incomplete Element types
+  // fn view(&self) -> Element<Message> { ... }
+  ```
+
+- **Container Type Conversion**
+  - Be careful when chaining method calls with `.into()`
+  - For complex containers, explicitly cast to the target Element type
+  ```rust
+  // ✅ DO: Specify Element type when chaining container methods
+  container(content)
+      .width(Length::Fill)
+      .padding(10)
+      .into() as Element<'static, Message, iced::Renderer<Theme>>
+  
+  // ✅ ALTERNATIVELY: Simplify test implementations
+  // In test implementations, you can return simple text elements
+  text("Component").into()
+  ```
+
+- **Testing UI Components**
+  - In tests, use simplified view implementations that don't use complex containers
+  - Ensure your test code renders valid Element types
+  - When testing components, focus on the component's logical behavior rather than its visual appearance
+  ```rust
+  // ✅ DO: Create simplified view implementations for tests
+  #[cfg(test)]
+  impl UiComponent for TestComponent {
+      fn view(&self) -> Element<'static, Message, iced::Renderer<Theme>> {
+          // Simple placeholder for tests
+          text("Test Component").into()
+      }
+  }
+  
+  // ✅ DO: Write tests focusing on component logic, not rendering details
+  #[test]
+  fn test_component_behavior() {
+      let component = MyComponent::new(10);
+      assert_eq!(component.value, 10);
+      
+      // Verify the view can be called without errors
+      let _element = component.view();
+  }
+  ```
+
+- **Integration Test Patterns**
+  - When testing state updates that affect UI, verify the state changes but not the rendered output
+  - For event handling tests, check that the state responds correctly to events
+  ```rust
+  // ✅ DO: Verify state changes in integration tests
+  #[test]
+  fn test_start_stop_scan() {
+      let mut state = AppState::default();
+      
+      // Check that we start scanning correctly
+      assert!(!state.is_scanning);
+      let _ = state.update(Message::StartScan);
+      assert!(state.is_scanning);
+      
+      // Check that we stop scanning correctly
+      let _ = state.update(Message::StopScan);
+      assert!(!state.is_scanning);
+  }
+  ```
+
 ## State Management
 
 - **Central State Struct**

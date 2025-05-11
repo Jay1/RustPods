@@ -52,8 +52,8 @@ impl App {
         // Create scanner
         let scanner = BleScanner::new();
         
-        // Create system tray
-        let tray = SystemTray::new(ui_tx.clone())
+        // Create system tray with configuration
+        let tray = SystemTray::new(ui_tx.clone(), config.clone())
             .map_err(|_| RustPodsError::UiError)?;
         
         Ok(Self {

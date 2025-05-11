@@ -4,12 +4,15 @@ use std::time::Instant;
 use iced::{Subscription, Application, Command};
 use std::convert::TryInto;
 use iced::executor;
+use std::sync::mpsc;
 
 use crate::bluetooth::DiscoveredDevice;
 use crate::config::{AppConfig, ConfigManager, ConfigError};
 use crate::ui::Message;
 use crate::ui::components::{BluetoothSetting, UiSetting, SystemSetting};
 use crate::ui::{MainWindow, SettingsWindow, SettingsTab};
+use crate::ui::components::SystemTray;
+use crate::ui::system_tray::SystemTrayError;
 
 /// Main application state
 #[derive(Debug, Clone)]
@@ -55,6 +58,9 @@ pub struct AppState {
     
     /// Current settings error message (if any)
     pub settings_error: Option<String>,
+    
+    /// System tray component
+    pub system_tray: Option<SystemTray>,
 }
 
 impl Default for AppState {
@@ -87,6 +93,7 @@ impl Default for AppState {
             main_window,
             settings_window,
             settings_error: None,
+            system_tray: None,
         }
     }
 }
@@ -115,8 +122,23 @@ impl Application for AppState {
                 self.toggle_visibility();
             }
             Message::Exit => {
+                // Clean up resources before exit
+                #[cfg(target_os = "windows")]
+                if let Some(tray) = &mut self.system_tray {
+                    if let Err(e) = tray.cleanup() {
+                        log::error!("Failed to clean up system tray: {}", e);
+                    } else {
+                        log::info!("System tray resources cleaned up");
+                    }
+                }
+                
+                // Save settings before exit
+                if let Err(e) = self.config.save() {
+                    log::error!("Failed to save settings on exit: {}", e);
+                }
+                
                 // Exit will be handled by the AppController
-                std::process::exit(0); // Add a direct exit for when the window is closed
+                std::process::exit(0);
             }
             Message::DeviceDiscovered(device) => {
                 self.update_device(device);
@@ -176,6 +198,7 @@ impl Application for AppState {
             }
             Message::BatteryStatusUpdated(status) => {
                 // Update battery status
+                let status_clone = status.clone();
                 self.battery_status = Some(status);
                 
                 // Update main window with new battery status
@@ -191,6 +214,23 @@ impl Application for AppState {
                             now.duration_since(timestamp).as_secs()
                         })
                     ).with_animation_progress(self.animation_progress);
+                }
+                
+                // Update system tray with battery status if available
+                if let Some(tray) = &mut self.system_tray {
+                    // Update connection status in tray icon
+                    if let Err(e) = tray.update_icon(true) {
+                        log::warn!("Failed to update tray icon: {}", e);
+                    }
+                    
+                    // Update tooltip with battery information
+                    if let Err(e) = tray.update_tooltip_with_battery(
+                        status_clone.battery.left,
+                        status_clone.battery.right,
+                        status_clone.battery.case
+                    ) {
+                        log::warn!("Failed to update tray tooltip: {}", e);
+                    }
                 }
             }
             Message::AirPodsConnected(airpods) => {
@@ -341,6 +381,14 @@ impl AppState {
         self.visible = !self.visible;
     }
     
+    /// Initialize the system tray component
+    pub fn initialize_system_tray(&mut self, tx: mpsc::Sender<Message>) -> Result<(), SystemTrayError> {
+        // Create the system tray
+        let tray = SystemTray::new(tx, self.config.clone())?;
+        self.system_tray = Some(tray);
+        Ok(())
+    }
+    
     /// Update a device in the devices list
     pub fn update_device(&mut self, device: DiscoveredDevice) {
         let address = device.address.to_string();
@@ -445,6 +493,31 @@ impl AppState {
         // Update main window theme
         // (This would be implemented in a real app by applying theme settings
         // to all UI components)
+        
+        // Update system tray configuration
+        if let Some(system_tray) = &mut self.system_tray {
+            if let Err(e) = system_tray.update_config(self.config.clone()) {
+                log::error!("Failed to update system tray config: {}", e);
+            } else {
+                log::debug!("System tray configuration updated");
+            }
+            
+            // Special handling for startup registration on Windows
+            #[cfg(target_os = "windows")]
+            {
+                // Ensure startup registration matches config
+                let should_register = self.config.system.launch_at_startup;
+                let is_registered = system_tray.is_startup_registered();
+                
+                if should_register != is_registered {
+                    if let Err(e) = system_tray.set_startup_enabled(should_register) {
+                        log::error!("Failed to update startup registration: {}", e);
+                    } else {
+                        log::info!("Updated startup registration to: {}", should_register);
+                    }
+                }
+            }
+        }
         
         // Check if auto-scan setting changed
         if self.config.bluetooth.auto_scan_on_startup && !self.is_scanning && self.auto_scan {

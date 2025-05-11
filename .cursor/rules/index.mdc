@@ -39,6 +39,7 @@ Guidelines for Bluetooth LE communication and hardware interactions.
 Guidelines for UI implementation and application architecture.
 
 - [icedPatterns.mdc](mdc:.cursor/rules/icedPatterns.mdc) - UI implementation using the Iced framework
+- [theme.mdc](mdc:.cursor/rules/theme.mdc) - UI theming guidelines and Catppuccin color scheme implementation
 
 ## Important Notes
 
@@ -48,6 +49,7 @@ Guidelines for UI implementation and application architecture.
 - Maintain cross-platform compatibility where possible, with Windows as primary target
 - Keep performance impacts minimal, especially for system tray and background operations
 - Follow Rust best practices for memory management and concurrency
+- Apply consistent theming using the Catppuccin Mocha color scheme
 
 ## Contact
 For questions about these guidelines, contact project maintainers.
