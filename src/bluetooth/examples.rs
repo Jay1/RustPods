@@ -1,6 +1,5 @@
 use std::time::{Duration, Instant};
-use tokio::time::sleep;
-use btleplug::api::BDAddr;
+// use btleplug::api::BDAddr;
 
 use crate::bluetooth::{BleScanner, BleEvent, ScanConfig};
 use crate::airpods::{airpods_all_models_filter, airpods_pro_filter, airpods_nearby_filter};
@@ -106,7 +105,7 @@ pub async fn interval_scanning() -> Result<(), Box<dyn std::error::Error>> {
     
     // Receive events until scanning is completed
     println!("Starting interval-based scanning...");
-    let start_time = Instant::now();
+    let _start_time = Instant::now();
     
     while let Some(event) = events.recv().await {
         match event {
@@ -165,7 +164,7 @@ pub async fn airpods_filtering() -> Result<(), Box<dyn std::error::Error>> {
     scanner.initialize().await?;
     
     // Start scanning
-    let mut events = scanner.subscribe_all();
+    let events = scanner.subscribe_all();
     scanner.start_scanning().await?;
     
     // Set a timeout
@@ -192,7 +191,7 @@ pub async fn airpods_filtering() -> Result<(), Box<dyn std::error::Error>> {
                     // Get filtered devices
                     let all_airpods = scanner_clone.get_filtered_airpods(&airpods_all_models_filter());
                     let pro_airpods = scanner_clone.get_filtered_airpods(&airpods_pro_filter());
-                    let nearby_airpods = scanner_clone.get_filtered_airpods(&airpods_nearby_filter());
+                    let nearby_airpods = scanner_clone.get_filtered_airpods(&airpods_nearby_filter(-70));
                     
                     // Custom filter: AirPods with strong signal
                     let custom_airpods_filter = crate::airpods::AirPodsFilter::new()

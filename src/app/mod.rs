@@ -1,9 +1,11 @@
 //! Application entry point and main logic
 
 use std::sync::mpsc;
-use tokio::sync::mpsc as tokio_mpsc;
+// Remove unused tokio_mpsc import
+// use tokio::sync::mpsc as tokio_mpsc;
 
-use crate::bluetooth::{BleScanner, BleEvent, ScanConfig};
+use crate::bluetooth::{BleScanner, BleEvent};
+// Remove unused ScanConfig import
 use crate::config::AppConfig;
 use crate::ui::{Message, SystemTray};
 use crate::error::RustPodsError;
@@ -107,7 +109,7 @@ impl App {
     /// Start scanning for devices
     async fn start_scan(&mut self) -> Result<(), RustPodsError> {
         // Start scanning with the configured scan profile
-        let scan_config = self.config.to_scan_config();
+        let _scan_config = self.config.to_scan_config();
         
         // Use the existing start_scanning method and pass options if needed
         let mut events = self.scanner.start_scanning().await?;

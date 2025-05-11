@@ -1,4 +1,3 @@
-use std::time::Duration;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -12,13 +11,11 @@ use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use futures::StreamExt;
 
-use crate::error::RustPodsError;
-use crate::bluetooth::adapter::{AdapterManager, AdapterInfo};
 use crate::bluetooth::scanner_config::ScanConfig;
 use crate::bluetooth::events::{BleEvent, EventBroker, EventFilter};
 use crate::airpods::{
-    DetectedAirPods, AirPodsType, detect_airpods, create_airpods_filter,
-    AirPodsFilter, airpods_all_models_filter
+    DetectedAirPods, detect_airpods, create_airpods_filter,
+    AirPodsFilter
 };
 
 /// Custom error type for Bluetooth operations
@@ -328,14 +325,11 @@ impl BleScanner {
                                         }
                                     }
                                 },
-                                CentralEvent::DeviceDisconnected(peripheral_id) => {
-                                    // We need a lookup from PeripheralId to BDAddr since we store by BDAddr
-                                    // First, try to find the BDAddr that corresponds to this PeripheralId
-                                    // For MVP, just keep note that a device disconnected
-                                    let _ = event_tx.send(BleEvent::Error(format!("Device disconnected"))).await;
-                                    
-                                    // In a full implementation, we'd need to properly map PeripheralId to BDAddr
-                                    // For now, just log and don't remove to avoid the type mismatch
+                                CentralEvent::ManufacturerDataAdvertisement{id: _id, manufacturer_data: _} => {
+                                    // Ignore - devices are processed in DeviceDiscovered
+                                },
+                                CentralEvent::DeviceDisconnected(_peripheral_id) => {
+                                    // Handle device disconnected event
                                 },
                                 _ => {} // Ignore other events for now
                             }
@@ -464,6 +458,7 @@ impl BleScanner {
     }
     
     /// Process a discovered device, applying filters and sending events
+    #[allow(dead_code)]
     async fn process_discovered_device(
         &self,
         device: DiscoveredDevice,

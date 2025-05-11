@@ -1,8 +1,10 @@
-use std::collections::HashMap;
-use btleplug::api::BDAddr;
+// Remove unused imports
+// use std::collections::HashMap;
+// use btleplug::api::BDAddr;
 
 use crate::bluetooth::DiscoveredDevice;
-use super::{AirPodsType, detect_airpods, identify_airpods_type};
+// Remove unused detect_airpods import
+use super::{AirPodsType, identify_airpods_type};
 
 /// Apple company identifier for manufacturer data
 pub const APPLE_COMPANY_ID: u16 = 0x004C;
@@ -222,6 +224,18 @@ impl AirPodsFilter {
                 }
             }
             
+            // Apply battery info filter if configured
+            if self.require_battery_info {
+                if let Some(data) = device.manufacturer_data.get(&APPLE_COMPANY_ID) {
+                    // Use the parse_airpods_data function to check if battery information is available
+                    if super::parse_airpods_data(data).is_none() {
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
+            }
+            
             // If we passed all filters, include the device
             true
         }
@@ -239,9 +253,9 @@ pub fn airpods_pro_filter() -> AirPodsFilter {
 }
 
 /// Preset filter for stronger signal AirPods (likely to be current user's)
-pub fn airpods_nearby_filter() -> AirPodsFilter {
+pub fn airpods_nearby_filter(min_rssi: i16) -> AirPodsFilter {
     AirPodsFilter::new()
-        .with_min_rssi(-65) // Only include strong signals
+        .with_min_rssi(min_rssi) // Only include strong signals
         .with_max_devices(3) // Limit to 3 closest devices
 }
 

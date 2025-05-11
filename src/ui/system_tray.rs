@@ -8,6 +8,7 @@ pub struct SystemTray {
     /// The system tray item
     tray: TrayItem,
     /// Sender for UI messages
+    #[allow(dead_code)]
     tx: mpsc::Sender<Message>,
 }
 
@@ -60,7 +61,11 @@ impl SystemTray {
         
         // Note: tray-item 0.7 doesn't have set_tooltip
             
-        Ok(Self { tray, tx })
+        // Return the tray
+        Ok(Self {
+            tray,
+            tx,
+        })
     }
     
     /// Update the system tray icon based on connection status
@@ -89,7 +94,7 @@ mod tests {
         // This is more of a compilation test than a runtime test
         // It verifies that the type signatures are correct
         
-        let (tx, _rx) = mpsc::channel::<Message>();
+        let (_tx, _rx) = mpsc::channel::<Message>();
         
         // Just make sure the type compiles
         let tray_type = std::any::TypeId::of::<SystemTray>();

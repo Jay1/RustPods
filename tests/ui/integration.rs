@@ -88,15 +88,15 @@ fn test_state_device_flow() {
 #[test]
 fn test_visibility_toggle() {
     let mut state = AppState::default();
-    assert!(state.visible); // Default is visible for integration testing
+    assert!(!state.visible); // Default is NOT visible
     
     // Toggle visibility
     state.toggle_visibility();
-    assert!(!state.visible);
+    assert!(state.visible);
     
     // Toggle back
     state.toggle_visibility();
-    assert!(state.visible);
+    assert!(!state.visible);
 }
 
 /// Test that state handles messages correctly

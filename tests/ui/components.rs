@@ -141,17 +141,13 @@ fn create_test_airpods(
 #[test]
 fn test_app_state_toggle_visibility() {
     let mut state = AppState::default();
+    assert!(!state.visible); // Default is false
     
-    // Initially visible
-    assert!(state.visible);
-    
-    // Toggle visibility
     state.toggle_visibility();
-    assert!(!state.visible);
+    assert!(state.visible); // Now true after toggle
     
-    // Toggle back
     state.toggle_visibility();
-    assert!(state.visible);
+    assert!(!state.visible); // Now false again
 }
 
 #[test]

@@ -12,7 +12,7 @@ This document serves as the central index for all active Cursor rules within thi
 Fundamental project structure, setup, and general development guidelines.
 
 - [index.mdc](mdc:.cursor/rules/index.mdc) - Core principles and project-specific guidelines
-- [cursorRules.mdc](mdc:.cursor/rules/cursorRules.mdc) - How to add or edit Cursor rules in our project
+- [cursor_rules.mdc](mdc:.cursor/rules/cursor_rules.mdc) - How to add or edit Cursor rules in our project
 - [protectedFiles.mdc](mdc:.cursor/rules/protectedFiles.mdc) - Guidelines for handling protected files and merge conflicts
 - [icedPatterns.mdc](mdc:.cursor/rules/icedPatterns.mdc) - Guidelines for using the Iced GUI framework
 - [projectStructure.mdc](mdc:.cursor/rules/projectStructure.mdc) - Project structure and file organization guidelines
@@ -23,9 +23,9 @@ Fundamental project structure, setup, and general development guidelines.
 
 Guidelines for managing project tasks and development workflow.
 
-- [devWorkflow.mdc](mdc:.cursor/rules/devWorkflow.mdc) - Task Master development workflow and processes
+- [dev_workflow.mdc](mdc:.cursor/rules/dev_workflow.mdc) - Task Master development workflow and processes
 - [taskmaster.mdc](mdc:.cursor/rules/taskmaster.mdc) - Comprehensive reference for Task Master tools and commands
-- [selfImprove.mdc](mdc:.cursor/rules/selfImprove.mdc) - Guidelines for improving Cursor rules and documentation
+- [self_improve.mdc](mdc:.cursor/rules/self_improve.mdc) - Guidelines for improving Cursor rules and documentation
 
 ## Bluetooth & Hardware
 
@@ -38,9 +38,7 @@ Guidelines for Bluetooth LE communication and hardware interactions.
 
 Guidelines for UI implementation and application architecture.
 
-- [icedUi.mdc](mdc:.cursor/rules/icedUi.mdc) - UI implementation using the Iced framework
-- [systemTray.mdc](mdc:.cursor/rules/systemTray.mdc) - System tray integration guidelines
-- [errorHandling.mdc](mdc:.cursor/rules/errorHandling.mdc) - Error handling and recovery strategies
+- [icedPatterns.mdc](mdc:.cursor/rules/icedPatterns.mdc) - UI implementation using the Iced framework
 
 ## Important Notes
 

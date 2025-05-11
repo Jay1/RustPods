@@ -12,45 +12,180 @@ This document outlines our test-driven approach for the RustPods project, coveri
 - **Test Organization:**
   - Place unit tests in `#[cfg(test)]` modules at the end of each source file
   - Place integration tests in the `tests/` directory at the project root
-  - Group related integration test files into descriptively named subdirectories within the tests/ directory. Each .rs file within these subdirectories (or tests/ itself) is compiled as a separate crate.
+  - Group related integration test files into descriptively named subdirectories within the tests/ directory
   - Name integration test files descriptively with a focus on functionality (e.g., `scanning.rs`, `filtering.rs`)
   - Group related tests within files into descriptively named submodules
-  - Create a `mod.rs` file in each subdirectory to organize and export the test modules
-  - Share common test utilities through a root-level `common_test_helpers.rs` file
-  - Create domain-specific utilities in files like `bluetooth/common_utils.rs` for domain-specific test helpers
+  - For each test subdirectory, a `mod.rs` file can be used if you intend to group multiple test files within that subdirectory into a single, larger test crate. If mod.rs is absent, or if it does not declare other files as modules, each .rs file in the subdirectory will be compiled as an independent test crate. The tests/mod.rs at the root of the tests directory can be used to declare modules corresponding to the subdirectories if you wish to organize shared test logic or run all tests under a common test suite structure, but individual .rs files will still be discoverable as separate test crates by Cargo.
 
-- **Current Test Structure:**
+- **Implemented Structure:**
   ```
   tests/
-  ├── mod.rs                   # Top-level module organization
-  ├── common_test_helpers.rs   # Utilities shared across all integration tests
-  ├── app_config_tests.rs      # Tests for application configuration
-  ├── system_tray_tests.rs     # Tests for system tray functionality
-  ├── bluetooth/
-  │   ├── mod.rs               # Bluetooth module organization
-  │   ├── common_utils.rs      # Shared utilities for bluetooth tests
-  │   ├── adapter.rs           # Tests for Bluetooth adapter management
-  │   ├── scanning.rs          # Tests for Bluetooth scanning functionality
-  │   ├── filtering.rs         # Tests for AirPods device filtering capabilities
-  │   ├── detection.rs         # Tests for AirPods detection and parsing
-  │   ├── battery_status.rs    # Tests for AirPods battery status processing
-  │   └── config.rs            # Tests for Bluetooth scanner configuration options
-  ├── event_system/
-  │   ├── mod.rs               # Event system module organization
-  │   ├── core.rs              # Tests for the event system functionality
-  │   ├── broker.rs            # Tests for the primary event broker 
-  │   ├── simple_broker.rs     # Tests for simplified event broker scenarios
-  │   └── enhanced_broker.rs   # Tests for advanced event broker features
-  └── ui/
-      ├── mod.rs               # UI module organization
-      ├── state.rs             # Tests for UI state management
-      ├── components.rs        # Tests for UI components
-      ├── rendering.rs         # Tests for UI rendering and view functions
-      ├── device_display.rs    # Tests for device display components
-      ├── integration.rs       # Tests for UI integration scenarios
-      └── messages.rs          # Tests for UI message handling
+  ├── mod.rs                     # Main test module declaration
+  ├── common_test_helpers.rs     # Shared test utilities across all tests
+  ├── app_config_tests.rs        # App-level tests
+  ├── system_tray_tests.rs       # System tray tests
+  ├── bluetooth/                 # Bluetooth-related tests
+  │   ├── mod.rs                 # Bluetooth module declaration
+  │   ├── common_utils.rs        # Bluetooth-specific test utilities
+  │   ├── adapter.rs             # Bluetooth adapter tests
+  │   ├── battery_status.rs      # AirPods battery tests
+  │   ├── config.rs              # Scanner configuration tests
+  │   ├── detection.rs           # AirPods detection tests
+  │   ├── filtering.rs           # BLE filtering tests
+  │   └── scanning.rs            # BLE scanning tests
+  ├── event_system/              # Event system tests
+  │   ├── mod.rs                 # Event system module declaration
+  │   ├── broker.rs              # Event broker tests
+  │   ├── core.rs                # Core event system tests
+  │   ├── enhanced_broker.rs     # Advanced broker tests
+  │   └── simple_broker.rs       # Simple broker tests
+  └── ui/                        # UI component tests
+      ├── mod.rs                 # UI module declaration
+      ├── components.rs          # UI component tests
+      ├── device_display.rs      # Device display tests
+      ├── integration.rs         # UI integration tests
+      ├── messages.rs            # UI message tests
+      ├── rendering.rs           # UI rendering tests
+      └── state.rs               # UI state tests
   ```
-  This structure organizes tests by domain and functionality, making it easier to locate and manage tests as the project grows.
+
+## Testing Principles
+
+- **Independence:**
+  - Tests should be able to run independently
+  - Avoid shared mutable state between tests
+  - Use test fixtures for common setup/teardown
+
+- **Test Specific Behaviors:**
+  - Focus tests on specific behaviors rather than general functionality
+  - Name tests to reflect what they're specifically testing
+  - Follow the pattern: `test_<function/component>_<scenario>_<expected_result>`
+
+- **Mock Dependencies:**
+  - Use `mockall` for creating mock objects
+  - Inject mock dependencies in unit tests
+  - Test real integrations in integration tests
+
+## Test File Categories
+
+- **Common Helpers:**
+  - Place shared test utilities in `tests/common_test_helpers.rs`
+  - Place domain-specific helpers in each subdirectory (e.g., `bluetooth/common_utils.rs`)
+
+- **Bluetooth Tests:**
+  - Basic functionality tests for Bluetooth scanners and adapters
+  - Advanced feature tests for filtering, device detection, and status updates
+  - Configuration validation tests
+
+- **Event System Tests:**
+  - Event broker initialization and lifecycle tests
+  - Subscription and filtering tests
+  - Event distribution and handling tests
+
+- **UI Tests:**
+  - Component rendering tests
+  - State management tests
+  - User interaction tests
+  - Integration tests with backend functionality
+
+## Testing Best Practices
+
+- **Standardize Test Setup:**
+  - Use consistent patterns for test setup across similar tests
+  - Include helper functions for common operations
+  - Document when and why to use each helper function
+
+- **Test Edge Cases:**
+  - Test error conditions and recovery mechanisms
+  - Test boundary conditions in input validation
+  - Test resource limits and timeouts
+
+- **Avoid Brittle Tests:**
+  - Don't rely on timing-sensitive operations
+  - Use deterministic setup rather than random values
+  - Parameterize tests for different inputs when appropriate
+
+## Asynchronous Testing Guidelines
+
+- **Always Use Timeouts:**
+  - Wrap asynchronous operations with timeouts to prevent hanging tests
+  - Use `tokio::time::timeout` or the provided `with_timeout` helper function
+  - Example:
+    ```rust
+    // Instead of:
+    let result = async_operation().await;
+    
+    // Do this:
+    let result = match timeout(Duration::from_millis(1000), async_operation()).await {
+        Ok(res) => res,
+        Err(_) => panic!("Operation timed out"),
+    };
+    ```
+
+- **Stream Testing:**
+  - Convert channels to streams for better testability with `receiver_to_stream`
+  - Use `pin_mut!` to pin streams in place
+  - Test stream completion explicitly
+  - Avoid waiting indefinitely for stream values
+
+- **Resource Cleanup:**
+  - Ensure proper cleanup in async tests with `Drop` implementations
+  - Use `task.abort()` to cancel background tasks in tests
+  - Clean up channels and other resources even on test failure
+  - Add timeouts to shutdown operations
+
+## Test Dependency Management
+
+- **Required Crates:**
+  - Add `tokio-stream` to dev-dependencies for stream testing
+  - Use `mockall` for mocking dependencies
+  - Use `pretty_assertions` for improved assertion failure messages
+  - Use `tempfile` for file system testing
+
+- **Feature Flags:**
+  - Define test-specific feature flags for optional test functionality
+  - Example: `stream_testing` or `fs_testing`
+
+## Test Annotations
+
+- **Test Attributes:**
+  - Use `#[tokio::test]` for async tests
+  - Use `#[test]` for synchronous tests
+  - Add `#[ignore]` for long-running or resource-intensive tests
+  - Add `#[should_panic]` for tests that verify panics
+
+- **Test Categories:**
+  - Add comments to group related tests
+  - Document test purpose when not obvious from the name
+
+## Test Documentation
+
+- **Test Comments:**
+  - Clearly document test setup, assumptions, and expected outcomes
+  - Group test cases logically using comment headers
+  - Explain complex test scenarios or edge cases being tested
+
+- **Test Helper Documentation:**
+  - Document each test helper function with descriptive comments
+  - Explain parameter requirements and return values
+  - Note any side effects or required state
+
+## Edge Cases to Test
+
+- **Concurrency:**
+  - Test race conditions between event consumers
+  - Test cancellation and cleanup during operations
+  - Test graceful shutdown behavior
+
+- **Resource Limits:**
+  - Test behavior with channel buffer full
+  - Test recovery when resources are exhausted
+  - Test operation timeouts
+
+- **Error Handling:**
+  - Test error propagation across component boundaries
+  - Test recovery after errors
+  - Test logging and reporting of errors
 
 ## Unit Testing Guidelines
 
@@ -253,34 +388,6 @@ fn test_app_state_message_handling() {
   - Test message passing between components
   - Verify UI updates in response to application events
 
-## Asynchronous Testing
-
-- **Tokio Runtime:**
-  - Use `#[tokio::test]` for asynchronous tests
-  - Properly manage async tasks with JoinHandles
-  - Use timeouts for operations that could potentially hang
-  - Ensure all async resources are properly dropped
-
-```rust
-#[tokio::test]
-async fn test_async_operation() {
-    // Use timeout to prevent test from hanging
-    let result = timeout(
-        Duration::from_secs(5),
-        async_function_under_test()
-    ).await;
-    
-    assert!(result.is_ok(), "Operation timed out");
-    assert_eq!(result.unwrap(), expected_value);
-}
-```
-
-- **Stream Testing:**
-  - Use pin_mut for properly handling Stream futures
-  - Test both synchronous and asynchronous stream operations
-  - Verify stream completion behavior
-  - Test backpressure handling where appropriate
-
 ## System Tray Testing
 
 - **Headless Testing:**
@@ -479,6 +586,11 @@ fn test_requires_display_server() {
   - Group related tests with modules or helper functions
   - Document test dependencies and requirements
   - Use descriptive test names that explain the purpose of the test
+
+
+
+
+
 
 
 

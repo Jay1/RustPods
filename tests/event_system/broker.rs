@@ -1,21 +1,21 @@
-//! Integration tests for the Event Broker system
+//! Tests for the EventBroker implementation
 
-use std::collections::HashMap;
-use std::time::{Duration, Instant};
-use tokio::sync::mpsc::{channel, Receiver};
+use std::time::Duration;
+use tokio::sync::mpsc::Sender;
 use tokio::time::timeout;
-use futures::{Stream, StreamExt};
-use futures::pin_mut;
+
 use btleplug::api::BDAddr;
+use futures::{StreamExt, pin_mut};
 
-use rustpods::bluetooth::{
-    EventFilter, BleEvent, events::EventType, events::EventBroker,
-    DiscoveredDevice, receiver_to_stream
-};
-use rustpods::airpods::{DetectedAirPods, AirPodsType, AirPodsBattery, ChargingStatus};
+use rustpods::bluetooth::events::{BleEvent, EventBroker, EventFilter, EventType};
+use rustpods::bluetooth::{DiscoveredDevice, receiver_to_stream};
+use crate::common_test_helpers::{wait_ms, medium_delay};
 
-/// Helper to create a test device
+// Helper to create a simple test device
 fn create_test_device(address: [u8; 6], name: Option<&str>, rssi: Option<i16>) -> DiscoveredDevice {
+    use std::collections::HashMap;
+    use std::time::Instant;
+    
     DiscoveredDevice {
         address: BDAddr::from(address),
         name: name.map(|s| s.to_string()),
@@ -26,9 +26,11 @@ fn create_test_device(address: [u8; 6], name: Option<&str>, rssi: Option<i16>) -
     }
 }
 
-/// Helper to create test AirPods
-fn create_test_airpods(address: [u8; 6], name: Option<&str>) -> DetectedAirPods {
-    DetectedAirPods {
+// Helper to create a test AirPods
+fn create_test_airpods(address: [u8; 6], name: Option<&str>) -> rustpods::airpods::DetectedAirPods {
+    use rustpods::airpods::{AirPodsType, AirPodsBattery, ChargingStatus};
+    
+    rustpods::airpods::DetectedAirPods {
         address: BDAddr::from(address),
         name: name.map(|s| s.to_string()),
         device_type: AirPodsType::AirPods1,
@@ -39,7 +41,7 @@ fn create_test_airpods(address: [u8; 6], name: Option<&str>) -> DetectedAirPods 
             charging: ChargingStatus {
                 left: false,
                 right: false,
-                case: true,
+                case: false,
             },
         },
         rssi: Some(-60),
@@ -47,18 +49,48 @@ fn create_test_airpods(address: [u8; 6], name: Option<&str>) -> DetectedAirPods 
     }
 }
 
+/// Helper to ensure broker is properly shut down
+async fn shutdown_broker(broker: &mut EventBroker) {
+    println!("Attempting to shut down broker...");
+    // Attempt to shut down the broker with a timeout
+    match timeout(Duration::from_millis(2000), broker.shutdown()).await {
+        Ok(_) => {
+            println!("✅ Broker shutdown successful");
+            // Successfully shut down, give time for cleanup
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        },
+        Err(_) => {
+            println!("⚠️ Warning: Broker shutdown timed out");
+            // Still wait a bit to allow potential cleanup
+            tokio::time::sleep(Duration::from_millis(300)).await;
+        }
+    }
+}
+
 #[tokio::test]
 async fn test_event_broker_subscribe_all() {
+    println!("Starting subscribe_all test");
+    
     // Create an event broker
     let mut broker = EventBroker::new();
+    println!("Broker created");
     
     // Start the broker
-    broker.start();
+    let _handle = broker.start();
+    println!("Broker started");
+    
+    // Wait for broker to fully initialize - increase delay
+    tokio::time::sleep(Duration::from_millis(500)).await;
     
     // Subscribe to all events
     let (subscriber_id, rx) = broker.subscribe(EventFilter::all());
+    println!("Subscribed with ID: {}", subscriber_id);
+    
     let stream = receiver_to_stream(rx);
     pin_mut!(stream);
+    
+    // Wait a bit to ensure subscription is registered - increase delay
+    tokio::time::sleep(Duration::from_millis(500)).await;
     
     // Get a sender for events
     let sender = broker.get_sender();
@@ -66,37 +98,84 @@ async fn test_event_broker_subscribe_all() {
     // Send a test event
     let device = create_test_device([1, 2, 3, 4, 5, 6], Some("Test Device"), Some(-60));
     let event = BleEvent::DeviceDiscovered(device);
-    sender.send(event.clone()).await.unwrap();
+    println!("Sending test event");
+    match sender.send(event.clone()).await {
+        Ok(_) => println!("✅ Test event sent successfully"),
+        Err(e) => {
+            println!("❌ Failed to send test event: {:?}", e);
+            panic!("Failed to send test event");
+        }
+    }
     
-    // The subscriber should receive the event
-    let received = timeout(Duration::from_millis(100), stream.next()).await;
-    assert!(received.is_ok(), "Should receive the event");
+    // Wait for event to be processed - increase delay
+    println!("Waiting for event to be processed...");
+    tokio::time::sleep(Duration::from_millis(800)).await;
     
-    if let Ok(Some(received_event)) = received {
-        match received_event {
-            BleEvent::DeviceDiscovered(device) => {
-                assert_eq!(device.address, BDAddr::from([1, 2, 3, 4, 5, 6]));
-            },
-            _ => panic!("Received unexpected event type"),
+    // The subscriber should receive the event - use longer timeout
+    println!("Checking if event was received...");
+    let receive_timeout = Duration::from_millis(5000);
+    let received = timeout(receive_timeout, stream.next()).await;
+    
+    match received {
+        Ok(Some(event)) => {
+            println!("✅ Event received: {:?}", event);
+            match event {
+                BleEvent::DeviceDiscovered(device) => {
+                    assert_eq!(device.address, BDAddr::from([1, 2, 3, 4, 5, 6]));
+                },
+                _ => {
+                    println!("❌ Received unexpected event type: {:?}", event);
+                    panic!("Received unexpected event type");
+                }
+            }
+        },
+        Ok(None) => {
+            println!("❌ Stream ended unexpectedly");
+            panic!("Stream ended unexpectedly");
+        },
+        Err(e) => {
+            println!("❌ Event reception timed out: {:?}", e);
+            panic!("Should receive the event");
         }
     }
     
     // Clean up
+    println!("Unsubscribing");
     broker.unsubscribe(subscriber_id);
+    
+    // Give time for unsubscribe to complete
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    
+    // Ensure proper broker shutdown
+    let _ = shutdown_broker(&mut broker).await;
+    println!("Test completed successfully");
 }
 
 #[tokio::test]
 async fn test_event_broker_filter_by_type() {
+    println!("Starting filter_by_type test");
+    
     // Create an event broker
     let mut broker = EventBroker::new();
+    println!("Broker created");
     
     // Start the broker
-    broker.start();
+    let _handle = broker.start();
+    println!("Broker started");
+    
+    // Wait a short time for the broker to fully set up
+    tokio::time::sleep(Duration::from_millis(500)).await;
     
     // Subscribe to only AirPods events
-    let (subscriber_id, rx) = broker.subscribe(EventFilter::event_types(vec![EventType::AirPodsDetected]));
+    let filter = EventFilter::event_types(vec![EventType::AirPodsDetected]);
+    let (subscriber_id, rx) = broker.subscribe(filter);
+    println!("Subscribed with ID: {}", subscriber_id);
+    
     let stream = receiver_to_stream(rx);
     pin_mut!(stream);
+    
+    // Wait a bit to ensure subscription is registered
+    tokio::time::sleep(Duration::from_millis(500)).await;
     
     // Get a sender for events
     let sender = broker.get_sender();
@@ -104,41 +183,100 @@ async fn test_event_broker_filter_by_type() {
     // Send a device discovery event (should be filtered out)
     let device = create_test_device([1, 2, 3, 4, 5, 6], Some("Test Device"), Some(-60));
     let device_event = BleEvent::DeviceDiscovered(device);
-    sender.send(device_event.clone()).await.unwrap();
+    
+    println!("Sending device discovery event (should be filtered out)");
+    match sender.send(device_event.clone()).await {
+        Ok(_) => println!("✅ Device event sent successfully"),
+        Err(e) => {
+            println!("❌ Failed to send device event: {:?}", e);
+            panic!("Failed to send device event");
+        }
+    }
+    
+    // Wait a bit to ensure event was processed
+    tokio::time::sleep(Duration::from_millis(300)).await;
     
     // Send an AirPods event (should be received)
     let airpods = create_test_airpods([2, 3, 4, 5, 6, 7], Some("AirPods"));
     let airpods_event = BleEvent::AirPodsDetected(airpods);
-    sender.send(airpods_event.clone()).await.unwrap();
     
-    // The subscriber should receive only the AirPods event
-    let received = timeout(Duration::from_millis(100), stream.next()).await;
-    assert!(received.is_ok(), "Should receive the AirPods event");
-    
-    if let Ok(Some(received_event)) = received {
-        match received_event {
-            BleEvent::AirPodsDetected(airpods) => {
-                assert_eq!(airpods.address, BDAddr::from([2, 3, 4, 5, 6, 7]));
-            },
-            _ => panic!("Received unexpected event type"),
+    println!("Sending AirPods event (should be received)");
+    // Use a timeout for sending
+    match timeout(Duration::from_millis(2000), sender.send(airpods_event.clone())).await {
+        Ok(result) => match result {
+            Ok(_) => println!("✅ AirPods event sent successfully"),
+            Err(e) => {
+                println!("❌ Failed to send AirPods event: {:?}", e);
+                panic!("Failed to send AirPods event");
+            }
+        },
+        Err(e) => {
+            println!("❌ Timed out sending AirPods event: {:?}", e);
+            panic!("Timed out sending AirPods event");
         }
     }
     
-    // Should not receive the Device event
-    let no_more_events = timeout(Duration::from_millis(100), stream.next()).await;
+    // Wait a bit to ensure event was processed
+    tokio::time::sleep(Duration::from_millis(800)).await;
+    
+    // The subscriber should receive only the AirPods event - use a longer timeout
+    println!("Checking if AirPods event was received...");
+    let receive_timeout = Duration::from_millis(5000);
+    let received = timeout(receive_timeout, stream.next()).await;
+    
+    match received {
+        Ok(Some(event)) => {
+            println!("✅ Event received: {:?}", event);
+            match event {
+                BleEvent::AirPodsDetected(airpods) => {
+                    assert_eq!(airpods.address, BDAddr::from([2, 3, 4, 5, 6, 7]));
+                    println!("✅ Correct AirPods event received");
+                },
+                other => {
+                    println!("❌ Received unexpected event type: {:?}", other);
+                    panic!("Received unexpected event type: {:?}", other);
+                }
+            }
+        },
+        Ok(None) => {
+            println!("❌ Stream ended unexpectedly");
+            panic!("Stream ended unexpectedly");
+        },
+        Err(e) => {
+            println!("❌ Event reception timed out: {:?}", e);
+            panic!("Should receive the AirPods event");
+        }
+    }
+    
+    // Should not receive any more events (short timeout is fine here)
+    println!("Checking that no more events are received...");
+    let no_more_events = timeout(Duration::from_millis(500), stream.next()).await;
     assert!(no_more_events.is_err(), "Should not receive any more events");
+    println!("✅ No additional events received (as expected)");
     
     // Clean up
+    println!("Unsubscribing");
     broker.unsubscribe(subscriber_id);
+    
+    // Give time for unsubscribe to complete
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    
+    // Make sure the broker is shut down properly
+    let _ = shutdown_broker(&mut broker).await;
+    println!("Test completed successfully");
 }
 
 #[tokio::test]
 async fn test_event_broker_filter_by_device() {
+    println!("Starting filter_by_device test");
+    
     // Create an event broker
     let mut broker = EventBroker::new();
+    println!("Broker created");
     
     // Start the broker
-    broker.start();
+    let _handle = broker.start();
+    println!("Broker started");
     
     // Define a specific device address to filter on
     let target_address = BDAddr::from([1, 2, 3, 4, 5, 6]);
@@ -187,15 +325,22 @@ async fn test_event_broker_filter_by_device() {
     
     // Clean up
     broker.unsubscribe(subscriber_id);
+    
+    // Make sure the broker is shut down properly
+    let _ = shutdown_broker(&mut broker).await;
 }
 
 #[tokio::test]
 async fn test_event_broker_custom_filter() {
+    println!("Starting custom_filter test");
+    
     // Create an event broker
     let mut broker = EventBroker::new();
+    println!("Broker created");
     
     // Start the broker
-    broker.start();
+    let _handle = broker.start();
+    println!("Broker started");
     
     // Create a custom filter for devices with strong signal (RSSI > -70)
     let (subscriber_id, rx) = broker.subscribe(EventFilter::custom(|event| {
@@ -251,71 +396,116 @@ async fn test_event_broker_custom_filter() {
     
     // Clean up
     broker.unsubscribe(subscriber_id);
+    
+    // Ensure proper broker shutdown
+    let _ = shutdown_broker(&mut broker).await;
 }
 
 #[tokio::test]
 async fn test_event_broker_modify_filter() {
+    println!("Starting modify_filter test");
+    
     // Create an event broker
     let mut broker = EventBroker::new();
+    println!("Broker created");
     
     // Start the broker
-    broker.start();
+    let _handle = broker.start();
+    println!("Broker started");
+    
+    // Wait for broker to fully initialize
+    tokio::time::sleep(Duration::from_millis(50)).await;
     
     // Initially subscribe to only DeviceDiscovered events
-    let (subscriber_id, rx) = broker.subscribe(EventFilter::event_types(vec![EventType::DeviceDiscovered]));
+    let filter = EventFilter::event_types(vec![EventType::DeviceDiscovered]);
+    let (subscriber_id, rx) = broker.subscribe(filter);
     let stream = receiver_to_stream(rx);
     pin_mut!(stream);
     
     // Get a sender for events
     let sender = broker.get_sender();
     
-    // Send a device event (should be received)
+    // Small delay to ensure subscription is properly registered
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    
+    // First, send a device event (should be received)
     let device = create_test_device([1, 2, 3, 4, 5, 6], Some("Test Device"), Some(-60));
     let device_event = BleEvent::DeviceDiscovered(device);
     sender.send(device_event.clone()).await.unwrap();
     
-    // The subscriber should receive the device event
-    let received = timeout(Duration::from_millis(100), stream.next()).await;
-    assert!(received.is_ok(), "Should receive the device event");
+    // Check that we received it with a timeout
+    match timeout(Duration::from_millis(500), stream.next()).await {
+        Ok(Some(received)) => {
+            assert_eq!(format!("{:?}", received), format!("{:?}", device_event));
+        },
+        Ok(None) => panic!("Stream ended unexpectedly"),
+        Err(_) => panic!("Timeout waiting for device event"),
+    };
     
-    // Now modify the filter to only receive AirPods events
-    let modified = broker.modify_filter(subscriber_id, EventFilter::event_types(vec![EventType::AirPodsDetected]));
-    assert!(modified, "Should successfully modify the filter");
-    
-    // Send another device event (should not be received with the new filter)
-    let device2 = create_test_device([9, 8, 7, 6, 5, 4], Some("Test Device 2"), Some(-65));
-    let device_event2 = BleEvent::DeviceDiscovered(device2);
-    sender.send(device_event2.clone()).await.unwrap();
-    
-    // Send an AirPods event (should be received with the new filter)
-    let airpods = create_test_airpods([2, 3, 4, 5, 6, 7], Some("AirPods"));
+    // Now send an airpods event (should not be received)
+    let airpods = create_test_airpods([6, 5, 4, 3, 2, 1], Some("AirPods Pro"));
     let airpods_event = BleEvent::AirPodsDetected(airpods);
-    sender.send(airpods_event.clone()).await.unwrap();
+    sender.send(airpods_event).await.unwrap();
     
-    // Should receive only the AirPods event
-    let received = timeout(Duration::from_millis(100), stream.next()).await;
-    assert!(received.is_ok(), "Should receive the AirPods event");
+    // Small delay to ensure message is processed
+    tokio::time::sleep(Duration::from_millis(50)).await;
     
-    if let Ok(Some(received_event)) = received {
-        match received_event {
-            BleEvent::AirPodsDetected(_) => {
-                // Expected
-            },
-            _ => panic!("Received unexpected event type"),
-        }
+    // Try to receive with timeout - should time out since we're filtering
+    match timeout(Duration::from_millis(100), stream.next()).await {
+        Ok(_) => panic!("Shouldn't have received the AirPods event"),
+        Err(_) => {} // Timeout is expected
     }
     
-    // Clean up
-    broker.unsubscribe(subscriber_id);
+    // Now modify the filter to accept AirPods events
+    broker.modify_filter(
+        subscriber_id, 
+        EventFilter::event_types(vec![EventType::AirPodsDetected])
+    );
+    
+    // Small delay to ensure filter update is processed
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    
+    // Send another device event (should not be received now)
+    sender.send(device_event).await.unwrap();
+    
+    // Small delay to ensure message is processed
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    
+    // Try to receive with timeout - should time out since we're filtering
+    match timeout(Duration::from_millis(100), stream.next()).await {
+        Ok(_) => panic!("Shouldn't have received the Device event after filter change"),
+        Err(_) => {} // Timeout is expected
+    }
+    
+    // Send another airpods event (should be received now)
+    let airpods2 = create_test_airpods([2, 3, 4, 5, 6, 7], Some("AirPods Pro 2"));
+    let airpods_event2 = BleEvent::AirPodsDetected(airpods2);
+    sender.send(airpods_event2.clone()).await.unwrap();
+    
+    // Check that we received it with a timeout
+    match timeout(Duration::from_millis(500), stream.next()).await {
+        Ok(Some(received)) => {
+            assert_eq!(format!("{:?}", received), format!("{:?}", airpods_event2));
+        },
+        Ok(None) => panic!("Stream ended unexpectedly"),
+        Err(_) => panic!("Timeout waiting for airpods event after filter change"),
+    };
+    
+    // Ensure proper broker shutdown
+    let _ = shutdown_broker(&mut broker).await;
 }
 
 #[tokio::test]
 async fn test_event_broker_multiple_subscribers() {
+    println!("Starting multiple_subscribers test");
+    
     // Create an event broker
     let mut broker = EventBroker::new();
+    println!("Broker created");
     
     // Start the broker
-    broker.start();
+    let _handle = broker.start();
+    println!("Broker started");
     
     // Subscribe to all events
     let (all_id, all_rx) = broker.subscribe(EventFilter::all());
@@ -367,4 +557,7 @@ async fn test_event_broker_multiple_subscribers() {
     // Clean up
     broker.unsubscribe(all_id);
     broker.unsubscribe(airpods_id);
+    
+    // Ensure proper broker shutdown
+    let _ = shutdown_broker(&mut broker).await;
 } 

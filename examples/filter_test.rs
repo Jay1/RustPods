@@ -86,7 +86,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     // Get filtered devices
                     let all_airpods = scanner_clone.get_filtered_airpods(&airpods_all_models_filter());
                     let pro_airpods = scanner_clone.get_filtered_airpods(&airpods_pro_filter());
-                    let nearby_airpods = scanner_clone.get_filtered_airpods(&airpods_nearby_filter());
+                    let nearby_airpods = scanner_clone.get_filtered_airpods(&airpods_nearby_filter(-70));
                     
                     // Custom filter: AirPods 3 with strong signal
                     let custom_filter = AirPodsFilter::new()

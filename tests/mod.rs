@@ -1,11 +1,24 @@
+//! Main test module for RustPods
+//!
+//! This file organizes the integration tests into subdirectories, each
+//! with its own mod.rs file. Each subdirectory contains a set of related tests.
+//!
+//! This module structure allows for better organization of tests and shared 
+//! test utilities across related test cases.
+
 // Re-export common test helpers for use in all test modules
 pub mod common_test_helpers;
 
 // Domain-specific test modules
+// Each of these represents a subdirectory with multiple test files
 pub mod bluetooth;
 pub mod event_system;
 pub mod ui;
 
 // Standalone test modules for top-level components
 pub mod app_config_tests;
-pub mod system_tray_tests; 
+pub mod system_tray_tests;
+
+// Note: In Rust's test system, each .rs file in the tests directory 
+// is compiled as a separate test binary by default, even when there's a mod.rs file.
+// The mod.rs file imports allow us to share utilities and helpers across test binaries. 

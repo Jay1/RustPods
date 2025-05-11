@@ -1,6 +1,7 @@
 use std::collections::HashMap;
+#[cfg(test)]
 use std::time::Instant;
-use iced::{Sandbox, Command};
+use iced::{Sandbox};
 
 use crate::bluetooth::DiscoveredDevice;
 use crate::config::AppConfig;
@@ -31,7 +32,7 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         Self {
-            visible: true,
+            visible: false,
             is_scanning: false,
             auto_scan: true,
             devices: HashMap::new(),
@@ -100,10 +101,28 @@ impl AppState {
         let address = device.address.to_string();
         self.devices.insert(address, device);
     }
+
+    /// Remove a device and clear selection if it was selected
+    pub fn remove_device(&mut self, address: &str) {
+        self.devices.remove(address);
+        self.check_selected_device();
+    }
     
     /// Select a device by address
     pub fn select_device(&mut self, address: String) {
-        self.selected_device = Some(address);
+        // Only set if it exists
+        if self.devices.contains_key(&address) {
+            self.selected_device = Some(address);
+        }
+    }
+    
+    /// Check if selected device exists and clear if not
+    pub fn check_selected_device(&mut self) {
+        if let Some(selected) = &self.selected_device {
+            if !self.devices.contains_key(selected) {
+                self.selected_device = None;
+            }
+        }
     }
     
     /// Get the currently selected device
@@ -116,12 +135,11 @@ impl AppState {
 mod tests {
     use super::*;
     use btleplug::api::BDAddr;
-    use std::time::Instant;
     
     #[test]
     fn test_default_state() {
         let state = AppState::default();
-        assert!(state.visible);
+        assert!(!state.visible);
         assert!(!state.is_scanning);
         assert!(state.auto_scan);
         assert!(state.devices.is_empty());
@@ -131,13 +149,13 @@ mod tests {
     #[test]
     fn test_toggle_visibility() {
         let mut state = AppState::default();
-        assert!(state.visible);
-        
-        state.toggle_visibility();
         assert!(!state.visible);
         
         state.toggle_visibility();
         assert!(state.visible);
+        
+        state.toggle_visibility();
+        assert!(!state.visible);
     }
     
     #[test]
@@ -178,11 +196,7 @@ mod tests {
         let addr = BDAddr::from([1, 2, 3, 4, 5, 6]);
         let addr_str = addr.to_string();
         
-        // Device not in the list yet
-        state.select_device(addr_str.clone());
-        assert_eq!(state.selected_device, Some(addr_str.clone()));
-        
-        // Add the device
+        // Add the device first
         let device = DiscoveredDevice {
             address: addr,
             name: Some("Test Device".to_string()),
@@ -194,10 +208,15 @@ mod tests {
         
         state.update_device(device);
         
-        // Now select it again
-        let addr_str2 = addr.to_string(); // Create a new string to avoid using the moved value
-        state.select_device(addr_str2.clone());
-        assert_eq!(state.selected_device, Some(addr_str2));
+        // Now select it - should work because it exists
+        state.select_device(addr_str.clone());
+        assert_eq!(state.selected_device, Some(addr_str.clone()));
+        
+        // Try to select a non-existent device
+        let non_existent = "non:ex:is:te:nt:00";
+        state.select_device(non_existent.to_string());
+        // Selection should not change to the non-existent device
+        assert_eq!(state.selected_device, Some(addr_str));
     }
     
     #[test]

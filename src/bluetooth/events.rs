@@ -1,9 +1,7 @@
 //! Bluetooth event system for managing device discovery events
 
-use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
-use std::collections::HashMap;
 
 use tokio::sync::mpsc::{channel, Sender, Receiver};
 use tokio::task::JoinHandle;
@@ -11,7 +9,7 @@ use tokio::time::Duration;
 use futures::Stream;
 
 use btleplug::api::BDAddr;
-use crate::airpods::{DetectedAirPods, AirPodsType};
+use crate::airpods::DetectedAirPods;
 use crate::bluetooth::DiscoveredDevice;
 
 /// Type of BLE event
@@ -181,7 +179,7 @@ pub struct EventBroker {
     /// Next subscriber ID to use
     next_subscriber_id: SubscriberId,
     /// Active subscribers
-    subscribers: Vec<Subscriber>,
+    subscribers: Arc<Mutex<Vec<Subscriber>>>,
     /// Timeout for inactive subscribers (set to None to disable)
     inactive_timeout: Option<Duration>,
     /// Handle for the cleanup task
@@ -198,7 +196,7 @@ impl EventBroker {
         let (tx, rx) = channel(100);
         Self {
             next_subscriber_id: 1,
-            subscribers: Vec::new(),
+            subscribers: Arc::new(Mutex::new(Vec::new())),
             inactive_timeout: Some(Duration::from_secs(60)), // 1 minute default timeout
             cleanup_task: None,
             event_sender: tx,
@@ -212,20 +210,20 @@ impl EventBroker {
     }
     
     /// Start the event broker
-    pub fn start(&mut self) {
-        // Start the event distribution task
+    pub fn start(&mut self) -> JoinHandle<()> {
+        // Take the receiver
         let rx = self.take_receiver();
-        let subscribers = Arc::new(Mutex::new(self.subscribers.clone()));
+        let subscribers = self.subscribers.clone();
         
-        // Use tokio::spawn instead of just creating a task
-        tokio::spawn(async move {
+        // Use tokio::spawn and return the JoinHandle
+        let task = tokio::spawn(async move {
             let mut rx = rx;
             while let Some(event) = rx.recv().await {
                 // Distribute the event to all subscribers
-                let mut subscribers = subscribers.lock().unwrap();
+                let mut subscribers_guard = subscribers.lock().unwrap();
                 let now = Instant::now();
                 
-                for subscriber in subscribers.iter_mut() {
+                for subscriber in subscribers_guard.iter_mut() {
                     // Update last active timestamp
                     subscriber.last_active = now;
                     
@@ -240,7 +238,7 @@ impl EventBroker {
         
         // Start the cleanup task if a timeout is set
         if let Some(timeout) = self.inactive_timeout {
-            let subscribers = Arc::new(Mutex::new(self.subscribers.clone()));
+            let subscribers = self.subscribers.clone();
             
             self.cleanup_task = Some(tokio::spawn(async move {
                 loop {
@@ -248,15 +246,17 @@ impl EventBroker {
                     tokio::time::sleep(timeout / 2).await;
                     
                     // Check for inactive subscribers
-                    let mut subscribers = subscribers.lock().unwrap();
+                    let mut subscribers_guard = subscribers.lock().unwrap();
                     let now = Instant::now();
                     
-                    subscribers.retain(|subscriber| {
+                    subscribers_guard.retain(|subscriber| {
                         now.duration_since(subscriber.last_active) < timeout
                     });
                 }
             }));
         }
+        
+        task
     }
     
     /// Subscribe to events with a custom filter
@@ -265,24 +265,28 @@ impl EventBroker {
         let id = self.next_subscriber_id;
         self.next_subscriber_id += 1;
         
-        self.subscribers.push(Subscriber {
+        let new_subscriber = Subscriber {
             id,
             sender: tx,
             filter,
             last_active: Instant::now(),
-        });
+        };
+        
+        // Add to shared subscribers list
+        self.subscribers.lock().unwrap().push(new_subscriber);
         
         (id, rx)
     }
     
     /// Unsubscribe from events
     pub fn unsubscribe(&mut self, id: SubscriberId) {
-        self.subscribers.retain(|s| s.id != id);
+        self.subscribers.lock().unwrap().retain(|s| s.id != id);
     }
     
     /// Modify a subscriber's filter
     pub fn modify_filter(&mut self, id: SubscriberId, filter: EventFilter) -> bool {
-        if let Some(subscriber) = self.subscribers.iter_mut().find(|s| s.id == id) {
+        let mut subscribers_guard = self.subscribers.lock().unwrap();
+        if let Some(subscriber) = subscribers_guard.iter_mut().find(|s| s.id == id) {
             subscriber.filter = filter;
             true
         } else {
@@ -302,16 +306,8 @@ impl EventBroker {
             task.abort();
         }
         
-        // Close all subscriber channels to signal shutdown
-        // Instead of waiting for each channel to close, simply drop all senders
-        // This fixes the potential hang in the original implementation
-        for subscriber in &self.subscribers {
-            // We don't need to actively wait for closure, just drop it
-            // Removing the await here prevents potential hanging
-        }
-        
         // Clear the subscribers list
-        self.subscribers.clear();
+        self.subscribers.lock().unwrap().clear();
         
         // Create a new channel so the old one gets dropped
         let (tx, _) = channel(1);
@@ -352,8 +348,6 @@ impl Drop for EventBroker {
 
 /// A helper to create a Stream from an event receiver
 pub fn receiver_to_stream(mut rx: Receiver<BleEvent>) -> impl Stream<Item = BleEvent> {
-    use futures::stream::StreamExt;
-    
     async_stream::stream! {
         while let Some(event) = rx.recv().await {
             yield event;
@@ -435,6 +429,6 @@ mod tests {
         broker.shutdown().await;
         
         // Only check that subscribers are cleared
-        assert!(broker.subscribers.is_empty(), "Subscribers should be cleared after shutdown");
+        assert!(broker.subscribers.lock().unwrap().is_empty(), "Subscribers should be cleared after shutdown");
     }
 } 

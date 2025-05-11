@@ -1,12 +1,11 @@
 use btleplug::api::BDAddr;
-use std::collections::HashMap;
 use std::default::Default;
 
 use crate::bluetooth::DiscoveredDevice;
-use super::{AirPodsType, AirPodsBattery, parse_airpods_data, AirPodsFilter};
+use super::{AirPodsType, AirPodsBattery, parse_airpods_data};
 
 /// Constants for AirPods detection
-const APPLE_COMPANY_ID: u16 = 0x004C;
+pub const APPLE_COMPANY_ID: u16 = 0x004C;
 const AIRPODS_DATA_LENGTH: usize = 27;
 const AIRPODS_1_2_PREFIX: &[u8] = &[0x07, 0x19];
 const AIRPODS_PRO_PREFIX: &[u8] = &[0x0E, 0x19];
@@ -15,11 +14,16 @@ const AIRPODS_3_PREFIX: &[u8] = &[0x13, 0x19];
 const AIRPODS_MAX_PREFIX: &[u8] = &[0x0A, 0x19];
 
 /// Offset positions for AirPods device flags
-const FLIP_STATUS_OFFSET: usize = 11;
-const LEFT_BATTERY_OFFSET: usize = 12;
-const RIGHT_BATTERY_OFFSET: usize = 13;
-const CASE_BATTERY_OFFSET: usize = 15;
-const CHARGING_STATUS_OFFSET: usize = 14;
+#[allow(dead_code)]
+pub const FLIP_STATUS_OFFSET: usize = 11;
+#[allow(dead_code)]
+pub const LEFT_BATTERY_OFFSET: usize = 12;
+#[allow(dead_code)]
+pub const RIGHT_BATTERY_OFFSET: usize = 13;
+#[allow(dead_code)]
+pub const CASE_BATTERY_OFFSET: usize = 15;
+#[allow(dead_code)]
+pub const CHARGING_STATUS_OFFSET: usize = 14;
 
 /// Represents a detected AirPods device with all available information
 #[derive(Debug, Clone)]
@@ -179,6 +183,7 @@ where
 }
 
 /// Helper to extract and interpret AirPods battery values
+#[allow(dead_code)]
 pub fn extract_battery_level(value: u8) -> Option<u8> {
     // In AirPods protocol, 0xFF is used for unknown battery level
     if value == 0xFF {

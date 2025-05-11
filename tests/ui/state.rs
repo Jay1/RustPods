@@ -48,30 +48,38 @@ fn create_test_device(address: [u8; 6], name: &str, rssi: i16) -> DiscoveredDevi
 
 #[test]
 fn test_app_state_initialization() {
-    // Create a new AppState
-    let app_state = AppState::new();
+    let app_state = AppState::default();
     
-    // Verify initial state
-    assert!(app_state.visible);
+    // Default state should be not visible
+    assert!(!app_state.visible);
+    
+    // Default state should not be scanning
     assert!(!app_state.is_scanning);
+    
+    // Default state should have auto scan enabled
     assert!(app_state.auto_scan);
+    
+    // Should have no devices initially
     assert!(app_state.devices.is_empty());
-    assert_eq!(app_state.selected_device, None);
+    
+    // Should have no device selected
+    assert!(app_state.selected_device.is_none());
 }
 
 #[test]
 fn test_app_state_visibility() {
-    // Create a new AppState
-    let mut app_state = AppState::new();
+    let mut app_state = AppState::default();
     
-    // Test visibility toggling
-    assert!(app_state.visible);
-    
-    app_state.toggle_visibility();
+    // Default state should be not visible
     assert!(!app_state.visible);
     
+    // Toggle to visible
     app_state.toggle_visibility();
     assert!(app_state.visible);
+    
+    // Toggle back to hidden
+    app_state.toggle_visibility();
+    assert!(!app_state.visible);
 }
 
 #[test]

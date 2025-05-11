@@ -1,12 +1,12 @@
 use std::sync::Arc;
-use std::time::Duration;
 use std::fmt;
 use std::default::Default;
 
 use btleplug::api::{
-    BDAddr, Central, Manager as _, Peripheral as _, ScanFilter,
+    BDAddr, Central, Manager as _, 
+    ScanFilter,
 };
-use btleplug::platform::{Adapter, Manager, Peripheral};
+use btleplug::platform::{Adapter, Manager};
 
 use crate::bluetooth::BleError;
 
@@ -115,14 +115,14 @@ impl AdapterManager {
     }
     
     /// Get the address of an adapter (if available)
-    async fn get_adapter_address(adapter: &Adapter) -> Option<BDAddr> {
+    async fn get_adapter_address(_adapter: &Adapter) -> Option<BDAddr> {
         // This information may not be available on all platforms
         // On some systems, we can only use the adapter without knowing its address
         None
     }
     
     /// Get a name for the adapter based on platform-specific information
-    async fn get_adapter_name(adapter: &Adapter, index: usize) -> String {
+    async fn get_adapter_name(_adapter: &Adapter, index: usize) -> String {
         // Try to get a better name for the adapter if possible
         // For now, we'll just use a generic name with the index
         format!("BluetoothAdapter{}", index)
