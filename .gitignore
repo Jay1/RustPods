@@ -1,4 +1,38 @@
-target/
+# Rust specific
+/target/
 **/*.rs.bk
 Cargo.lock
+/debug/
+/release/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# IDE specific files
+.idea/
+.vscode/
+*.iml
+*.swp
 .DS_Store
+
+# Taskmaster/Cursor files
+.taskmasterconfig
+.roomodes
+.windsurfrules
+.roo/
+
+# Example code
+/iced_minimal/
+/iced_minimal/target/
+
+# Workspace specific
+scripts/
+tasks/
+
+# Dependencies
+node_modules/
+
+# Debug files
+*.log
