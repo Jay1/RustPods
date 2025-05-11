@@ -1,10 +1,10 @@
-# RustPodsMon
+# RustPods
 
 A Rust application for monitoring and controlling Apple AirPods and other Bluetooth headphones.
 
 ## Project Overview
 
-RustPodsMon is designed to provide a cross-platform desktop application that:
+RustPods is designed to provide a cross-platform desktop application that:
 - Displays real-time status of connected AirPods/Bluetooth headphones
 - Allows controlling device features like noise cancellation and transparency mode
 - Monitors battery levels and provides notifications

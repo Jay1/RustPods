@@ -1,0 +1,129 @@
+---
+description: Iced Patterns different API compared to earlier versions  Applications are built around the concepts of state, messages, view logic, and update logic
+globs: 
+alwaysApply: false
+---
+# Iced 0.13 Patterns
+
+- **Core Application Structure**
+  - Iced 0.13 has a completely different API structure compared to earlier versions
+  - Applications use the `iced::run` function instead of implementing the `Application` trait
+  - The UI is built by composing widgets in a declarative manner
+  - No `App` struct is needed as functions are passed directly to `iced::run`
+
+- **Running the UI Application**
+  ```rust
+  // ✅ DO: Use the iced::run function with title, update, and view functions
+  pub fn run() {
+      let result = iced::run(
+          "Application Title",
+          update_function,
+          view_function,
+      );
+      
+      if let Err(e) = result {
+          eprintln!("Application error: {}", e);
+      }
+  }
+  
+  // ❌ DON'T: Use the older Application trait directly
+  // Implement Application for AppState { ... }
+  ```
+
+- **Update Logic Structure**
+  ```rust
+  // ✅ DO: Use a separate update function with &mut State and Message parameters
+  fn update(state: &mut AppState, message: Message) -> iced::Task<Message> {
+      match message {
+          Message::ButtonPressed => {
+              // Update state
+          }
+      }
+      iced::Task::none()
+  }
+  
+  // ❌ DON'T: Try to use an update method on a state struct
+  // impl AppState {
+  //     fn update(&mut self, message: Message) -> Command<Message> { ... }
+  // }
+  ```
+
+- **View Logic Structure**
+  ```rust
+  // ✅ DO: Use a separate view function that returns Element<Message>
+  fn view(state: &AppState) -> Element<Message> {
+      column![
+          text("Hello, World!"),
+          button("Click me").on_press(Message::ButtonPressed)
+      ]
+      .padding(20)
+      .into()
+  }
+  
+  // ❌ DON'T: Use a view method on a state struct
+  // impl AppState {
+  //     fn view(&self) -> Element<Message> { ... }
+  // }
+  ```
+
+- **Working with Lifetimes**
+  ```rust
+  // ✅ DO: Use 'static lifetime for UI elements when using owned data
+  fn component_view(label: String) -> Element<'static, Message> {
+      column![
+          text(label)
+      ]
+      .into()
+  }
+  
+  // ❌ DON'T: Try to return borrowed data without proper lifetime annotations
+  // fn component_view(label: &str) -> Element<Message> { ... }
+  ```
+
+- **Column and Row Alignment**
+  ```rust
+  // ✅ DO: Use align_x and align_y methods 
+  column![
+      text("Centered Text")
+  ]
+  .align_x(Alignment::Center)
+  .spacing(10)
+  .padding(20)
+  
+  // ❌ DON'T: Use align_items which doesn't exist
+  // column![ ... ].align_items(Alignment::Center)
+  ```
+
+- **System Tray Integration**
+  ```rust
+  // ✅ DO: Use TrayItem with proper API methods
+  let mut tray = TrayItem::new("AppName", "app-icon")?;
+  tray.add_menu_item("Show", move || {
+      // Handle menu item click
+  })?;
+  
+  // Set tooltip
+  tray.set_tooltip("Application tooltip")?;
+  
+  // ❌ DON'T: Use non-existent methods
+  // tray.set_icon_tooltip("Tooltip");
+  ```
+
+- **Fixed Elements to Avoid Lifetime Issues**
+  ```rust
+  // ✅ DO: Create static Element functions that take owned data
+  fn battery_view(label: String, level: u8) -> Element<'static, Message> {
+      column![
+          text(label),
+          text(format!("{}%", level))
+      ]
+      .into()
+  }
+  
+  // ❌ DON'T: Store references to temporary Element values
+  // let component = ComponentView::new().view();
+  // content_with_component(component) // Error: reference to temporary value
+  ```
+
+
+
