@@ -1,4 +1,9 @@
 use crate::bluetooth::DiscoveredDevice;
+use crate::bluetooth::AirPodsBatteryStatus;
+use crate::airpods::DetectedAirPods;
+use crate::config::AppConfig;
+use crate::ui::components::{BluetoothSetting, UiSetting, SystemSetting};
+use crate::ui::settings_window::SettingsTab;
 
 /// Messages that can be sent to update the UI state
 #[derive(Debug, Clone)]
@@ -12,7 +17,7 @@ pub enum Message {
     /// New Bluetooth device discovered
     DeviceDiscovered(DiscoveredDevice),
     
-    /// Device updated (battery level, etc.)
+    /// Existing device was updated
     DeviceUpdated(DiscoveredDevice),
     
     /// Select a device to connect to
@@ -24,11 +29,81 @@ pub enum Message {
     /// Stop scanning for devices
     StopScan,
     
+    /// Scan completed
+    ScanCompleted,
+    
+    /// Scan started
+    ScanStarted,
+    
+    /// Scan stopped
+    ScanStopped,
+    
+    /// Scan progress update
+    ScanProgress(usize),
+    
     /// Toggle automatic scanning
     ToggleAutoScan(bool),
     
     /// Tick event for periodic updates
     Tick,
+    
+    /// Raw animation tick event
+    AnimationTick,
+    
+    /// Animation progress update (0.0-1.0)
+    AnimationProgress(f32),
+    
+    /// AirPods device connected
+    AirPodsConnected(DetectedAirPods),
+    
+    /// Battery status updated
+    BatteryStatusUpdated(AirPodsBatteryStatus),
+    
+    /// Battery update failed
+    BatteryUpdateFailed(String),
+    
+    /// Generic error message
+    Error(String),
+    
+    /// Status message for information (non-error)
+    Status(String),
+    
+    /// Retry connection to a device
+    RetryConnection,
+    
+    /// Update a Bluetooth setting
+    UpdateBluetoothSetting(BluetoothSetting),
+    
+    /// Update a UI setting
+    UpdateUiSetting(UiSetting),
+    
+    /// Update a system setting
+    UpdateSystemSetting(SystemSetting),
+    
+    /// Settings have been changed
+    SettingsChanged(AppConfig),
+    
+    /// Open the settings view
+    OpenSettings,
+    
+    /// Save the current settings
+    SaveSettings,
+    
+    /// Reset settings to defaults
+    ResetSettings,
+    
+    /// Close the settings view
+    CloseSettings,
+    
+    /// Select a settings tab
+    SelectSettingsTab(SettingsTab),
+}
+
+impl Message {
+    /// Create a new error message
+    pub fn error<S: Into<String>>(message: S) -> Self {
+        Self::Error(message.into())
+    }
 }
 
 #[cfg(test)]
@@ -67,10 +142,22 @@ mod tests {
         
         // Create messages with the device
         let discovered_msg = Message::DeviceDiscovered(device.clone());
-        let updated_msg = Message::DeviceUpdated(device);
         
         // Check correct message types
         assert!(matches!(discovered_msg, Message::DeviceDiscovered(_)));
-        assert!(matches!(updated_msg, Message::DeviceUpdated(_)));
+    }
+    
+    #[test]
+    fn test_error_message() {
+        // Test the error message constructor
+        let error_message = "Test error message";
+        let msg = Message::error(error_message);
+        
+        assert!(matches!(msg, Message::Error(_)));
+        if let Message::Error(text) = msg {
+            assert_eq!(text, error_message);
+        } else {
+            panic!("Expected Error message");
+        }
     }
 } 

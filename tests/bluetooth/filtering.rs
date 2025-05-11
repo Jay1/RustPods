@@ -11,7 +11,7 @@ use rustpods::airpods::{
     APPLE_COMPANY_ID, detect_airpods
 };
 use rustpods::bluetooth::DiscoveredDevice;
-use crate::bluetooth::common_utils::{create_test_device, create_airpods_manufacturer_data, AIRPODS_PRO_PREFIX};
+use crate::bluetooth::common_utils::{create_test_device, create_airpods_manufacturer_data};
 
 #[test]
 fn test_all_models_filter() {
@@ -91,7 +91,7 @@ async fn test_battery_filter() {
     
     // Create test device with valid AirPods Pro data including battery information
     // using create_airpods_manufacturer_data directly since it gives us more control
-    let mut device_with_battery = DiscoveredDevice {
+    let device_with_battery = DiscoveredDevice {
         address: BDAddr::from([0x01, 0x02, 0x03, 0x04, 0x05, 0x06]),
         name: Some("AirPods Pro with battery".to_string()),
         rssi: Some(-60),

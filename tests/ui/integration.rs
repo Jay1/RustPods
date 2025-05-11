@@ -4,7 +4,8 @@ use btleplug::api::BDAddr;
 use std::collections::HashMap;
 use std::time::Instant;
 
-use iced::Sandbox;
+
+use iced::Application;
 
 use rustpods::bluetooth::DiscoveredDevice;
 use rustpods::config::AppConfig;
@@ -106,23 +107,23 @@ fn test_message_handling() {
     let mut state = AppState::default();
     
     // Test StartScan message
-    state.update(Message::StartScan);
+    let _ = state.update(Message::StartScan);
     assert!(state.is_scanning);
     
     // Test StopScan message
-    state.update(Message::StopScan);
+    let _ = state.update(Message::StopScan);
     assert!(!state.is_scanning);
     
     // Test ToggleAutoScan message
-    state.update(Message::ToggleAutoScan(false));
+    let _ = state.update(Message::ToggleAutoScan(false));
     assert!(!state.auto_scan);
     
-    state.update(Message::ToggleAutoScan(true));
+    let _ = state.update(Message::ToggleAutoScan(true));
     assert!(state.auto_scan);
     
     // Test ToggleVisibility message
     let initial_visibility = state.visible;
-    state.update(Message::ToggleVisibility);
+    let _ = state.update(Message::ToggleVisibility);
     assert_ne!(state.visible, initial_visibility);
 }
 
@@ -133,7 +134,158 @@ fn test_default_config() {
     
     // Verify default config values
     let default_config = AppConfig::default();
-    assert_eq!(state.config.scan_duration, default_config.scan_duration);
-    assert_eq!(state.config.scan_interval, default_config.scan_interval);
-    assert_eq!(state.config.auto_scan_on_startup, default_config.auto_scan_on_startup);
+    assert_eq!(state.config.bluetooth.scan_duration, default_config.bluetooth.scan_duration);
+    assert_eq!(state.config.bluetooth.scan_interval, default_config.bluetooth.scan_interval);
+    assert_eq!(state.config.bluetooth.auto_scan_on_startup, default_config.bluetooth.auto_scan_on_startup);
+}
+
+// Create a mock device for testing
+fn create_test_device(address: &str) -> DiscoveredDevice {
+    // Parse the address using BDAddr::from or directly create from bytes
+    let addr = if address.contains(':') {
+        // Parse from string like "11:22:33:44:55:66"
+        let bytes: Vec<&str> = address.split(':').collect();
+        let mut addr_bytes = [0u8; 6];
+        for (i, byte) in bytes.iter().enumerate() {
+            addr_bytes[i] = u8::from_str_radix(byte, 16).unwrap_or(0);
+        }
+        BDAddr::from(addr_bytes)
+    } else {
+        // Just for tests, create a simple address if not in correct format
+        BDAddr::from([1, 2, 3, 4, 5, 6])
+    };
+    
+    DiscoveredDevice {
+        address: addr,
+        name: Some(format!("Test Device {}", address)),
+        rssi: Some(-70),
+        manufacturer_data: HashMap::new(),
+        is_potential_airpods: false,
+        last_seen: std::time::Instant::now(),
+    }
+}
+
+#[test]
+fn test_app_state_defaults() {
+    let state = AppState::default();
+    
+    // Check initial state
+    assert!(!state.visible);
+    assert!(!state.is_scanning);
+    assert!(state.auto_scan);
+    assert!(state.devices.is_empty());
+    assert_eq!(state.selected_device, None);
+    
+    // Verify config matches default
+    let default_config = AppConfig::default();
+    assert_eq!(state.config.bluetooth.scan_duration, default_config.bluetooth.scan_duration);
+    assert_eq!(state.config.bluetooth.scan_interval, default_config.bluetooth.scan_interval);
+    assert_eq!(state.config.bluetooth.auto_scan_on_startup, default_config.bluetooth.auto_scan_on_startup);
+}
+
+#[test]
+fn test_toggle_visibility() {
+    let mut state = AppState::default();
+    assert!(!state.visible);
+    
+    // Toggle visibility
+    let _ = state.update(Message::ToggleVisibility);
+    assert!(state.visible);
+    
+    // Toggle again
+    let _ = state.update(Message::ToggleVisibility);
+    assert!(!state.visible);
+}
+
+#[test]
+fn test_device_discovery() {
+    let mut state = AppState::default();
+    let device = create_test_device("11:22:33:44:55:66");
+    
+    // Add device
+    let _ = state.update(Message::DeviceDiscovered(device.clone()));
+    
+    // Verify device was added
+    assert_eq!(state.devices.len(), 1);
+    assert!(state.devices.contains_key(&device.address.to_string()));
+    
+    // Compare device data
+    let stored_device = state.devices.get(&device.address.to_string()).unwrap();
+    assert_eq!(stored_device.name, device.name);
+    assert_eq!(stored_device.rssi, device.rssi);
+}
+
+#[test]
+fn test_device_selection() {
+    let mut state = AppState::default();
+    let device1 = create_test_device("11:22:33:44:55:66");
+    let device2 = create_test_device("AA:BB:CC:DD:EE:FF");
+    
+    // Add devices
+    let _ = state.update(Message::DeviceDiscovered(device1.clone()));
+    let _ = state.update(Message::DeviceDiscovered(device2.clone()));
+    
+    // Select first device
+    let _ = state.update(Message::SelectDevice(device1.address.to_string()));
+    assert_eq!(state.selected_device, Some(device1.address.to_string()));
+    
+    // Select second device
+    let _ = state.update(Message::SelectDevice(device2.address.to_string()));
+    assert_eq!(state.selected_device, Some(device2.address.to_string()));
+    
+    // Try to select non-existent device
+    let _ = state.update(Message::SelectDevice("00:00:00:00:00:00".to_string()));
+    // Selection should not change
+    assert_eq!(state.selected_device, Some(device2.address.to_string()));
+}
+
+#[test]
+fn test_scanning_state() {
+    let mut state = AppState::default();
+    assert!(!state.is_scanning);
+    
+    // Start scanning
+    let _ = state.update(Message::StartScan);
+    assert!(state.is_scanning);
+    
+    // Stop scanning
+    let _ = state.update(Message::StopScan);
+    assert!(!state.is_scanning);
+    
+    // ScanStarted message
+    let _ = state.update(Message::ScanStarted);
+    assert!(state.is_scanning);
+    
+    // ScanCompleted message
+    let _ = state.update(Message::ScanCompleted);
+    assert!(!state.is_scanning);
+}
+
+#[test]
+fn test_start_stop_scan() {
+    let mut state = AppState::default();
+    
+    // Check that we start scanning correctly
+    assert!(!state.is_scanning);
+    let _ = state.update(Message::StartScan);
+    assert!(state.is_scanning);
+    
+    // Check that we stop scanning correctly
+    let _ = state.update(Message::StopScan);
+    assert!(!state.is_scanning);
+    
+    // Check auto scan toggling
+    let _ = state.update(Message::ToggleAutoScan(false));
+    assert!(!state.auto_scan);
+    
+    let _ = state.update(Message::ToggleAutoScan(true));
+    assert!(state.auto_scan);
+    
+    // First make sure we're visible
+    let _ = state.update(Message::ToggleVisibility);
+    assert!(state.visible);
+    
+    // Now check visibility toggling
+    let _ = state.update(Message::ToggleVisibility);
+    assert!(!state.visible);
 } 

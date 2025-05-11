@@ -61,6 +61,13 @@ pub struct ChargingStatus {
     pub case: bool,
 }
 
+impl ChargingStatus {
+    /// Check if any component is charging
+    pub fn is_any_charging(&self) -> bool {
+        self.left || self.right || self.case
+    }
+}
+
 impl Default for AirPodsBattery {
     fn default() -> Self {
         Self {

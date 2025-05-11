@@ -1,13 +1,22 @@
 // Common test utilities shared across all test modules
 use std::time::Duration;
-use tokio::time::timeout;
-use std::future::Future;
 use futures::Stream;
 use tokio::sync::mpsc::Receiver;
-use tokio::time;
+use tokio::time::{self, timeout};
 use futures::{StreamExt};
 use std::pin::Pin;
 use tokio_stream::wrappers::ReceiverStream;
+use std::collections::HashMap;
+use std::str::FromStr;
+use std::sync::Arc;
+
+// Add imports for RustPods types
+use rustpods::airpods::{DetectedAirPods, AirPodsType, AirPodsBattery};
+use rustpods::bluetooth::{DiscoveredDevice, BleEvent};
+use rustpods::config::{AppConfig, BluetoothConfig, UiConfig, SystemConfig};
+use rustpods::ui::state::AppState;
+use rustpods::ui::theme::Theme;
+use btleplug::api::BDAddr;
 
 /// Helper to convert tokio receiver to stream for testing
 pub fn receiver_to_stream<T>(rx: Receiver<T>) -> impl Stream<Item = T> {
@@ -101,6 +110,168 @@ pub fn receiver_to_stream_boxed<T: Send + 'static>(receiver: Receiver<T>) -> Pin
     Box::pin(ReceiverStream::new(receiver))
 }
 
+/// Receive the next event from a channel with a timeout
+pub async fn receive_with_timeout<T>(rx: &mut Receiver<T>, duration: Duration) -> Option<T> {
+    match timeout(duration, rx.recv()).await {
+        Ok(Some(event)) => Some(event),
+        _ => None,
+    }
+}
+
+/// Create a test configuration
+pub fn create_test_config() -> AppConfig {
+    AppConfig {
+        bluetooth: BluetoothConfig {
+            auto_scan_on_startup: true,
+            scan_duration: 5,
+            scan_interval: 30,
+            battery_refresh_interval: 60,
+            min_rssi: -80,
+            auto_reconnect: true,
+            reconnect_attempts: 3,
+        },
+        ui: UiConfig {
+            show_notifications: true,
+            start_minimized: false,
+            theme: "CatppuccinMocha".to_string(),
+            show_percentage_in_tray: true,
+            show_low_battery_warning: true,
+            low_battery_threshold: 20,
+        },
+        system: SystemConfig {
+            launch_at_startup: true,
+            log_level: "info".to_string(),
+            enable_telemetry: false,
+        },
+    }
+}
+
+/// Create a test AppState
+pub fn create_test_app_state() -> AppState {
+    let mut state = AppState::default();
+    state.visible = true;
+    state.config = Arc::new(create_test_config());
+    state
+}
+
+/// Create a test AirPods device
+pub fn create_test_airpods(device_type: AirPodsType, address: Option<&str>) -> DetectedAirPods {
+    let addr = match address {
+        Some(addr_str) => BDAddr::from_str(addr_str).unwrap_or_else(|_| {
+            BDAddr::from([0x11, 0x22, 0x33, 0x44, 0x55, 0x66])
+        }),
+        None => BDAddr::from([0x11, 0x22, 0x33, 0x44, 0x55, 0x66]),
+    };
+
+    let name = match device_type {
+        AirPodsType::AirPods1 => "AirPods",
+        AirPodsType::AirPods2 => "AirPods",
+        AirPodsType::AirPods3 => "AirPods (3rd generation)",
+        AirPodsType::AirPodsPro => "AirPods Pro",
+        AirPodsType::AirPodsPro2 => "AirPods Pro",
+        AirPodsType::AirPodsMax => "AirPods Max",
+        AirPodsType::Unknown => "Unknown AirPods",
+    };
+
+    DetectedAirPods {
+        address: addr,
+        name: Some(name.to_string()),
+        device_type,
+        battery: AirPodsBattery {
+            left: Some(70),
+            right: Some(70),
+            case: None,
+            charging: false,
+        },
+        rssi: Some(-60),
+        raw_data: vec![0x01, 0x02, 0x03],
+    }
+}
+
+/// Create a test discovered device with manufacturer data
+pub fn create_test_device_with_data(
+    address: &str,
+    name: Option<&str>,
+    manufacturer_id: u16,
+    data: Vec<u8>,
+) -> DiscoveredDevice {
+    let mut manufacturer_data = HashMap::new();
+    manufacturer_data.insert(manufacturer_id, data);
+
+    DiscoveredDevice {
+        address: BDAddr::from_str(address).unwrap_or_else(|_| {
+            BDAddr::from([0x11, 0x22, 0x33, 0x44, 0x55, 0x66])
+        }),
+        name: name.map(String::from),
+        rssi: Some(-60),
+        manufacturer_data,
+        services: vec![],
+    }
+}
+
+/// Create a test Apple device with manufacturer data
+pub fn create_test_apple_device(
+    address: &str,
+    name: Option<&str>,
+    data: Vec<u8>,
+) -> DiscoveredDevice {
+    create_test_device_with_data(address, name, 76, data) // 76 is Apple's manufacturer ID
+}
+
+/// Create a simple channel for BLE events
+pub fn create_ble_event_channel() -> (tokio::sync::mpsc::Sender<BleEvent>, tokio::sync::mpsc::Receiver<BleEvent>) {
+    tokio::sync::mpsc::channel(100)
+}
+
+/// Helper to get sample manufacturer data for different AirPods models
+pub fn get_sample_airpods_data(model: AirPodsType) -> Vec<u8> {
+    match model {
+        AirPodsType::AirPods1 => {
+            vec![0x01, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb0]
+        },
+        AirPodsType::AirPods2 => {
+            vec![0x02, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb0]
+        },
+        AirPodsType::AirPods3 => {
+            vec![0x05, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb0]
+        },
+        AirPodsType::AirPodsPro => {
+            vec![0x03, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb0]
+        },
+        AirPodsType::AirPodsPro2 => {
+            vec![0x06, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb0]
+        },
+        AirPodsType::AirPodsMax => {
+            vec![0x04, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb0]
+        },
+        AirPodsType::Unknown => {
+            vec![0xFF, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb0]
+        },
+    }
+}
+
+/// Create a UI test setup with a specific theme
+pub fn create_ui_test_with_theme(theme: Theme) -> AppState {
+    let mut state = AppState::default();
+    state.visible = true;
+    
+    // Create a test config
+    let mut config = create_test_config();
+    config.ui.theme = theme.to_string();
+    
+    // Apply the config
+    state.config = Arc::new(config);
+    
+    state
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -132,4 +303,21 @@ mod tests {
             42
         }).await;
     }
+    
+    #[tokio::test]
+    async fn test_create_test_config() {
+        let config = create_test_config();
+        
+        // Verify basic properties
+        assert_eq!(config.bluetooth.scan_duration, 5);
+        assert_eq!(config.ui.low_battery_threshold, 20);
+        assert_eq!(config.system.log_level, "info");
+    }
+    
+    #[tokio::test]
+    async fn test_create_test_airpods() {
+        let airpods = create_test_airpods(AirPodsType::AirPodsPro, None);
+        
+        assert_eq!(airpods.device_type, AirPodsType::AirPodsPro);
+        assert_eq!(airpods.name, Some("AirPods Pro".to_string()));
 } 

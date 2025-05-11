@@ -6,11 +6,12 @@ use std::time::Instant;
 
 use btleplug::api::BDAddr;
 use iced::Element;
-use iced::Sandbox;
+use iced::Application;
 
 use rustpods::bluetooth::DiscoveredDevice;
 use rustpods::ui::components::{BatteryDisplay, DeviceList, Header};
 use rustpods::ui::{Message, UiComponent};
+use rustpods::ui::theme::Theme;
 
 use rustpods::ui::state::AppState;
 use rustpods::airpods::{
@@ -24,15 +25,15 @@ fn test_battery_display_component() {
     let display = BatteryDisplay::new(Some(75), Some(80), Some(90));
     
     // Ensure view function can be called (this is a more of a compilation test)
-    let _element: Element<Message> = display.view();
+    let _element: Element<'_, Message, iced::Renderer<Theme>> = display.view();
     
     // Create with empty values
     let display = BatteryDisplay::empty();
-    let _element: Element<Message> = display.view();
+    let _element: Element<'_, Message, iced::Renderer<Theme>> = display.view();
     
     // Test with extreme values
     let display = BatteryDisplay::new(Some(0), Some(100), None);
-    let _element: Element<Message> = display.view();
+    let _element: Element<'_, Message, iced::Renderer<Theme>> = display.view();
 }
 
 /// Test that the device list renders correctly with different devices
@@ -62,11 +63,11 @@ fn test_device_list_component() {
     let selected = Some(BDAddr::from([6, 5, 4, 3, 2, 1]).to_string());
     
     let device_list = DeviceList::new(devices, selected);
-    let _element: Element<Message> = device_list.view();
+    let _element: Element<'_, Message, iced::Renderer<Theme>> = device_list.view();
     
     // Create an empty device list
     let device_list = DeviceList::new(vec![], None);
-    let _element: Element<Message> = device_list.view();
+    let _element: Element<'_, Message, iced::Renderer<Theme>> = device_list.view();
 }
 
 /// Test that the header renders correctly
@@ -74,11 +75,11 @@ fn test_device_list_component() {
 fn test_header_component() {
     // Test with scanning active
     let header = Header::new(true, true);
-    let _element: Element<Message> = header.view();
+    let _element: Element<'_, Message, iced::Renderer<Theme>> = header.view();
     
     // Test with scanning inactive
     let header = Header::new(false, false);
-    let _element: Element<Message> = header.view();
+    let _element: Element<'_, Message, iced::Renderer<Theme>> = header.view();
 }
 
 // The following tests are commented out because they require a GUI environment
@@ -223,18 +224,18 @@ fn test_app_state_update() {
     let mut state = AppState::default();
     
     // Test message handling
-    state.update(Message::StartScan);
+    let _ = state.update(Message::StartScan);
     assert!(state.is_scanning);
     
-    state.update(Message::StopScan);
+    let _ = state.update(Message::StopScan);
     assert!(!state.is_scanning);
     
     let device = create_test_device([1, 2, 3, 4, 5, 6], Some("Test Device"), Some(-60), false);
     let device_address = device.address.to_string();
     
-    state.update(Message::DeviceDiscovered(device));
+    let _ = state.update(Message::DeviceDiscovered(device));
     assert_eq!(state.devices.len(), 1);
     
-    state.update(Message::SelectDevice(device_address.clone()));
+    let _ = state.update(Message::SelectDevice(device_address.clone()));
     assert_eq!(state.selected_device, Some(device_address));
 } 

@@ -34,11 +34,30 @@ alwaysApply: true
   │   ├── mod.rs
   │   ├── app.rs
   │   ├── components/
+  │   │   ├── settings_view.rs
   │   │   └── ...
+  │   ├── state.rs      // Application state management
+  │   ├── message.rs    // UI message types
+  │   ├── theme.rs      // Theming and styling
+  │   ├── main_window.rs // Main application window
+  │   ├── settings_window.rs // Settings UI window
+  │   ├── system_tray.rs // System tray integration
   │   └── ...
   ├── config/           // Application configuration
-  │   └── mod.rs
+  │   ├── mod.rs
+  │   └── app_config.rs // Configuration types and persistence
   └── error.rs          // Error types
+  ```
+
+- **Tests Structure:**
+  ```
+  tests/
+  ├── app_config_tests.rs     // Configuration tests
+  ├── bluetooth_tests.rs      // Bluetooth functionality tests
+  ├── airpods_tests.rs        // AirPods detection tests
+  ├── config_tests.rs         // Other configuration tests
+  ├── settings_window_tests.rs // Settings UI window tests
+  └── ...
   ```
 
 ## Module Organization
@@ -48,42 +67,45 @@ alwaysApply: true
   - Use `mod.rs` for re-exports and module documentation
   - Separate distinct functionality into individual files
   ```rust
-  // src/bluetooth/mod.rs
-  //! BLE scanning and device management
+  // src/ui/mod.rs
+  //! UI module for the application
 
-  mod scanner;
-  mod adapter;
-  mod examples;
-  mod scanner_config;
+  // Module exports
+  mod app;
+  pub mod components;
+  pub mod state;
+  mod message;
+  mod system_tray;
+  mod main_window;
+  mod settings_window;
+  pub mod theme;
 
-  pub use scanner::{
-      BleScanner, BleError, BleEvent, DiscoveredDevice,
-  };
+  // Re-exports for easier access
+  pub use app::{run_ui, view, subscription};
+  pub use state::AppState;
+  pub use message::Message;
+  pub use system_tray::SystemTray;
+  pub use main_window::MainWindow;
+  pub use settings_window::{SettingsWindow, SettingsTab};
 
-  pub use adapter::{
-      AdapterManager, AdapterInfo,
-  };
-
-  pub use scanner_config::ScanConfig;
-
-  // Export examples for testing
-  pub use examples::{
-      discover_adapters, scan_with_adapter, interval_scanning,
-  };
+  /// Trait for UI components that can be rendered
+  pub trait UiComponent {
+      /// Convert the component to an element
+      fn view(&self) -> iced::Element<'static, Message, iced::Renderer<theme::Theme>>;
+  }
   ```
 
 - **Component Organization:**
   - Group related components in dedicated modules
   - Re-export components for easier access
   ```rust
-  // src/airpods/mod.rs
-  //! AirPods-specific functionality
+  // src/ui/components/mod.rs
+  //! UI components module
 
-  mod detector;
-
-  pub use detector::{
-      DetectedAirPods, detect_airpods, 
-      identify_airpods_type, create_airpods_filter
+  mod settings_view;
+  
+  pub use settings_view::{
+      SettingsView, BluetoothSetting, UiSetting, SystemSetting
   };
   ```
 
@@ -96,24 +118,20 @@ alwaysApply: true
   - Place implementation blocks after type definitions
   - Place tests in a `#[cfg(test)]` module at the end of the file
   ```rust
-  //! Module purpose description
+  //! Settings window implementation for RustPods
+
+  use crate::config::AppConfig;
+  use crate::ui::Message;
+  use crate::ui::theme::{self, Theme};
+  use crate::ui::UiComponent;
   
-  // Standard library imports
-  use std::collections::HashMap;
-  
-  // External crate imports
-  use btleplug::api::{BDAddr, Central, CentralEvent};
-  
-  // Internal imports
-  use crate::bluetooth::DiscoveredDevice;
-  
-  /// Public type documentation
-  pub struct BleScanner {
+  /// Represents the settings window of the application
+  #[derive(Debug)]
+  pub struct SettingsWindow {
       // Fields...
   }
   
-  // Implementation
-  impl BleScanner {
+  impl SettingsWindow {
       // Methods...
   }
   
@@ -129,18 +147,15 @@ alwaysApply: true
   - Use `Result<T, E>` for functions that can fail
   ```rust
   #[derive(Debug, thiserror::Error)]
-  pub enum BleError {
-      #[error("Failed to find a suitable Bluetooth adapter")]
-      AdapterNotFound,
+  pub enum ConfigError {
+      #[error("IO error: {0}")]
+      IoError(#[from] std::io::Error),
       
-      #[error("Bluetooth operation failed: {0}")]
-      BtlePlugError(#[from] btleplug::Error),
+      #[error("Serialization error: {0}")]
+      SerializationError(#[from] serde_json::Error),
       
-      #[error("Scanning is already in progress")]
-      ScanInProgress,
-      
-      #[error("Device communication error: {0}")]
-      DeviceError(String),
+      #[error("Validation failed for {0}: {1}")]
+      ValidationFailed(String, String),
   }
   ```
 
@@ -149,19 +164,24 @@ alwaysApply: true
 - **General Naming:**
   - Use clear, descriptive names
   - Follow Rust naming conventions
-  - Use snake_case for files (e.g., `scanner_config.rs`)
+  - Use snake_case for files (e.g., `settings_window.rs`)
   - Use snake_case for variables and functions
   - Use PascalCase for types and traits
   - Use SCREAMING_SNAKE_CASE for constants
 
 - **Module Names:**
-  - Use singular nouns for modules (e.g., `bluetooth`, not `bluetooths`)
+  - Use singular nouns for modules (e.g., `config`, not `configs`)
   - Use descriptive names that indicate functionality
 
 - **Component Names:**
   - Name UI components based on their purpose
   - Use PascalCase for component structs
-  - Examples: `BleScanner`, `AdapterManager`, `DetectedAirPods`
+  - Examples: `SettingsWindow`, `MainWindow`, `SystemTray`
+
+- **Message Types:**
+  - Use descriptive names for message variants
+  - Group related messages together
+  - Example: `Message::UpdateBluetoothSetting(BluetoothSetting)`
 
 ## Documentation
 
@@ -171,14 +191,15 @@ alwaysApply: true
   - Document all public APIs
   - Include examples where appropriate
   ```rust
-  //! Bluetooth scanning functionality
+  //! Settings window implementation for RustPods
   
-  /// Bluetooth LE scanner for discovering nearby devices
-  pub struct BleScanner {
-      /// Adapter manager for handling multiple adapters
-      adapter_manager: Option<AdapterManager>,
-      /// Whether a scan is currently in progress
-      is_scanning: bool,
+  /// Represents the settings window of the application
+  #[derive(Debug)]
+  pub struct SettingsWindow {
+      /// Application configuration
+      config: AppConfig,
+      /// Whether changes have been made
+      has_changes: bool,
   }
   ```
 
@@ -200,13 +221,11 @@ alwaysApply: true
       use super::*;
       
       #[test]
-      fn test_detect_airpods_no_manufacturer_data() {
-          // Test code
-      }
-      
-      #[test]
-      fn test_extract_battery_level() {
-          // Test code
+      fn test_mark_changed() {
+          let mut window = SettingsWindow::new(AppConfig::default());
+          assert!(!window.has_changes());
+          window.mark_changed();
+          assert!(window.has_changes());
       }
   }
   ```
@@ -217,13 +236,8 @@ alwaysApply: true
   - Group related tests in dedicated files
   ```
   tests/
-  ├── bluetooth/
-  │   ├── scanning_tests.rs
-  │   └── adapter_tests.rs
-  ├── airpods/
-  │   └── detection_tests.rs
-  └── ui/
-      └── rendering_tests.rs
+  ├── app_config_tests.rs     // Tests for AppConfig
+  ├── settings_window_tests.rs // Tests for SettingsWindow
   ```
 
 ## Cross-Platform Considerations
@@ -233,13 +247,13 @@ alwaysApply: true
   - Keep platform-specific code isolated
   ```rust
   #[cfg(target_os = "windows")]
-  fn platform_specific_function() {
-      // Windows implementation
+  fn set_autostart_enabled(enabled: bool) -> Result<(), ConfigError> {
+      // Windows-specific implementation
   }
   
   #[cfg(target_os = "macos")]
-  fn platform_specific_function() {
-      // macOS implementation
+  fn set_autostart_enabled(enabled: bool) -> Result<(), ConfigError> {
+      // macOS-specific implementation
   }
   ```
 
@@ -249,6 +263,26 @@ alwaysApply: true
   - Ensure adapter management works across supported platforms
   - Use feature flags for optional platform support
   - Test adapter discovery and scanning on all platforms
+
+## UI Component Organization
+
+- **Component Hierarchy:**
+  - Base components should be reusable and composable
+  - More complex components should build on simpler ones
+  - Separate presentation from logic where possible
+  - Use a consistent style throughout the application
+
+- **State Management:**
+  - Use `AppState` as the single source of truth
+  - Pass down configuration via props/parameters
+  - Update state through messages
+  - Keep UI components as functional as possible
+
+- **Settings Organization:**
+  - Group settings by category (Bluetooth, UI, System)
+  - Use appropriate UI controls for different setting types
+  - Implement validation for user input
+  - Provide clear feedback on validation errors
 
 ## Asynchronous Code Organization
 
@@ -265,10 +299,6 @@ alwaysApply: true
       let (tx, rx) = channel(100);
       self.event_sender = Some(tx.clone());
       
-      // Create a channel for cancellation
-      let (cancel_tx, cancel_rx) = channel::<()>(1);
-      self.cancel_sender = Some(cancel_tx);
-      
       // Start scanning task
       let scan_task = self.start_scan_task(tx, cancel_rx).await?;
       self.scan_task = Some(scan_task);
@@ -282,13 +312,58 @@ alwaysApply: true
   - Properly clean up tasks when they're no longer needed
   - Use Arc/Mutex for shared state across tasks
   ```rust
-  // Drop implementation for cleanup
-  impl Drop for BleScanner {
+  impl Drop for SomeAsyncComponent {
       fn drop(&mut self) {
           // Abort the background task if still running
-          if let Some(task) = self.scan_task.take() {
+          if let Some(task) = self.task.take() {
               task.abort();
           }
+      }
+  }
+  ```
+
+## UI Theme Organization
+
+- **Theme Module Structure:**
+  - Define color constants at the top of the module
+  - Group related colors together (base colors, text colors, accent colors)
+  - Use semantic naming for colors (e.g., TEXT, BACKGROUND, ACCENT)
+  - Implement styling for all widget components consistently
+  ```rust
+  // Example theme module structure
+  //! Theme module for application styling
+  
+  use iced::{Color, application, widget::{button, container, text_input}};
+  
+  // Color constants
+  pub const TEXT: Color = Color::from_rgb8(0xcd, 0xd6, 0xf4);
+  pub const BACKGROUND: Color = Color::from_rgb8(0x1e, 0x1e, 0x2e);
+  
+  // Theme enum
+  #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+  pub enum Theme {
+      #[default]
+      CatppuccinMocha,
+  }
+  
+  // Style implementations for various components
+  impl application::StyleSheet for Theme { /* ... */ }
+  impl button::StyleSheet for Theme { /* ... */ }
+  impl container::StyleSheet for Theme { /* ... */ }
+  impl text_input::StyleSheet for Theme { /* ... */ }
+  ```
+
+- **Theme Integration:**
+  - Set the application theme in the main Application implementation
+  - Override the theme() method to return the appropriate theme
+  - Ensure consistent styling across all components
+  ```rust
+  impl Application for AppState {
+      type Theme = crate::ui::theme::Theme;
+      // ...
+      
+      fn theme(&self) -> Self::Theme {
+          crate::ui::theme::Theme::CatppuccinMocha
       }
   }
   ```

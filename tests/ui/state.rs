@@ -4,14 +4,14 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 use btleplug::api::BDAddr;
-use iced::Sandbox;
+
+use iced::Application;
 
 use rustpods::ui::{state::AppState, Message};
-use rustpods::bluetooth::{DiscoveredDevice, BleEvent};
+use rustpods::bluetooth::DiscoveredDevice;
 use rustpods::airpods::{
     DetectedAirPods, AirPodsType, AirPodsBattery, ChargingStatus
 };
-use rustpods::config::AppConfig;
 
 /// Helper to create a test AirPods device
 fn create_test_airpods(device_type: AirPodsType, left: Option<u8>, right: Option<u8>, case: Option<u8>) -> DetectedAirPods {
@@ -50,8 +50,8 @@ fn create_test_device(address: [u8; 6], name: &str, rssi: i16) -> DiscoveredDevi
 fn test_app_state_initialization() {
     let app_state = AppState::default();
     
-    // Default state should be not visible
-    assert!(!app_state.visible);
+    // Visibility should be the opposite of start_minimized setting
+    assert_eq!(app_state.visible, !app_state.config.ui.start_minimized);
     
     // Default state should not be scanning
     assert!(!app_state.is_scanning);
@@ -70,22 +70,23 @@ fn test_app_state_initialization() {
 fn test_app_state_visibility() {
     let mut app_state = AppState::default();
     
-    // Default state should be not visible
-    assert!(!app_state.visible);
+    // Initial visibility should be opposite of start_minimized
+    let initial_visibility = !app_state.config.ui.start_minimized;
+    assert_eq!(app_state.visible, initial_visibility);
     
-    // Toggle to visible
+    // Toggle to opposite state
     app_state.toggle_visibility();
-    assert!(app_state.visible);
+    assert_eq!(app_state.visible, !initial_visibility);
     
-    // Toggle back to hidden
+    // Toggle back to initial state
     app_state.toggle_visibility();
-    assert!(!app_state.visible);
+    assert_eq!(app_state.visible, initial_visibility);
 }
 
 #[test]
 fn test_app_state_update_devices() {
     // Create a new AppState
-    let mut app_state = AppState::new();
+    let (mut app_state, _) = AppState::new(());
     
     // Create test devices
     let device1 = create_test_device([1, 2, 3, 4, 5, 6], "Device 1", -60);
@@ -116,7 +117,7 @@ fn test_app_state_update_devices() {
 #[test]
 fn test_app_state_select_device() {
     // Create a new AppState
-    let mut app_state = AppState::new();
+    let (mut app_state, _) = AppState::new(());
     
     // Create test device
     let device = create_test_device([1, 2, 3, 4, 5, 6], "Device 1", -60);
@@ -139,28 +140,28 @@ fn test_app_state_select_device() {
 #[test]
 fn test_app_state_message_handling() {
     // Create a new AppState
-    let mut app_state = AppState::new();
+    let (mut app_state, _) = AppState::new(());
     
     // Test starting scan message
-    app_state.update(Message::StartScan);
+    let _ = app_state.update(Message::StartScan);
     assert!(app_state.is_scanning);
     
     // Test stop scan message
-    app_state.update(Message::StopScan);
+    let _ = app_state.update(Message::StopScan);
     assert!(!app_state.is_scanning);
     
     // Test device update message
     let device = create_test_device([1, 2, 3, 4, 5, 6], "Test Device", -60);
-    app_state.update(Message::DeviceDiscovered(device.clone()));
+    let _ = app_state.update(Message::DeviceDiscovered(device.clone()));
     assert_eq!(app_state.devices.len(), 1);
     
     // Test device selection message
     let addr_str = device.address.to_string();
-    app_state.update(Message::SelectDevice(addr_str.clone()));
+    let _ = app_state.update(Message::SelectDevice(addr_str.clone()));
     assert_eq!(app_state.selected_device, Some(addr_str));
     
     // Test auto scan toggle message
     assert!(app_state.auto_scan); // Default is true
-    app_state.update(Message::ToggleAutoScan(false));
+    let _ = app_state.update(Message::ToggleAutoScan(false));
     assert!(!app_state.auto_scan);
 } 

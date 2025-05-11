@@ -1,604 +1,389 @@
 ---
-description: This document outlines our test-driven approach for the RustPods project, covering unit tests, inteThis document outlines our test-driven approach for the RustPods project, covering unit tests, integration tests, and UI component testing patternsgration tests, and UI component testing patterns
+description: This document outlines our test-driven approach for the RustPods project, covering unit tests. This document outlines our test-driven approach for the RustPods project, covering unit tests, integration tests, and UI component testing patternsgration tests, and UI component testing patterns
 globs: 
 alwaysApply: false
 ---
-# Testing Guidelines for RustPods
+# Testing Guidelines for the RustPods Project
 
-This document outlines our test-driven approach for the RustPods project, covering unit tests, integration tests, and UI component testing patterns.
+This document outlines our testing approach for ensuring RustPods is reliable and stable. It covers unit tests, integration tests, and UI component testing patterns.
 
-## Testing Structure
+## Core Principles
 
-- **Test Organization:**
-  - Place unit tests in `#[cfg(test)]` modules at the end of each source file
-  - Place integration tests in the `tests/` directory at the project root
-  - Group related integration test files into descriptively named subdirectories within the tests/ directory
-  - Name integration test files descriptively with a focus on functionality (e.g., `scanning.rs`, `filtering.rs`)
-  - Group related tests within files into descriptively named submodules
-  - For each test subdirectory, a `mod.rs` file can be used if you intend to group multiple test files within that subdirectory into a single, larger test crate. If mod.rs is absent, or if it does not declare other files as modules, each .rs file in the subdirectory will be compiled as an independent test crate. The tests/mod.rs at the root of the tests directory can be used to declare modules corresponding to the subdirectories if you wish to organize shared test logic or run all tests under a common test suite structure, but individual .rs files will still be discoverable as separate test crates by Cargo.
+- **Test-Driven Development**: Write tests before implementing features when possible.
+- **Comprehensive Coverage**: Aim for high test coverage, especially for core functionality.
+- **Isolation**: Unit tests should focus on testing a single component with minimal dependencies.
+- **Mock Integration**: Use mocks and test doubles when testing components that have external dependencies.
+- **Error Handling**: Test both success and failure cases, ensuring proper error handling.
+- **Test Readability**: Write clear, self-documenting tests with descriptive names.
 
-- **Implemented Structure:**
-  ```
-  tests/
-  ├── mod.rs                     # Main test module declaration
-  ├── common_test_helpers.rs     # Shared test utilities across all tests
-  ├── app_config_tests.rs        # App-level tests
-  ├── system_tray_tests.rs       # System tray tests
-  ├── bluetooth/                 # Bluetooth-related tests
-  │   ├── mod.rs                 # Bluetooth module declaration
-  │   ├── common_utils.rs        # Bluetooth-specific test utilities
-  │   ├── adapter.rs             # Bluetooth adapter tests
-  │   ├── battery_status.rs      # AirPods battery tests
-  │   ├── config.rs              # Scanner configuration tests
-  │   ├── detection.rs           # AirPods detection tests
-  │   ├── filtering.rs           # BLE filtering tests
-  │   └── scanning.rs            # BLE scanning tests
-  ├── event_system/              # Event system tests
-  │   ├── mod.rs                 # Event system module declaration
-  │   ├── broker.rs              # Event broker tests
-  │   ├── core.rs                # Core event system tests
-  │   ├── enhanced_broker.rs     # Advanced broker tests
-  │   └── simple_broker.rs       # Simple broker tests
-  └── ui/                        # UI component tests
-      ├── mod.rs                 # UI module declaration
-      ├── components.rs          # UI component tests
-      ├── device_display.rs      # Device display tests
-      ├── integration.rs         # UI integration tests
-      ├── messages.rs            # UI message tests
-      ├── rendering.rs           # UI rendering tests
-      └── state.rs               # UI state tests
-  ```
+## Directory Structure
 
-## Testing Principles
+```
+project_root/
+├── src/
+│   └── module_name/
+│       ├── mod.rs
+│       ├── implementation.rs
+│       └── tests.rs         # Unit tests for this module
+├── tests/
+│   ├── common_test_helpers.rs  # Shared test utilities
+│   ├── integration/
+│   │   └── specific_test.rs    # Integration tests
+│   ├── bluetooth/             # Bluetooth-specific tests
+│   ├── ui/                    # UI-specific tests
+│   │   ├── theme_tests.rs     # Theme-specific tests
+│   │   └── ...
+│   └── app_config_tests.rs    # Config-specific tests
+```
 
-- **Independence:**
-  - Tests should be able to run independently
-  - Avoid shared mutable state between tests
-  - Use test fixtures for common setup/teardown
+## Test Types
 
-- **Test Specific Behaviors:**
-  - Focus tests on specific behaviors rather than general functionality
-  - Name tests to reflect what they're specifically testing
-  - Follow the pattern: `test_<function/component>_<scenario>_<expected_result>`
+### Unit Tests
 
-- **Mock Dependencies:**
-  - Use `mockall` for creating mock objects
-  - Inject mock dependencies in unit tests
-  - Test real integrations in integration tests
-
-## Test File Categories
-
-- **Common Helpers:**
-  - Place shared test utilities in `tests/common_test_helpers.rs`
-  - Place domain-specific helpers in each subdirectory (e.g., `bluetooth/common_utils.rs`)
-
-- **Bluetooth Tests:**
-  - Basic functionality tests for Bluetooth scanners and adapters
-  - Advanced feature tests for filtering, device detection, and status updates
-  - Configuration validation tests
-
-- **Event System Tests:**
-  - Event broker initialization and lifecycle tests
-  - Subscription and filtering tests
-  - Event distribution and handling tests
-
-- **UI Tests:**
-  - Component rendering tests
-  - State management tests
-  - User interaction tests
-  - Integration tests with backend functionality
-
-## Testing Best Practices
-
-- **Standardize Test Setup:**
-  - Use consistent patterns for test setup across similar tests
-  - Include helper functions for common operations
-  - Document when and why to use each helper function
-
-- **Test Edge Cases:**
-  - Test error conditions and recovery mechanisms
-  - Test boundary conditions in input validation
-  - Test resource limits and timeouts
-
-- **Avoid Brittle Tests:**
-  - Don't rely on timing-sensitive operations
-  - Use deterministic setup rather than random values
-  - Parameterize tests for different inputs when appropriate
-
-## Asynchronous Testing Guidelines
-
-- **Always Use Timeouts:**
-  - Wrap asynchronous operations with timeouts to prevent hanging tests
-  - Use `tokio::time::timeout` or the provided `with_timeout` helper function
-  - Example:
-    ```rust
-    // Instead of:
-    let result = async_operation().await;
-    
-    // Do this:
-    let result = match timeout(Duration::from_millis(1000), async_operation()).await {
-        Ok(res) => res,
-        Err(_) => panic!("Operation timed out"),
-    };
-    ```
-
-- **Stream Testing:**
-  - Convert channels to streams for better testability with `receiver_to_stream`
-  - Use `pin_mut!` to pin streams in place
-  - Test stream completion explicitly
-  - Avoid waiting indefinitely for stream values
-
-- **Resource Cleanup:**
-  - Ensure proper cleanup in async tests with `Drop` implementations
-  - Use `task.abort()` to cancel background tasks in tests
-  - Clean up channels and other resources even on test failure
-  - Add timeouts to shutdown operations
-
-## Test Dependency Management
-
-- **Required Crates:**
-  - Add `tokio-stream` to dev-dependencies for stream testing
-  - Use `mockall` for mocking dependencies
-  - Use `pretty_assertions` for improved assertion failure messages
-  - Use `tempfile` for file system testing
-
-- **Feature Flags:**
-  - Define test-specific feature flags for optional test functionality
-  - Example: `stream_testing` or `fs_testing`
-
-## Test Annotations
-
-- **Test Attributes:**
-  - Use `#[tokio::test]` for async tests
-  - Use `#[test]` for synchronous tests
-  - Add `#[ignore]` for long-running or resource-intensive tests
-  - Add `#[should_panic]` for tests that verify panics
-
-- **Test Categories:**
-  - Add comments to group related tests
-  - Document test purpose when not obvious from the name
-
-## Test Documentation
-
-- **Test Comments:**
-  - Clearly document test setup, assumptions, and expected outcomes
-  - Group test cases logically using comment headers
-  - Explain complex test scenarios or edge cases being tested
-
-- **Test Helper Documentation:**
-  - Document each test helper function with descriptive comments
-  - Explain parameter requirements and return values
-  - Note any side effects or required state
-
-## Edge Cases to Test
-
-- **Concurrency:**
-  - Test race conditions between event consumers
-  - Test cancellation and cleanup during operations
-  - Test graceful shutdown behavior
-
-- **Resource Limits:**
-  - Test behavior with channel buffer full
-  - Test recovery when resources are exhausted
-  - Test operation timeouts
-
-- **Error Handling:**
-  - Test error propagation across component boundaries
-  - Test recovery after errors
-  - Test logging and reporting of errors
-
-## Unit Testing Guidelines
-
-- **Core Components Testing:**
-  - Every public function should have at least one unit test
-  - Test both expected success cases and expected failure cases
-  - Create meaningful test data that resembles real-world scenarios
-  - For complex functions, test edge cases and boundary conditions
-
-- **Helper Utilities:**
-  - Create test helper functions for frequently used test setup code
-  - Place helper functions at the top of the test module
-  - Document helper functions with clear descriptions
+- **Location**: Inside the module being tested (in a `tests` module)
+- **Purpose**: Test individual functions and methods in isolation
+- **Example**:
 
 ```rust
 #[cfg(test)]
 mod tests {
     use super::*;
     
-    // Helper to create a test device with manufacturer data
-    fn create_test_device_with_data(
-        address: [u8; 6],
-        name: Option<&str>,
-        rssi: Option<i16>,
-        manufacturer_data: HashMap<u16, Vec<u8>>
-    ) -> DiscoveredDevice {
-        DiscoveredDevice {
-            address: BDAddr::from(address),
-            name: name.map(|s| s.to_string()),
-            rssi,
-            manufacturer_data,
-            is_potential_airpods: false,
-            last_seen: Instant::now(),
-        }
+    #[test]
+    fn test_parse_airpods_data_empty() {
+        let data = vec![1, 2, 3];
+        let result = parse_airpods_data(&data);
+        assert!(result.is_none());
+    }
+}
+```
+
+### Integration Tests
+
+- **Location**: In the `tests/` directory
+- **Purpose**: Test interaction between components or across module boundaries
+- **Example**:
+
+```rust
+#[test]
+fn test_app_state_defaults() {
+    let state = AppState::default();
+    
+    // Check initial state
+    assert!(!state.visible);
+    assert!(!state.is_scanning);
+    assert!(state.auto_scan);
+    assert!(state.devices.is_empty());
+    assert_eq!(state.selected_device, None);
+}
+```
+
+### UI Component Tests
+
+- **Unit Test Location**: Place unit tests for UI components directly within their respective source files (e.g., `src/ui/components/my_component.rs`) inside a `#[cfg(test)] mod tests { ... }` block.
+- **Integration Test Location**: For tests that verify interactions between multiple UI components or a component with the broader UI state, use integration tests in the main `tests/ui/` directory.
+- **Purpose**: Verify UI components render correctly and handle events properly
+- **Example**:
+
+```rust
+// src/ui/components/device_list.rs
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_device_list_renders() {
+        // ...
+    }
+}
+```
+
+```rust
+// tests/ui/device_list_integration.rs
+#[test]
+fn test_device_list_with_state_changes() {
+    // ...
+}
+```
+
+### Theme Tests
+
+- **Unit Test Location**: Place theme unit tests in `src/ui/theme.rs` inside the `#[cfg(test)] mod tests { ... }` block.
+- **Integration Test Location**: For theme integration tests, use `tests/ui/theme_tests.rs`.
+- **Purpose**: Verify theme colors, styling implementations, and proper application to UI components.
+- **Patterns**:
+  - Test color constants match expected values
+  - Test theme implementations (StyleSheet traits)
+  - Test theme application to components
+  - Test theme changes (if theme switching is supported)
+- **Example**:
+
+```rust
+// src/ui/theme.rs
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn test_theme_color_constants() {
+        // Test that color constants match expected values
+        assert_eq!(TEXT, Color::from_rgb8(0xcd, 0xd6, 0xf4));
+        assert_eq!(BASE, Color::from_rgb8(0x1e, 0x1e, 0x2e));
     }
     
     #[test]
-    fn test_function_behavior() {
-        // Test code using helper function
-        let device = create_test_device_with_data(...);
-        assert_eq!(function_under_test(device), expected_result);
+    fn test_application_style() {
+        let theme = Theme::CatppuccinMocha;
+        let appearance = <Theme as application::StyleSheet>::appearance(&theme, &());
+        
+        assert_eq!(appearance.background_color, BASE);
+        assert_eq!(appearance.text_color, TEXT);
     }
 }
 ```
 
-## Integration Testing Guidelines
+```rust
+// tests/ui/theme_tests.rs
+#[test]
+fn test_theme_integration() {
+    // Test that the theme is properly applied to components
+    let app_state = AppState::default();
+    assert_eq!(app_state.theme(), theme::Theme::CatppuccinMocha);
+    
+    // Test that components render with the correct styling
+    // ...
+}
+```
 
-- **Cross-Module Interaction:**
-  - Test interactions between multiple components
-  - Verify that modules integrate correctly with each other
-  - Focus on testing complete user scenarios
-  - Use real implementations rather than mocks when practical
+## Mock Objects
 
-- **Bluetooth Testing:**
-  - Test adapter discovery and management
-  - Test device scanning functionality
-  - Test filtering of discovered devices
-  - Test event generation and handling
-  - Verify correct behavior with different scan configurations
+- Use the `mockall` crate for creating mock objects for testing
+- Create mocks for external dependencies like Bluetooth peripherals
+- Carefully control mock behavior for deterministic tests
 
 ```rust
-#[tokio::test]
-async fn test_scan_with_filter() {
-    let mut scanner = BleScanner::new().await.unwrap();
-    let config = ScanConfig::airpods_optimized();
-    
-    scanner.set_config(config);
-    
-    // Start scanning with a filter
-    let filter = create_airpods_filter();
-    let filtered_devices = scanner.scan_with_filter(filter).await.unwrap();
-    
-    // Verify filtered results
-    for device in filtered_devices {
-        assert!(device.is_potential_airpods);
+// Example mock for a Bluetooth device
+#[automock]
+trait BluetoothDevice {
+    fn connect(&mut self) -> Result<(), Error>;
+    fn read_battery(&self) -> Result<u8, Error>;
+}
+```
+
+## Test Utilities
+
+- `tests/common_test_helpers.rs` contains shared test utilities.
+- Use these helpers to simplify test setup and reduce duplication across multiple tests, particularly integration tests.
+- **Note on Scope**: For unit tests, prefer defining test-specific helpers within the `#[cfg(test)] mod tests {}` block of the module under test if the helpers are not broadly applicable across different modules or integration tests. This promotes better isolation. For helpers shared across multiple integration tests or complex unit test setups that genuinely benefit from shared code, `tests/common_test_helpers.rs` is appropriate.
+- Include helper functions for:
+  - Creating test device objects
+  - Setting up mock behaviors
+  - Handling async test utilities (e.g., custom functions like `receiver_with_timeout(receiver, duration)` for managing timeouts with `tokio::sync::mpsc::Receiver` or similar async primitives in tests)
+  - Creating test configuration objects
+  - Creating test UI elements with specific themes
+
+```rust
+// Example test helper
+pub fn create_test_airpods() -> DetectedAirPods {
+    DetectedAirPods {
+        address: BDAddr::from([0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC]),
+        name: Some("AirPods Pro".to_string()),
+        device_type: AirPodsType::AirPodsPro,
+        battery: AirPodsBattery::default(),
+        rssi: Some(-60),
+        raw_data: vec![0x0E, 0x19, 0x01, 0x02, 0x03],
     }
 }
-```
 
-- **Event System Testing:**
-  - Test event generation from Bluetooth operations
-  - Test event filtering with different filter types
-  - Test event subscription and delivery
-  - Test event broker management of multiple subscribers
-  - Verify concurrent handling of events
-  - Use timeout-based testing for asynchronous events
-
-```rust
-#[tokio::test]
-async fn test_event_broker_filter_by_type() {
-    // Create an event broker
-    let mut broker = EventBroker::new();
-    broker.start();
-    
-    // Subscribe to only AirPods events
-    let (subscriber_id, rx) = broker.subscribe(EventFilter::event_types(vec![EventType::AirPodsDetected]));
-    let stream = receiver_to_stream(rx);
-    pin_mut!(stream);
-    
-    // Send a device discovery event (should be filtered out)
-    let device_event = BleEvent::DeviceDiscovered(create_test_device(...));
-    broker.get_sender().send(device_event).await.unwrap();
-    
-    // Send an AirPods event (should be received)
-    let airpods_event = BleEvent::AirPodsDetected(create_test_airpods(...));
-    broker.get_sender().send(airpods_event).await.unwrap();
-    
-    // The subscriber should receive only the AirPods event
-    let received = timeout(Duration::from_millis(100), stream.next()).await;
-    assert!(received.is_ok(), "Should receive the AirPods event");
-    
-    match received.unwrap().unwrap() {
-        BleEvent::AirPodsDetected(_) => { /* Expected */ },
-        _ => panic!("Received unexpected event type"),
-    }
-    
-    // Should not receive any more events
-    let no_more_events = timeout(Duration::from_millis(100), stream.next()).await;
-    assert!(no_more_events.is_err(), "Should not receive any more events");
-}
-```
-
-- **AirPods Detection Testing:**
-  - Test identification of different AirPods models
-  - Test parsing of manufacturer data
-  - Test battery level extraction and processing
-  - Test charging status detection
-  - Verify handling of invalid or non-AirPods data
-
-```rust
-#[test]
-fn test_detect_airpods_pro() {
-    // Create manufacturer data for AirPods Pro
-    let mut manufacturer_data = HashMap::new();
-    manufacturer_data.insert(
-        APPLE_COMPANY_ID,
-        create_airpods_data(AIRPODS_PRO_PREFIX, 9, 9, 5, 0b00000110) // 90%, 90%, 50%, left+right charging
-    );
-    
-    let device = create_test_device_with_data(
-        [0x02, 0x03, 0x04, 0x05, 0x06, 0x07],
-        Some("AirPods Pro"),
-        Some(-65),
-        manufacturer_data
-    );
-    
-    // Test detection
-    let result = detect_airpods(&device);
-    assert!(result.is_some(), "Should detect AirPods Pro device");
-    
-    let airpods = result.unwrap();
-    assert_eq!(airpods.device_type, AirPodsType::AirPodsPro);
-    assert_eq!(airpods.battery.left, Some(90));
-    assert_eq!(airpods.battery.right, Some(90));
-    assert_eq!(airpods.battery.case, Some(50));
-    assert!(airpods.battery.charging.left);
-    assert!(airpods.battery.charging.right);
-    assert!(!airpods.battery.charging.case);
-}
-```
-
-## UI Testing Guidelines
-
-- **UI State Testing:**
-  - Test initialization of UI state
-  - Test state transitions from user actions
-  - Test handling of UI messages
-  - Test data flow between UI and application logic
-  - Verify correct message handling behavior
-
-```rust
-#[test]
-fn test_app_state_message_handling() {
-    let mut app_state = AppState::new();
-    
-    // Test UI message handling
-    app_state.update(Message::StartScan);
-    assert!(app_state.is_scanning);
-    
-    app_state.update(Message::StopScan);
-    assert!(!app_state.is_scanning);
-    
-    // Test data flow
-    let device = create_test_device([1, 2, 3, 4, 5, 6], "Test Device", -60);
-    app_state.update(Message::DeviceDiscovered(device.clone()));
-    assert_eq!(app_state.devices.len(), 1);
-}
-```
-
-- **UI Component Testing:**
-  - Test individual UI components in isolation
-  - Verify correct rendering with different input states
-  - Test component interactions and state updates
-  - Verify accessibility features work correctly
-  - Test UI responsiveness to different window sizes
-
-- **Iced Framework Testing:**
-  - Test component integration with Iced
-  - Verify correct subscription behavior
-  - Test message passing between components
-  - Verify UI updates in response to application events
-
-## System Tray Testing
-
-- **Headless Testing:**
-  - Focus on testing the API structure rather than actual GUI interactions
-  - Test message passing through channels
-  - Test error handling and recovery paths
-  - Use TypeId verification for type checking when actual instances can't be created
-
-```rust
-#[test]
-fn test_system_tray_api() {
-    // Create a message channel
-    let (tx, _rx) = mpsc::channel::<Message>();
-    
-    // Verify the error enum functionality
-    
-    // Instead of actually creating a tray (which would fail in CI),
-    // verify type API is correctly defined
-    let type_id = std::any::TypeId::of::<SystemTray>();
-    assert_eq!(type_id, std::any::TypeId::of::<SystemTray>());
-    
-    // Test sending messages on the channel
-    let result = tx.send(Message::ToggleVisibility);
-    assert!(result.is_ok(), "Should be able to send messages on the channel");
-}
-```
-
-- **Message Handling:**
-  - Test that UI message enum variants are correctly implemented
-  - Verify that message patterns can be properly matched
-  - Test debug formatting for messages
-  - Ensure messages can be correctly sent through channels
-
-## Configuration Testing
-
-- **AppConfig Testing:**
-  - Test default configuration values
-  - Test conversion to specialized configs (e.g., ScanConfig)
-  - Test custom configuration creation and validation
-  - Test configuration serialization and deserialization
-  - Verify platform-specific path handling
-
-```rust
-#[test]
-fn test_custom_config() {
-    // Create a fully custom config
-    let custom_config = AppConfig {
-        auto_scan_on_startup: false,
-        scan_duration: Duration::from_secs(15),
-        scan_interval: Duration::from_secs(45),
-        min_rssi: Some(-55),
-        show_notifications: false,
-        start_minimized: false,
-        theme: Theme::Dark,
-        settings_path: PathBuf::from("/custom/path/settings.json"),
+// Example theme test helper
+pub fn create_test_ui_with_theme() -> (iced::Settings<()>, AppState) {
+    let settings = iced::Settings {
+        flags: (),
+        antialiasing: true,
+        ..Default::default()
     };
     
-    // Verify all custom values
-    assert!(!custom_config.auto_scan_on_startup);
-    assert_eq!(custom_config.scan_duration, Duration::from_secs(15));
+    let state = AppState::default();
     
-    // Test converting to ScanConfig
-    let scan_config = custom_config.to_scan_config();
-    assert_eq!(scan_config.scan_duration, Duration::from_secs(15));
+    (settings, state)
 }
 ```
 
-## Platform-Specific Testing
+## Asynchronous Testing
 
-- **Conditional Compilation:**
-  - Use `#[cfg(target_os = "windows")]` for Windows-specific tests
-  - Use `#[cfg(target_family = "unix")]` for Unix-based systems (macOS, Linux)
-  - Implement platform-specific validation where needed
-  - Test platform-specific paths and configurations
+- Use `tokio::test` for async tests
+- Set appropriate timeouts to prevent test hangs
+- Use channels for simulating async events
+- Handle proper cleanup in async tests
 
 ```rust
-// Verify the path points to a valid location
-let path = &config.settings_path;
-assert!(path.to_str().is_some(), "Path should be convertible to a string");
+#[tokio::test]
+async fn test_scanner_events() {
+    let mut scanner = BleScanner::new().await.unwrap();
+    let (tx, rx) = channel::<BleEvent>(10);
+    
+    // Test async operation
+    let scan_task = tokio::spawn(async move {
+        // Test code...
+    });
+    
+    // Always clean up the task
+    scan_task.abort();
+}
+```
 
-// For Windows, expect a path that includes AppData
+## Configuration Tests
+
+- **Location**: `tests/app_config_tests.rs`
+- **Purpose**: Verify config loading, saving, and validation
+- **Patterns**:
+  - Use tempdir for file I/O tests
+  - Test data serialization/deserialization
+  - Verify default values
+  - Test validation logic works correctly
+
+## Common Pitfalls and Test Failures
+
+- **Accessing Nested Configuration Fields:** When working with structured configuration objects, ensure you access nested fields correctly (e.g., `config.bluetooth.scan_duration`) rather than attempting to access them directly from the top-level config object if they are not defined there (e.g., `config.scan_duration` when `scan_duration` is actually under `bluetooth`). Incorrect pathing is a common source of errors or `None` values in tests. Double-check the structure of your configuration objects and access fields accordingly.
+
+## UI State Testing 
+
+- **Location**: `tests/ui/state.rs`
+- **Purpose**: Verify application state updates correctly
+- **Patterns**:
+  - Test message handling
+  - Verify state transitions
+  - Test UI model business logic
+  - Ensure proper UI updates on state changes
+
+## Bluetooth Tests
+
+- **Unit Test Location**: Place unit tests within the respective source file (e.g., `src/bluetooth/your_component.rs`) inside a `#[cfg(test)] mod tests { ... }` block.
+- **Integration Test Location**: Integration tests for Bluetooth functionality go into `tests/bluetooth/`.
+- **Purpose**: Test all Bluetooth functionality
+- **Patterns**:
+  - Mock BLE devices for testing without hardware
+  - Test filtering and device detection
+  - Test connection management
+  - Test battery status extraction
+  - Test events properly propagate through the system
+
+## Test Naming Conventions
+
+- Use descriptive test names that explain what is being tested
+- Follow the pattern `test_<function>_<scenario>_<expected_outcome>`
+- Examples:
+  - `test_parse_airpods_data_empty_returns_none`
+  - `test_scan_with_invalid_adapter_fails`
+  - `test_battery_status_extraction_from_manufacturer_data`
+
+## Tips for Writing Good Tests
+
+- **Arrange-Act-Assert**: Structure tests with setup, action, and verification phases
+- **Independent Tests**: Each test should be able to run independently
+- **Descriptive Assert Messages**: Include messages in assertions to explain failures
+- **Test Edge Cases**: Include tests for empty/null values, large numbers, etc.
+- **Test Performance**: Ensure tests run quickly, especially unit tests
+- **Avoid Test Interdependence**: Don't let tests depend on each other's state
+
+## Running Tests
+
+- **Run all tests:** `cargo test`
+- **Run a single test by name:** `cargo test test_name`
+- **Run all tests in a specific file:** `cargo test --test file_name`
+  - Note: This targets a specific integration test file (e.g., `tests/file_name.rs`) or files starting with that name
+- **Run tests in a subdirectory:**
+  - For tests organized in subdirectories (e.g., `tests/ui/`), you have several options:
+  - **By module path:** `cargo test ui::` (runs all tests in modules with path starting with "ui::")
+  - **By name pattern:** `cargo test ui_` (runs all test functions whose names start with "ui_")
+  - **By individual test binary:** For each file in `tests/ui/`, run `cargo test --test ui_file_name`
+  - **UI component examples:**
+    - `cargo test component::button::` (all tests within button component module)
+    - `cargo test --test ui_components` (the specific integration test file at `tests/ui_components.rs`)
+- **Run tests with debug output:** `RUST_LOG=debug cargo test -- --nocapture`
+- **Run tests in a specific module from unit tests:**
+  - `cargo test --lib bluetooth::scanner::tests` (runs the test mod in `src/bluetooth/scanner.rs`)
+
+## Dealing with Platform-Specific Tests
+
+Use conditional compilation for platform-specific tests:
+
+```rust
 #[cfg(target_os = "windows")]
-assert!(path.to_str().unwrap().contains("config") || 
-        path.to_str().unwrap().contains("Config") ||
-        path.to_str().unwrap().contains("AppData"),
-        "Windows path should contain config or AppData directory");
-
-// For Unix systems, should include .config
-#[cfg(target_family = "unix")]
-assert!(path.to_str().unwrap().contains(".config"), 
-        "Unix path should contain .config directory");
-```
-
-- **Cross-Platform Adaptation:**
-  - Skip tests that aren't compatible with all platforms
-  - Provide alternative test paths for different platforms
-  - Document platform-specific limitations in test comments
-
-## Mock Testing Patterns
-
-- **UI Mocking Approach:**
-  - Create test doubles for UI components that can't be tested in headless environments
-  - Test message handling logic without requiring actual UI rendering
-  - Verify UI state transitions using mocked user input
-
-```rust
 #[test]
-fn test_ui_state_with_mocked_input() {
-    // Create the UI state
-    let mut state = AppState::default();
-    
-    // Simulate a user action by sending a message directly
-    state.update(Message::SelectDevice("test-device-id".to_string()));
-    
-    // Verify the state changed correctly
-    assert_eq!(state.selected_device, Some("test-device-id".to_string()));
+fn test_windows_specific_behavior() {
+    // Windows-specific test code
 }
-```
 
-- **Bluetooth Mocking:**
-  - Create mock Bluetooth adapters for testing scanning logic
-  - Generate synthetic device discovery events
-  - Simulate various connection scenarios
-  - Test error handling with artificially induced failures
-
-```rust
+#[cfg(target_os = "macos")]
 #[test]
-fn test_bluetooth_error_handling() {
-    // Create a mock adapter that always fails to scan
-    let mock_adapter = MockAdapter::new().with_scan_error(BleError::ScanInProgress);
-    
-    // Test that the error is properly handled
-    let result = process_scan_with_adapter(&mock_adapter);
-    assert!(matches!(result, Err(RustPodsError::BluetoothError(_))));
+fn test_macos_specific_behavior() {
+    // macOS-specific test code
 }
 ```
 
-## Test Data Management
+## Ensuring Test Quality
 
-- **Test Data Factories:**
-  - Create dedicated functions to generate test data
-  - Parameterize test data generation for different scenarios
-  - Document the purpose and structure of test data
+- Regularly review test coverage with `cargo tarpaulin` or similar tools
+- Add regression tests when bugs are fixed
+- Consider running tests on multiple platforms when possible
+- Clean up resources in tests, even on test failure paths
 
+## Test Organization and Structure
+
+This section clarifies where and how tests are structured in the project.
+
+### Unit Tests
+
+- **Location**: Unit tests are co-located with the code they are testing. They reside in the *same file* within the `src` directory, encapsulated within a `#[cfg(test)] mod tests { ... }` block.
+- **Purpose**: To test individual functions, methods, or small units of code in isolation.
+
+**Example Structure (`src/module/component.rs`):**
 ```rust
-/// Helper to create test AirPods manufacturer data with the correct format
-fn create_airpods_data(
-    prefix: &[u8],
-    left_battery: u8,
-    right_battery: u8,
-    case_battery: u8,
-    charging_status: u8
-) -> Vec<u8> {
-    // The data structure must exactly match what's expected in parse_airpods_data
-    let mut data = Vec::with_capacity(27);
-    
-    // AirPods model prefix (first two bytes)
-    data.push(prefix[0]);
-    data.push(prefix[1]);
-    
-    // Add 10 bytes of dummy data
-    data.extend_from_slice(&[0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A]);
-    
-    // Add battery and status data
-    data.push(left_battery);
-    data.push(right_battery);
-    data.push(charging_status);
-    data.push(case_battery);
-    
-    // Add padding
-    data.extend_from_slice(&[0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
-    
-    data
+// src/module/component.rs
+
+pub fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*; // Make items from outer module available
+
+    #[test]
+    fn test_add_positive_numbers() {
+        assert_eq!(add(2, 3), 5);
+    }
+
+    #[test]
+    fn test_add_negative_numbers() {
+        assert_eq!(add(-2, -3), -5);
+    }
 }
 ```
 
-## Continuous Integration Considerations
+### Integration Tests
 
-- **CI Environment Testing:**
-  - Ensure tests can run in headless environments (GitHub Actions, etc.)
-  - Skip UI/system tray tests that require a display server
-  - Use conditional compilation to adapt to CI environments
-  - Add CI-specific test flags where needed
+- **Location**: Integration tests reside in separate files within the `tests/` directory at the root of the project. You can create subdirectories within `tests/` to organize them further (e.g., `tests/bluetooth/`, `tests/ui/`).
+- **Purpose**: To test how different parts of your crate work together, or to test the public API of your library. Each file in the `tests` directory is compiled as a separate crate.
+- **Structure**: Test functions in these files are directly annotated with `#[test]` (for synchronous tests) or `#[tokio::test]` (for asynchronous tests). They do *not* need to be wrapped in a `mod tests { ... }` block.
 
+**Example Structure (`tests/my_integration_test.rs`):**
 ```rust
-// Skip tests that require a display server in CI environments
+// tests/my_integration_test.rs
+
+use rustpods; // Assuming 'rustpods' is the name of your crate
+
 #[test]
-#[cfg_attr(feature = "ci", ignore)]
-fn test_requires_display_server() {
-    // Test that would fail in a headless CI environment
+fn test_public_api_functionality() {
+    // Call some public function from your crate
+    // assert_eq!(rustpods::some_public_function(), expected_value);
+}
+
+#[tokio::test]
+async fn test_async_integration_feature() {
+    // let result = rustpods::some_async_feature().await;
+    // assert!(result.is_ok());
 }
 ```
 
-- **Test Tagging and Organization:**
-  - Use `#[ignore]` for tests that are long-running or require special setup
-  - Group related tests with modules or helper functions
-  - Document test dependencies and requirements
-  - Use descriptive test names that explain the purpose of the test
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+The examples provided earlier in sections like "Unit Tests", "Integration Tests", "UI Component Tests", and "Bluetooth Tests" illustrate the content of test functions. This "Test Organization and Structure" section focuses on where those test files and modules are located.

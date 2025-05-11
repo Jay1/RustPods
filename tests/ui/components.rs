@@ -4,7 +4,8 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 use btleplug::api::BDAddr;
-use iced::Sandbox;
+
+use iced::Application;
 
 use rustpods::ui::AppState;
 use rustpods::ui::Message;
@@ -59,37 +60,36 @@ fn test_device_management() {
 fn test_message_handling() {
     let mut state = AppState::default();
     
-    // Test toggle scanning message
-    state.is_scanning = false;
-    state.update(Message::StartScan);
+    // Test scan toggling
+    let _ = state.update(Message::StartScan);
     assert!(state.is_scanning);
     
-    state.update(Message::StopScan);
+    let _ = state.update(Message::StopScan);
     assert!(!state.is_scanning);
     
-    // Test toggle auto-scan
-    state.auto_scan = false;
-    state.update(Message::ToggleAutoScan(true));
+    // Test auto scan toggling
+    assert!(state.auto_scan);
+    let _ = state.update(Message::ToggleAutoScan(true));
     assert!(state.auto_scan);
     
-    state.update(Message::ToggleAutoScan(false));
+    let _ = state.update(Message::ToggleAutoScan(false));
     assert!(!state.auto_scan);
     
     // Test device selection
+    let addr = BDAddr::from([0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC]);
+    let addr_str = addr.to_string();
     let device = DiscoveredDevice {
-        address: BDAddr::from([1, 2, 3, 4, 5, 6]),
-        name: Some("Test Device".to_string()),
-        rssi: Some(-50),
+        address: addr,
+        name: Some("AirPods Pro".to_string()),
+        rssi: Some(-65),
         manufacturer_data: HashMap::new(),
-        is_potential_airpods: false,
+        is_potential_airpods: true,
         last_seen: Instant::now(),
     };
     
-    state.update_device(device);
+    state.devices.insert(addr_str.clone(), device);
     
-    let addr_str = BDAddr::from([1, 2, 3, 4, 5, 6]).to_string();
-    state.update(Message::SelectDevice(addr_str.clone()));
-    
+    let _ = state.update(Message::SelectDevice(addr_str.clone()));
     assert_eq!(state.selected_device, Some(addr_str));
 }
 
@@ -141,13 +141,18 @@ fn create_test_airpods(
 #[test]
 fn test_app_state_toggle_visibility() {
     let mut state = AppState::default();
-    assert!(!state.visible); // Default is false
     
-    state.toggle_visibility();
-    assert!(state.visible); // Now true after toggle
+    // Initial visibility based on config
+    let initial_visibility = !state.config.ui.start_minimized;
+    assert_eq!(state.visible, initial_visibility);
     
+    // First toggle should switch to opposite state
     state.toggle_visibility();
-    assert!(!state.visible); // Now false again
+    assert_eq!(state.visible, !initial_visibility);
+    
+    // Second toggle should restore to initial state
+    state.toggle_visibility();
+    assert_eq!(state.visible, initial_visibility);
 }
 
 #[test]

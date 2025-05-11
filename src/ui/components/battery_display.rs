@@ -1,9 +1,9 @@
-use iced::widget::{column, container, progress_bar, row, text};
-use iced::{Element, Length};
+use iced::widget::{column, container, progress_bar, row, text};use iced::Length;
 
 use crate::ui::{Message, UiComponent};
 
 /// Component for displaying battery levels
+#[derive(Debug, Clone)]
 pub struct BatteryDisplay {
     /// Left earbud battery level (0-100)
     left_level: Option<u8>,
@@ -34,7 +34,7 @@ impl BatteryDisplay {
 }
 
 impl UiComponent for BatteryDisplay {
-    fn view(&self) -> Element<'_, Message> {
+    fn view(&self) -> iced::Element<'static, Message, iced::Renderer<crate::ui::theme::Theme>> {
         let mut content = column![]
             .spacing(20)
             .padding(20)
@@ -82,7 +82,7 @@ impl UiComponent for BatteryDisplay {
 }
 
 /// Helper function to create a battery indicator
-fn create_battery_indicator(level: Option<u8>) -> Element<'static, Message> {
+fn create_battery_indicator(level: Option<u8>) -> iced::Element<'static, Message, iced::Renderer<crate::ui::theme::Theme>> {
     match level {
         Some(level) => {
             let level_f32 = level as f32 / 100.0;

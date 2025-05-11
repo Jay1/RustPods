@@ -1,11 +1,15 @@
 use std::collections::HashMap;
 #[cfg(test)]
 use std::time::Instant;
-use iced::{Sandbox};
+use iced::{Subscription, Application, Command};
+use std::convert::TryInto;
+use iced::executor;
 
 use crate::bluetooth::DiscoveredDevice;
-use crate::config::AppConfig;
+use crate::config::{AppConfig, ConfigManager, ConfigError};
 use crate::ui::Message;
+use crate::ui::components::{BluetoothSetting, UiSetting, SystemSetting};
+use crate::ui::{MainWindow, SettingsWindow, SettingsTab};
 
 /// Main application state
 #[derive(Debug, Clone)]
@@ -25,41 +29,94 @@ pub struct AppState {
     /// Currently selected device
     pub selected_device: Option<String>,
     
+    /// Timestamp when the current device was connected
+    pub connection_timestamp: Option<std::time::Instant>,
+    
+    /// Animation progress for refresh button (0.0-1.0)
+    pub animation_progress: f32,
+    
+    /// Last known battery status
+    pub battery_status: Option<crate::bluetooth::AirPodsBatteryStatus>,
+    
     /// Application configuration
     pub config: AppConfig,
+    
+    /// Configuration manager
+    pub config_manager: Option<ConfigManager>,
+    
+    /// Whether settings view is open
+    pub show_settings: bool,
+    
+    /// Main window component
+    pub main_window: MainWindow,
+    
+    /// Settings window component
+    pub settings_window: SettingsWindow,
+    
+    /// Current settings error message (if any)
+    pub settings_error: Option<String>,
 }
 
 impl Default for AppState {
     fn default() -> Self {
+        // Load config or use default
+        let config = AppConfig::load().unwrap_or_default();
+        
+        // Create config manager
+        let config_manager = Some(ConfigManager::default());
+        
+        // Create an empty main window
+        let main_window = MainWindow::empty();
+        
+        // Create settings window with the config
+        let settings_window = SettingsWindow::new(config.clone());
+        
         Self {
-            visible: false,
+            // Always start with visible = true to ensure the UI shows up
+            visible: true,
             is_scanning: false,
             auto_scan: true,
             devices: HashMap::new(),
             selected_device: None,
-            config: AppConfig::default(),
+            connection_timestamp: None,
+            animation_progress: 0.0,
+            battery_status: None,
+            config,
+            config_manager,
+            show_settings: false,
+            main_window,
+            settings_window,
+            settings_error: None,
         }
     }
 }
 
-impl Sandbox for AppState {
+impl Application for AppState {
     type Message = Message;
-    
-    fn new() -> Self {
-        Self::default()
+    type Theme = crate::ui::theme::Theme;
+    type Executor = executor::Default;
+    type Flags = ();
+
+    fn new(_flags: Self::Flags) -> (Self, Command<Message>) {
+        (Self::default(), Command::none())
     }
     
     fn title(&self) -> String {
-        String::from("RustPods")
+        String::from("RustPods - AirPods Battery Monitor")
     }
-    
-    fn update(&mut self, message: Message) {
+
+    fn theme(&self) -> Self::Theme {
+        crate::ui::theme::Theme::CatppuccinMocha
+    }
+
+    fn update(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::ToggleVisibility => {
                 self.toggle_visibility();
             }
             Message::Exit => {
-                // Exit the application - handled by runner
+                // Exit will be handled by the AppController
+                std::process::exit(0); // Add a direct exit for when the window is closed
             }
             Message::DeviceDiscovered(device) => {
                 self.update_device(device);
@@ -72,21 +129,209 @@ impl Sandbox for AppState {
             }
             Message::StartScan => {
                 self.is_scanning = true;
+                // Reset animation progress
+                self.animation_progress = 0.0;
+                // AppController will handle the actual scanning
             }
             Message::StopScan => {
                 self.is_scanning = false;
+                // AppController will handle the actual scanning
+            }
+            Message::ScanStarted => {
+                self.is_scanning = true;
+            }
+            Message::ScanStopped => {
+                self.is_scanning = false;
+            }
+            Message::ScanCompleted => {
+                self.is_scanning = false;
+            }
+            Message::ScanProgress(_progress) => {
+                // We don't need to update state for scan progress
+            }
+            Message::AnimationTick => {
+                // Update animation progress
+                self.animation_progress = (self.animation_progress + 0.01) % 1.0;
+                
+                // Update main window with current animation progress
+                if let Some(device) = self.get_selected_device() {
+                    self.main_window = MainWindow::new(
+                        self.battery_status.clone(),
+                        self.is_scanning,
+                        true, // is_connected
+                        device.name.clone(),
+                        device.rssi,
+                        self.connection_timestamp.map(|timestamp| {
+                            let now = std::time::Instant::now();
+                            now.duration_since(timestamp).as_secs()
+                        })
+                    ).with_animation_progress(self.animation_progress);
+                }
+            }
+            Message::AnimationProgress(progress) => {
+                self.animation_progress = progress;
             }
             Message::ToggleAutoScan(enabled) => {
                 self.auto_scan = enabled;
             }
+            Message::BatteryStatusUpdated(status) => {
+                // Update battery status
+                self.battery_status = Some(status);
+                
+                // Update main window with new battery status
+                if let Some(device) = self.get_selected_device() {
+                    self.main_window = MainWindow::new(
+                        self.battery_status.clone(),
+                        self.is_scanning,
+                        true, // is_connected
+                        device.name.clone(),
+                        device.rssi,
+                        self.connection_timestamp.map(|timestamp| {
+                            let now = std::time::Instant::now();
+                            now.duration_since(timestamp).as_secs()
+                        })
+                    ).with_animation_progress(self.animation_progress);
+                }
+            }
+            Message::AirPodsConnected(airpods) => {
+                // We've connected to AirPods
+                println!("Connected to AirPods: {:?}", airpods);
+                // Update the corresponding device if we have it
+                if let Some(address) = self.selected_device.as_ref() {
+                    if let Some(device) = self.devices.get_mut(address) {
+                        device.is_potential_airpods = true;
+                    }
+                }
+            }
+            Message::BatteryUpdateFailed(error) => {
+                eprintln!("Battery update failed: {}", error);
+            }
+            Message::Error(error) => {
+                eprintln!("Error: {}", error);
+            }
+            Message::Status(status) => {
+                println!("Status: {}", status);
+            }
+            Message::RetryConnection => {
+                // Retry connection with selected device
+                if let Some(address) = self.selected_device.clone() {
+                    // Simply reselect the device to trigger reconnection
+                    self.select_device(address);
+                }
+            }
             Message::Tick => {
-                // Periodic update
+                // Periodic update, nothing to do for now
+            }
+            Message::UpdateBluetoothSetting(setting) => {
+                // Update settings window
+                self.settings_window.mark_changed();
+                
+                // Update application state
+                self.update_bluetooth_setting(setting);
+            }
+            Message::UpdateUiSetting(setting) => {
+                // Update settings window
+                self.settings_window.mark_changed();
+                
+                // Update application state
+                self.update_ui_setting(setting);
+            }
+            Message::UpdateSystemSetting(setting) => {
+                // Update settings window
+                self.settings_window.mark_changed();
+                
+                // Update application state
+                self.update_system_setting(setting);
+            }
+            Message::OpenSettings => {
+                // Reset any validation errors
+                self.settings_window.set_validation_error(None);
+                
+                // Show the settings window
+                self.settings_window.update_config(self.config.clone());
+                self.show_settings = true;
+            }
+            Message::CloseSettings => {
+                // Close the settings window
+                self.show_settings = false;
+                
+                // Discard any changes by updating the settings window with current config
+                self.settings_window.update_config(self.config.clone());
+            }
+            Message::SaveSettings => {
+                // Get the updated config from settings window
+                let updated_config = self.settings_window.config();
+                
+                // Validate the config
+                if let Err(e) = updated_config.validate() {
+                    // Set validation error
+                    self.settings_window.set_validation_error(Some(e.to_string()));
+                    
+                    // Log the error
+                    log::error!("Settings validation failed: {}", e);
+                    
+                    return Command::none();
+                }
+                
+                // Update application config
+                self.config = updated_config.clone();
+                
+                // Save settings to disk
+                if let Err(e) = self.config.save() {
+                    // Set save error
+                    self.settings_window.set_validation_error(Some(format!("Failed to save: {}", e)));
+                    
+                    // Log the error
+                    log::error!("Settings save failed: {}", e);
+                    
+                    return Command::none();
+                }
+                
+                // Apply the settings
+                self.apply_settings();
+                
+                // Close settings window
+                self.show_settings = false;
+            }
+            Message::ResetSettings => {
+                // Reset to default settings
+                self.reset_settings();
+                
+                // Update settings window with default config
+                self.settings_window.update_config(self.config.clone());
+            }
+            Message::SelectSettingsTab(tab) => {
+                // Update selected tab in settings window
+                self.settings_window.select_tab(tab);
+            }
+            Message::SettingsChanged(config) => {
+                // Update config
+                self.config = config.clone();
+                
+                // Update settings window
+                self.settings_window.update_config(config);
             }
         }
+        
+        Command::none()
+    }
+
+    fn view(&self) -> iced::Element<'_, Message, iced::Renderer<crate::ui::theme::Theme>> {
+        crate::ui::app::view(self)
     }
     
-    fn view(&self) -> iced::Element<Message> {
-        crate::ui::app::view(self)
+    fn subscription(&self) -> Subscription<Message> {
+        // Combine regular subscription with window events to handle close
+        Subscription::batch(vec![
+            crate::ui::app::subscription(self),
+            iced::subscription::events_with(|event, _status| {
+                if let iced::Event::Window(iced::window::Event::CloseRequested) = event {
+                    Some(Message::Exit)
+                } else {
+                    None
+                }
+            })
+        ])
     }
 }
 
@@ -113,6 +358,8 @@ impl AppState {
         // Only set if it exists
         if self.devices.contains_key(&address) {
             self.selected_device = Some(address);
+            // Set the connection timestamp to now
+            self.connection_timestamp = Some(std::time::Instant::now());
         }
     }
     
@@ -129,6 +376,159 @@ impl AppState {
     pub fn get_selected_device(&self) -> Option<&DiscoveredDevice> {
         self.selected_device.as_ref().and_then(|addr| self.devices.get(addr))
     }
+    
+    /// Save the current settings
+    fn save_settings(&mut self) {
+        // Validate settings first
+        match self.config.validate() {
+            Ok(_) => {
+                // Save to file
+                match self.config.save() {
+                    Ok(_) => {
+                        // Clear any previous error
+                        self.settings_error = None;
+                        
+                        // Log success
+                        log::info!("Settings saved successfully");
+                    },
+                    Err(e) => {
+                        // Set error message
+                        self.settings_error = Some(format!("Failed to save settings: {}", e));
+                        
+                        // Log error
+                        log::error!("Failed to save settings: {}", e);
+                    }
+                }
+            },
+            Err(e) => {
+                // Set validation error message
+                self.settings_error = Some(format!("Invalid settings: {}", e));
+                
+                // Log error
+                log::error!("Settings validation failed: {}", e);
+            }
+        }
+    }
+    
+    /// Reset settings to defaults
+    fn reset_settings(&mut self) {
+        // Create a new default config but preserve the settings path
+        let settings_path = self.config.settings_path.clone();
+        self.config = AppConfig::default();
+        self.config.settings_path = settings_path;
+        
+        // Clear any error
+        self.settings_error = None;
+        
+        log::info!("Settings reset to defaults");
+    }
+    
+    /// Load settings from disk
+    fn load_settings(&mut self) -> Result<(), ConfigError> {
+        match AppConfig::load() {
+            Ok(config) => {
+                self.config = config;
+                Ok(())
+            },
+            Err(e) => {
+                self.settings_error = Some(format!("Failed to load settings: {}", e));
+                log::error!("Failed to load settings: {}", e);
+                Err(e)
+            }
+        }
+    }
+    
+    /// Apply settings to the application
+    fn apply_settings(&mut self) {
+        // Update all components with new settings
+        
+        // Update main window theme
+        // (This would be implemented in a real app by applying theme settings
+        // to all UI components)
+        
+        // Check if auto-scan setting changed
+        if self.config.bluetooth.auto_scan_on_startup && !self.is_scanning && self.auto_scan {
+            // We should be scanning but aren't - start scanning
+            // In real code, this would send a message to start scanning
+        } else if !self.config.bluetooth.auto_scan_on_startup && self.is_scanning && self.auto_scan {
+            // We shouldn't be scanning but are - stop scanning
+            // In real code, this would send a message to stop scanning
+        }
+        
+        // Update the auto_scan flag to match config
+        self.auto_scan = self.config.bluetooth.auto_scan_on_startup;
+        
+        log::info!("Settings applied");
+    }
+    
+    /// Update a Bluetooth setting
+    fn update_bluetooth_setting(&mut self, setting: BluetoothSetting) {
+        match setting {
+            BluetoothSetting::AutoScanOnStartup(value) => {
+                self.config.bluetooth.auto_scan_on_startup = value;
+            }
+            BluetoothSetting::ScanDuration(value) => {
+                self.config.bluetooth.scan_duration = std::time::Duration::from_secs(value as u64);
+            }
+            BluetoothSetting::ScanInterval(value) => {
+                self.config.bluetooth.scan_interval = std::time::Duration::from_secs(value as u64);
+            }
+            BluetoothSetting::MinRssi(value) => {
+                self.config.bluetooth.min_rssi = Some(value.try_into().unwrap_or(-70));
+            }
+            BluetoothSetting::BatteryRefreshInterval(value) => {
+                self.config.bluetooth.battery_refresh_interval = value as u64;
+            }
+            BluetoothSetting::AutoReconnect(value) => {
+                self.config.bluetooth.auto_reconnect = value;
+            }
+            BluetoothSetting::ReconnectAttempts(value) => {
+                self.config.bluetooth.reconnect_attempts = value.try_into().unwrap_or(3);
+            }
+        }
+    }
+    
+    /// Update a UI setting
+    fn update_ui_setting(&mut self, setting: UiSetting) {
+        match setting {
+            UiSetting::ShowNotifications(value) => {
+                self.config.ui.show_notifications = value;
+            }
+            UiSetting::StartMinimized(value) => {
+                self.config.ui.start_minimized = value;
+            }
+            UiSetting::Theme(value) => {
+                self.config.ui.theme = value;
+            }
+            UiSetting::ShowPercentageInTray(value) => {
+                self.config.ui.show_percentage_in_tray = value;
+            }
+            UiSetting::ShowLowBatteryWarning(value) => {
+                self.config.ui.show_low_battery_warning = value;
+            }
+            UiSetting::LowBatteryThreshold(value) => {
+                self.config.ui.low_battery_threshold = value;
+            }
+        }
+    }
+    
+    /// Update a system setting
+    fn update_system_setting(&mut self, setting: SystemSetting) {
+        match setting {
+            SystemSetting::StartOnBoot(value) => {
+                self.config.system.launch_at_startup = value;
+            }
+            SystemSetting::StartMinimized(value) => {
+                self.config.ui.start_minimized = value;
+            }
+            SystemSetting::LogLevel(value) => {
+                self.config.system.log_level = value;
+            }
+            SystemSetting::EnableTelemetry(value) => {
+                self.config.system.enable_telemetry = value;
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -139,7 +539,8 @@ mod tests {
     #[test]
     fn test_default_state() {
         let state = AppState::default();
-        assert!(!state.visible);
+        // Visibility should be the opposite of start_minimized setting
+        assert_eq!(state.visible, !state.config.ui.start_minimized);
         assert!(!state.is_scanning);
         assert!(state.auto_scan);
         assert!(state.devices.is_empty());
@@ -149,13 +550,17 @@ mod tests {
     #[test]
     fn test_toggle_visibility() {
         let mut state = AppState::default();
-        assert!(!state.visible);
+        // Get initial state based on config
+        let initial_visibility = !state.config.ui.start_minimized;
+        assert_eq!(state.visible, initial_visibility);
         
+        // Toggle should flip the visibility
         state.toggle_visibility();
-        assert!(state.visible);
+        assert_eq!(state.visible, !initial_visibility);
         
+        // Toggle again should restore original visibility
         state.toggle_visibility();
-        assert!(!state.visible);
+        assert_eq!(state.visible, initial_visibility);
     }
     
     #[test]

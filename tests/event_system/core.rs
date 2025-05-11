@@ -2,11 +2,11 @@
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
-use tokio::sync::mpsc::{channel, Receiver};
+use tokio::sync::mpsc::channel;
 use tokio::time::timeout;
 
 use btleplug::api::BDAddr;
-use futures::{Stream, StreamExt, pin_mut};
+use futures::{StreamExt, pin_mut};
 
 use rustpods::bluetooth::events::{BleEvent, EventFilter, EventType};
 use rustpods::bluetooth::{DiscoveredDevice, receiver_to_stream};

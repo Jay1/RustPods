@@ -1,10 +1,10 @@
 //! Common test utilities for Bluetooth tests
 
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use btleplug::api::BDAddr;
 
-use rustpods::bluetooth::{DiscoveredDevice, ScanConfig};
+use rustpods::bluetooth::DiscoveredDevice;
 use rustpods::airpods::{DetectedAirPods, AirPodsType, AirPodsBattery, ChargingStatus, APPLE_COMPANY_ID};
 
 /// Create a test device with basic properties

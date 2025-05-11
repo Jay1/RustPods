@@ -42,7 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Run scan for a limited time
     let scan_duration = Duration::from_secs(30);
-    let start_time = Instant::now();
+    let _start_time = Instant::now();
     
     println!("\nScanning for {} seconds...", scan_duration.as_secs());
     
@@ -62,7 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     
                     // Use the cloned scanner here
-                    let all_airpods = scanner_clone.get_filtered_airpods(&airpods_all_models_filter());
+                    let _all_airpods = scanner_clone.get_filtered_airpods(&airpods_all_models_filter());
                 }
                 BleEvent::AirPodsDetected(airpods) => {
                     println!("AirPods detected: {:?} ({:?})", 
@@ -84,7 +84,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("\nScan cycle completed, {} devices found", devices_found);
                     
                     // Get filtered devices
-                    let all_airpods = scanner_clone.get_filtered_airpods(&airpods_all_models_filter());
+                    let _all_airpods = scanner_clone.get_filtered_airpods(&airpods_all_models_filter());
                     let pro_airpods = scanner_clone.get_filtered_airpods(&airpods_pro_filter());
                     let nearby_airpods = scanner_clone.get_filtered_airpods(&airpods_nearby_filter(-70));
                     
@@ -96,7 +96,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let custom_filtered = scanner_clone.get_filtered_airpods(&custom_filter);
                     
                     // Display filter results
-                    println!("  All AirPods: {} devices", all_airpods.len());
+                    println!("  All AirPods: {} devices", _all_airpods.len());
                     println!("  Pro models: {} devices", pro_airpods.len());
                     println!("  Nearby AirPods: {} devices", nearby_airpods.len());
                     println!("  AirPods 3 (custom): {} devices", custom_filtered.len());

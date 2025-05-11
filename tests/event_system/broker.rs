@@ -1,7 +1,6 @@
 //! Tests for the EventBroker implementation
 
 use std::time::Duration;
-use tokio::sync::mpsc::Sender;
 use tokio::time::timeout;
 
 use btleplug::api::BDAddr;
@@ -9,7 +8,6 @@ use futures::{StreamExt, pin_mut};
 
 use rustpods::bluetooth::events::{BleEvent, EventBroker, EventFilter, EventType};
 use rustpods::bluetooth::{DiscoveredDevice, receiver_to_stream};
-use crate::common_test_helpers::{wait_ms, medium_delay};
 
 // Helper to create a simple test device
 fn create_test_device(address: [u8; 6], name: Option<&str>, rssi: Option<i16>) -> DiscoveredDevice {

@@ -1,6 +1,6 @@
 ---
-description:
-globs:
+description: 
+globs: 
 alwaysApply: false
 ---
 # RustPods Project Memory
@@ -32,6 +32,7 @@ This file stores project-specific knowledge, conventions, and user preferences l
 - **UI Framework**: Using `iced` v0.10 with tokio and debug features for GUI implementation
 - **Error Handling**: Using `thiserror` for error type definitions
 - **System Tray**: Using `tray-item` v0.7 for system tray integration
+- **UI Theme**: Using Catppuccin Mocha color scheme for a visually appealing dark theme
 
 ## Implementation Patterns
 
@@ -52,10 +53,17 @@ This file stores project-specific knowledge, conventions, and user preferences l
   - Events include device discovery, device updates, battery updates, etc.
 
 - **UI Architecture**:
-  - The UI uses Iced's `Sandbox` pattern for state management
+  - The UI uses Iced's `Application` pattern for state management
   - `AppState` manages the application state and is passed to UI components
   - UI components are organized into modules in the `ui` directory
   - The UI is launched by the `run_ui` function in `ui/app.rs`
+
+- **Theme Implementation**:
+  - Theme is defined in the `ui/theme.rs` module
+  - Color constants are defined using `Color::from_rgb8()` with Catppuccin Mocha hex values
+  - Theme enum with `CatppuccinMocha` variant is implemented
+  - StyleSheet traits are implemented for application, button, container, and text_input
+  - Theme is applied through the `theme()` method in the `Application` implementation
 
 ## Known Issues & Workarounds
 
@@ -69,3 +77,4 @@ This file stores project-specific knowledge, conventions, and user preferences l
 - Enhance system tray functionality
 - Improve UI with battery status display
 - Create settings UI for configuration options
+- Add additional theme variants (like Catppuccin Latte for light mode)

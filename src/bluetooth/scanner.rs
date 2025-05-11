@@ -17,6 +17,7 @@ use crate::airpods::{
     DetectedAirPods, detect_airpods, create_airpods_filter,
     AirPodsFilter
 };
+use crate::config::{AppConfig, Configurable};
 
 /// Custom error type for Bluetooth operations
 #[derive(Debug, thiserror::Error)]
@@ -539,6 +540,87 @@ impl BleScanner {
     pub fn subscribe_airpods(&mut self) -> Receiver<BleEvent> {
         self.subscribe(EventFilter::airpods_only())
     }
+    
+    /// Get peripherals by Bluetooth address
+    pub async fn get_peripherals_by_address(&self, address: &BDAddr) -> Result<Vec<Peripheral>, BleError> {
+        // Make sure we have an adapter
+        let adapter = if let Some(adapter) = &self.adapter {
+            adapter.clone()
+        } else {
+            return Err(BleError::AdapterNotFound);
+        };
+        
+        // Get all peripherals
+        let peripherals = adapter.peripherals().await.map_err(BleError::BtlePlugError)?;
+        
+        // Filter by address
+        let matching_devices = peripherals.into_iter()
+            .filter(|peripheral| peripheral.address() == *address)
+            .collect::<Vec<_>>();
+        
+        Ok(matching_devices)
+    }
+    
+    /// Start scanning with a specific configuration
+    pub async fn start_scanning_with_config(
+        &mut self,
+        config: ScanConfig,
+    ) -> Result<Receiver<BleEvent>, BleError> {
+        // Similar to start_scanning but with custom config
+        if self.scan_task.is_some() {
+            return Err(BleError::ScanInProgress);
+        }
+        
+        // Make sure we have an adapter
+        let adapter = if let Some(adapter) = &self.adapter {
+            adapter.clone()
+        } else {
+            // Try to initialize
+            self.initialize().await?;
+            
+            // Get the adapter
+            self.adapter.as_ref().ok_or(BleError::AdapterNotFound)?.clone()
+        };
+        
+        // Create channels for communication
+        let (tx, rx) = channel(100);
+        self.event_sender = Some(tx.clone());
+        
+        // Create a channel for cancellation
+        let (cancel_tx, cancel_rx) = channel::<()>(1);
+        self.cancel_sender = Some(cancel_tx);
+        
+        // Use the provided config
+        self.config = config.clone();
+        
+        // Start scanning task
+        let scan_task = self.start_scan_task(tx, cancel_rx, adapter).await?;
+        self.scan_task = Some(scan_task);
+        self.is_scanning = true;
+        
+        Ok(rx)
+    }
+    
+    /// Get a configurable reference to the scanner if available
+    pub fn as_configurable(&mut self) -> Option<&mut dyn Configurable> {
+        Some(self)
+    }
+}
+
+// Implement the Configurable trait for BleScanner
+impl Configurable for BleScanner {
+    fn apply_config(&mut self, config: &AppConfig) {
+        // Apply bluetooth-related settings to our ScanConfig
+        let mut scan_config = ScanConfig::default();
+        scan_config = scan_config.with_scan_duration(config.bluetooth.scan_duration);
+        scan_config = scan_config.with_interval(config.bluetooth.scan_interval);
+        scan_config = scan_config.with_min_rssi(config.bluetooth.min_rssi);
+        
+        // Set a reasonable default for max cycles
+        scan_config = scan_config.with_max_cycles(Some(5));
+        
+        self.set_config(scan_config);
+    }
 }
 
 impl Drop for BleScanner {
@@ -547,5 +629,103 @@ impl Drop for BleScanner {
         if let Some(task) = self.scan_task.take() {
             task.abort();
         }
+    }
+}
+
+/// Parse a BDAddr from a string
+#[allow(dead_code)]
+pub fn parse_bdaddr(s: &str) -> Result<BDAddr, String> {
+    let bytes: Vec<&str> = s.split(':').collect();
+    
+    if bytes.len() != 6 {
+        return Err(format!("Invalid BDAddr format: {}", s));
+    }
+    
+    let mut addr = [0u8; 6];
+    for (i, byte) in bytes.iter().enumerate() {
+        addr[i] = u8::from_str_radix(byte, 16)
+            .map_err(|e| format!("Invalid hex byte '{}': {}", byte, e))?;
+    }
+    
+    Ok(BDAddr::from(addr))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bluetooth::scanner_config::ScanConfig;
+    
+    #[test]
+    fn test_parse_bdaddr_valid() {
+        let addr_str = "12:34:56:78:9A:BC";
+        let result = parse_bdaddr(addr_str);
+        assert!(result.is_ok());
+        
+        let addr = result.unwrap();
+        assert_eq!(addr, BDAddr::from([0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC]));
+    }
+    
+    #[test]
+    fn test_parse_bdaddr_invalid_format() {
+        // Too few segments
+        let result = parse_bdaddr("12:34:56:78:9A");
+        assert!(result.is_err());
+        
+        // Invalid hex
+        let result = parse_bdaddr("12:34:56:78:9A:ZZ");
+        assert!(result.is_err());
+    }
+    
+    #[test]
+    fn test_scanner_new() {
+        let scanner = BleScanner::new();
+        assert!(!scanner.is_scanning());
+        assert_eq!(scanner.get_scan_cycles(), 0);
+        assert!(scanner.get_devices().is_empty());
+    }
+    
+    #[test]
+    fn test_scanner_with_config() {
+        let config = ScanConfig {
+            scan_duration: std::time::Duration::from_secs(5),
+            ..ScanConfig::default()
+        };
+        
+        let scanner = BleScanner::with_config(config.clone());
+        assert_eq!(scanner.get_config().scan_duration, config.scan_duration);
+    }
+    
+    #[test]
+    fn test_device_list_operations() {
+        let mut scanner = BleScanner::new();
+        
+        // Insert devices through internal method - need to expose a method for testing
+        let device1 = DiscoveredDevice {
+            address: BDAddr::from([1, 2, 3, 4, 5, 6]),
+            name: Some("Test Device 1".to_string()),
+            rssi: Some(-60),
+            manufacturer_data: HashMap::new(),
+            is_potential_airpods: false,
+            last_seen: std::time::Instant::now(),
+        };
+        
+        {
+            let mut devices = scanner.devices.lock().unwrap();
+            devices.insert(device1.address, device1.clone());
+        }
+        
+        // Test get_devices
+        let devices = scanner.get_devices();
+        assert_eq!(devices.len(), 1);
+        assert_eq!(devices[0].address, device1.address);
+        
+        // Test get_device
+        let result = scanner.get_device(&device1.address);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().address, device1.address);
+        
+        // Test clear_devices
+        scanner.clear_devices();
+        assert!(scanner.get_devices().is_empty());
     }
 } 

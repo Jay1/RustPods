@@ -14,10 +14,14 @@ pub mod common_test_helpers;
 pub mod bluetooth;
 pub mod event_system;
 pub mod ui;
+pub mod airpods;
 
 // Standalone test modules for top-level components
 pub mod app_config_tests;
 pub mod system_tray_tests;
+pub mod app_battery_monitoring_tests;
+pub mod config_tests;
+pub mod settings_ui_tests;
 
 // Note: In Rust's test system, each .rs file in the tests directory 
 // is compiled as a separate test binary by default, even when there's a mod.rs file.

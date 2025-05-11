@@ -63,6 +63,10 @@ fn test_message_handling() {
             Message::Tick => {
                 // Just a periodic tick, nothing to do in this test
             }
+            // Add a catch-all pattern for all other message types
+            _ => {
+                // No action needed for other message types in this test
+            }
         }
     }
     
@@ -127,7 +131,9 @@ fn test_device_discovery_cycle() {
             Message::DeviceDiscovered(device) | Message::DeviceUpdated(device) => {
                 state.update_device(device);
             }
-            _ => {}
+            _ => {
+                // Ignore other message types in this test
+            }
         }
     }
     

@@ -7,6 +7,18 @@ use rustpods::bluetooth::{
     AdapterManager, BleScanner, ScanConfig, BleError
 };
 
+/// Create a mock adapter manager for testing
+async fn create_mock_adapter_manager(_has_adapters: bool) -> Result<AdapterManager, BleError> {
+    // For testing purposes, we'll create a real adapter manager
+    // In a production environment, we'd use a proper mocking framework
+    let adapter_manager = AdapterManager::new().await?;
+    
+    // In a real mock implementation, we would control whether it has adapters
+    // For now, we just return the real adapter manager and ignore the has_adapters parameter
+    
+    Ok(adapter_manager)
+}
+
 /// Helper to determine if we should skip Bluetooth tests
 fn skip_bluetooth_test() -> bool {
     std::env::var("CI").is_ok() || std::env::var("SKIP_BT_TESTS").is_ok()
@@ -19,13 +31,12 @@ async fn test_adapter_manager_no_adapters() {
         return;
     }
     
-    // Create a mock adapter manager (this would ideally use a proper mock in a real test)
-    // Here we're just testing the real adapter manager's fallback behavior
+    // Create a real adapter manager because our mock doesn't actually support the no_adapters case
     let adapter_manager_result = AdapterManager::new().await;
     
     match adapter_manager_result {
         Ok(adapter_manager) => {
-            let adapters = adapter_manager.get_available_adapters().clone();
+            let adapters = adapter_manager.get_available_adapters();
             
             // Check the fallback behavior - this will differ on systems with/without Bluetooth
             if adapters.is_empty() {
@@ -191,7 +202,7 @@ async fn test_adapter_selection() {
     
     // Get the list of adapters first
     let adapter_manager = adapter_manager_result.unwrap();
-    let adapters = adapter_manager.get_available_adapters().clone();
+    let adapters = adapter_manager.get_available_adapters();
     
     if adapters.is_empty() {
         println!("No adapters found, skipping adapter selection test");
@@ -267,4 +278,32 @@ async fn test_scanner_error_handling() {
     
     // Stop scan
     let _ = scanner.stop_scanning().await;
+}
+
+#[tokio::test]
+async fn test_adapter_manager_get_available_adapters() {
+    // Create a new adapter manager using our async function
+    let adapter_manager_result = create_mock_adapter_manager(true).await;
+    
+    // Skip test if we couldn't create an adapter manager
+    if adapter_manager_result.is_err() {
+        println!("Skipping test_adapter_manager_get_available_adapters due to adapter manager creation failure");
+        return;
+    }
+    
+    let adapter_manager = adapter_manager_result.unwrap();
+    
+    // Get available adapters
+    let adapters = adapter_manager.get_available_adapters();
+    
+    // Print adapter info for debugging
+    println!("Found {} adapters", adapters.len());
+    for (i, adapter) in adapters.iter().enumerate() {
+        println!("Adapter {}: {}", i, adapter.name);
+    }
+    
+    // Assert we have at least one adapter (may fail on systems without Bluetooth)
+    if !skip_bluetooth_test() {
+        assert!(!adapters.is_empty(), "Should have at least one adapter on test systems with Bluetooth");
+    }
 } 

@@ -8,8 +8,7 @@ use iced::Theme;
 
 use rustpods::bluetooth::DiscoveredDevice;
 use rustpods::airpods::{
-    DetectedAirPods, AirPodsType, AirPodsBattery, ChargingStatus,
-    APPLE_COMPANY_ID
+    DetectedAirPods, AirPodsType, AirPodsBattery, ChargingStatus
 };
 use rustpods::ui::Message;
 

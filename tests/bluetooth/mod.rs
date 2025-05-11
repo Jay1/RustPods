@@ -10,9 +10,16 @@
 pub mod common_utils;
 
 // Specific test categories
-pub mod adapter;
-pub mod battery_status;
-pub mod config;
-pub mod detection;
-pub mod filtering;
-pub mod scanning; 
+pub mod adapter;             // Tests for Bluetooth adapter management
+pub mod battery_status;      // Tests for basic battery status functionality
+pub mod battery_monitoring;  // Tests for battery monitoring and updates
+pub mod config;              // Tests for scan configuration
+pub mod detection;           // Tests for device detection
+pub mod filtering;           // Tests for device filtering
+pub mod scanning;            // Tests for device scanning
+
+//! Bluetooth module tests
+//!
+//! Tests for Bluetooth scanning and connection functionality.
+
+pub mod scanner_tests; 

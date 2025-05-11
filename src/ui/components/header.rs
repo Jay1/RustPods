@@ -1,10 +1,10 @@
 use iced::widget::{button, row, text, container};
-use iced::{Element, Length};
-use iced::theme;
+use iced::{Length};
 
 use crate::ui::{Message, UiComponent};
 
 /// Component for the application header
+#[derive(Debug, Clone)]
 pub struct Header {
     /// Whether scanning is active
     is_scanning: bool,
@@ -23,7 +23,7 @@ impl Header {
 }
 
 impl UiComponent for Header {
-    fn view(&self) -> Element<'_, Message> {
+    fn view(&self) -> iced::Element<'static, Message, iced::Renderer<crate::ui::theme::Theme>> {
         let title = text("RustPods - AirPods Battery Monitor")
             .size(28)
             .width(Length::Shrink);
@@ -37,26 +37,15 @@ impl UiComponent for Header {
         };
 
         // Wrap the button in a container for styling
-        let styled_scan_button = if self.is_scanning {
-            scan_button.style(theme::Button::Destructive)
-        } else {
-            scan_button.style(theme::Button::Primary)
-        };
+        let styled_scan_button = scan_button;
 
         // Iced 0.13 checkbox only takes 2 arguments - create a toggleable button instead
-        let toggle_button = button(
-            if self.auto_scan { "Auto-scan: On" } else { "Auto-scan: Off" }
-        )
-        .on_press(Message::ToggleAutoScan(!self.auto_scan))
-        .width(Length::Shrink);
+        let toggle_text = if self.auto_scan { "Auto-scan: On" } else { "Auto-scan: Off" };
+        let toggle_button = button(text(toggle_text))
+            .on_press(Message::ToggleAutoScan(!self.auto_scan))
+            .width(Length::Shrink);
         
-        let auto_scan_toggle = toggle_button.style(
-            if self.auto_scan { 
-                theme::Button::Primary
-            } else {
-                theme::Button::Secondary
-            }
-        );
+        let auto_scan_toggle = toggle_button;
 
         let header_row = row![
             title,
@@ -69,7 +58,6 @@ impl UiComponent for Header {
 
         container(header_row)
             .width(Length::Fill)
-            .style(theme::Container::Box)
             .into()
     }
 }

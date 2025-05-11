@@ -7,7 +7,7 @@ use btleplug::api::BDAddr;
 
 use rustpods::airpods::{
     detect_airpods, identify_airpods_type, create_airpods_filter,
-    AirPodsType, AirPodsBattery, DetectedAirPods, ChargingStatus,
+    AirPodsType, AirPodsBattery, DetectedAirPods,
     APPLE_COMPANY_ID
 };
 use rustpods::bluetooth::DiscoveredDevice;

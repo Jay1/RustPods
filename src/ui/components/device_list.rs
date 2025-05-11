@@ -1,6 +1,5 @@
 use iced::widget::{button, column, row, scrollable, text, container};
-use iced::{Element, Length};
-use iced::theme;
+use iced::Length;
 
 use crate::bluetooth::DiscoveredDevice;
 use crate::ui::{Message, UiComponent};
@@ -21,7 +20,7 @@ impl DeviceList {
 }
 
 impl UiComponent for DeviceList {
-    fn view(&self) -> Element<'_, Message> {
+    fn view(&self) -> iced::Element<'static, Message, iced::Renderer<crate::ui::theme::Theme>> {
         // Create a column of devices
         let mut device_list = column![]
             .spacing(10)
@@ -77,11 +76,11 @@ impl UiComponent for DeviceList {
                 .spacing(10),
             )
             .width(Length::Fill)
-            .on_press(Message::SelectDevice(address.clone()));
+            .on_press(Message::SelectDevice(address));
 
             // Use a different style based on selection
             let styled_container = if is_selected {
-                container(btn).padding(5).style(theme::Container::Box)
+                container(btn).padding(5)
             } else {
                 container(btn).padding(5)
             };

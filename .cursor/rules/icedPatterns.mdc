@@ -338,7 +338,7 @@ alwaysApply: false
   ```
 
 - **Command-line Interface Integration**
-  - The UI is launched with a specific command: `rustpodsmon ui`
+  - The UI is launched with a specific command: `rustpods ui`
   - The application can still function in CLI mode with other commands
   - The entry point in `main.rs` handles command-line arguments and routing
 

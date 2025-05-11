@@ -2,13 +2,11 @@
 
 use std::time::Duration;
 use rustpods::bluetooth::{EventFilter, BleEvent};
-use rustpods::bluetooth::events::{EventBroker, EventType};
+use rustpods::bluetooth::events::EventBroker;
 use tokio::time::timeout;
-use tokio::sync::mpsc::error::TryRecvError;
-use btleplug::api::BDAddr;
 use futures::{StreamExt, pin_mut};
 
-use crate::common_test_helpers::{receiver_to_stream, medium_delay, wait_ms};
+use crate::common_test_helpers::{receiver_to_stream, wait_ms};
 use crate::bluetooth::common_utils::create_test_device;
 
 /// Helper to create a simple test broker for testing
@@ -103,8 +101,8 @@ async fn test_multiple_subscribers() {
     let _handle = broker.start();
     
     // Subscribe to all events with two different subscribers
-    let (id1, rx1) = broker.subscribe(EventFilter::all());
-    let (id2, rx2) = broker.subscribe(EventFilter::all());
+    let (_id1, rx1) = broker.subscribe(EventFilter::all());
+    let (_id2, rx2) = broker.subscribe(EventFilter::all());
     
     // Convert receivers to streams
     let stream1 = receiver_to_stream(rx1);
@@ -152,7 +150,7 @@ async fn test_multiple_subscribers() {
     println!("Checking first subscriber...");
     
     // Use longer timeouts - 5 seconds for each
-    let first_sub_event1 = match timeout(Duration::from_secs(5), stream1.next()).await {
+    let _first_sub_event1 = match timeout(Duration::from_secs(5), stream1.next()).await {
         Ok(Some(event)) => {
             println!("✅ First subscriber received first event: {:?}", event);
             event
@@ -167,7 +165,7 @@ async fn test_multiple_subscribers() {
         }
     };
     
-    let first_sub_event2 = match timeout(Duration::from_secs(5), stream1.next()).await {
+    let _first_sub_event2 = match timeout(Duration::from_secs(5), stream1.next()).await {
         Ok(Some(event)) => {
             println!("✅ First subscriber received second event: {:?}", event);
             event
@@ -185,7 +183,7 @@ async fn test_multiple_subscribers() {
     // Check if events were received by the second subscriber
     println!("Checking second subscriber...");
     
-    let second_sub_event1 = match timeout(Duration::from_secs(5), stream2.next()).await {
+    let _second_sub_event1 = match timeout(Duration::from_secs(5), stream2.next()).await {
         Ok(Some(event)) => {
             println!("✅ Second subscriber received first event: {:?}", event);
             event
@@ -200,7 +198,7 @@ async fn test_multiple_subscribers() {
         }
     };
     
-    let second_sub_event2 = match timeout(Duration::from_secs(5), stream2.next()).await {
+    let _second_sub_event2 = match timeout(Duration::from_secs(5), stream2.next()).await {
         Ok(Some(event)) => {
             println!("✅ Second subscriber received second event: {:?}", event);
             event

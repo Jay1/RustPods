@@ -19,4 +19,11 @@ pub mod device_display;
 pub mod integration;
 pub mod messages;
 pub mod rendering;
-pub mod state; 
+pub mod state;
+
+//! UI module tests
+//!
+//! Tests for user interface components and theme functionality.
+
+pub mod theme_tests;
+pub mod state_tests; 
