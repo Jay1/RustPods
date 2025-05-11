@@ -1,12 +1,32 @@
 [package]
-name = "rustpodsmon"
+name = "rustpods"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
 btleplug = "0.10"
-iced = "0.13"
+tokio = { version = "1.0", features = ["full"] }
+thiserror = "1.0"
+log = "0.4"
+env_logger = "0.10"
+iced = { version = "0.10", features = ["tokio", "debug"] }
+dirs-next = "2.0"
 tray-item = "0.7"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tokio = { version = "1.0", features = ["full"] }
+futures = "0.3"
+async-stream = "0.3"
+
+[dev-dependencies]
+mockall = "0.11"
+pretty_assertions = "1.4"
+tempfile = "3.8"
+tokio-stream = "0.1"
+
+[lib]
+name = "rustpods"
+path = "src/lib.rs"
+
+[[bin]]
+name = "rustpodsmon"
+path = "src/main.rs"

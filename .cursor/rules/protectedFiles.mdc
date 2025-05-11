@@ -1,0 +1,100 @@
+---
+description: This document outlines how to handle protected files and resolve merge conflicts in the RustPods project
+globs: 
+alwaysApply: false
+---
+# Protected Files Guidelines
+
+This document outlines how to handle protected files and resolve merge conflicts in the RustPods project.
+
+## Protected Files
+
+The following files should be treated as protected, meaning they require special care when modifying:
+
+- **Configuration Files:**
+  - `Cargo.toml` - Dependencies and project configuration
+  - `.taskmasterconfig` - Task Master configuration 
+  - Any `.env` files containing secrets
+
+- **Core Architecture Files:**
+  - `src/lib.rs` - Main exports
+  - `src/main.rs` - Program entry point
+  - `src/app/mod.rs` - Application structure
+
+## Modifying Protected Files
+
+When modifying protected files:
+
+1. **Discuss Changes First:**
+   - Discuss significant changes with team before implementation
+   - Provide rationale for the modification
+   - Consider implications on other components
+
+2. **Make Focused Changes:**
+   - Keep changes small and focused
+   - Document the purpose of each change
+   - Maintain existing patterns and conventions
+
+3. **Test Thoroughly:**
+   - Test changes locally before committing
+   - Ensure existing functionality still works
+   - Add tests for new functionality
+
+## Handling Merge Conflicts
+
+If you encounter merge conflicts in protected files:
+
+1. **Understand Both Changes:**
+   - Review both your changes and the conflicting changes
+   - Understand the purpose behind each change
+   - Consult with the author of the conflicting changes if needed
+
+2. **Resolution Strategy:**
+   - **For Cargo.toml conflicts:**
+     - Keep all dependencies from both versions
+     - Merge dependency versions carefully, preferring newer versions unless there's a compatibility issue
+     - Maintain alphabetical ordering of dependencies
+
+   - **For Core Architecture Files:**
+     - Preserve both implementations when possible
+     - Make sure all exports are maintained
+     - Keep consistent naming and patterns
+
+3. **Post-Merge Testing:**
+   - Compile the project after resolving conflicts
+   - Run the test suite to ensure functionality
+   - Manually test affected features
+
+## Version Control Best Practices
+
+- **Small, Focused Commits:**
+  - Make small, focused commits
+  - Use descriptive commit messages
+  - Reference task IDs in commit messages
+
+- **Pull Request Guidelines:**
+  - Create focused pull requests
+  - Provide detailed descriptions
+  - Request reviews from appropriate team members
+
+- **Branch Management:**
+  - Create feature branches for new features
+  - Create fix branches for bug fixes
+  - Delete branches after merging
+
+## Recovery Strategies
+
+If something goes wrong:
+
+1. **Local Issues:**
+   - Use `git checkout -- filename` to discard local changes
+   - Use `git reset --hard HEAD` to discard all local changes (use with caution)
+
+2. **Committed Issues:**
+   - Use `git revert commit-hash` to undo specific commits
+   - Create a new fix commit rather than modifying history
+
+3. **Data Loss Prevention:**
+   - Always commit working code before pulling
+   - Consider using stash for temporary storage: `git stash save "description"`
+

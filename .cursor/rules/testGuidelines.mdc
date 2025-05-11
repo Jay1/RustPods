@@ -1,0 +1,492 @@
+---
+description: This document outlines our test-driven approach for the RustPods project, covering unit tests, inteThis document outlines our test-driven approach for the RustPods project, covering unit tests, integration tests, and UI component testing patternsgration tests, and UI component testing patterns
+globs: 
+alwaysApply: false
+---
+# Testing Guidelines for RustPods
+
+This document outlines our test-driven approach for the RustPods project, covering unit tests, integration tests, and UI component testing patterns.
+
+## Testing Structure
+
+- **Test Organization:**
+  - Place unit tests in `#[cfg(test)]` modules at the end of each source file
+  - Place integration tests in the `tests/` directory at the project root
+  - Group related integration test files into descriptively named subdirectories within the tests/ directory. Each .rs file within these subdirectories (or tests/ itself) is compiled as a separate crate.
+  - Name integration test files descriptively with a focus on functionality (e.g., `scanning.rs`, `filtering.rs`)
+  - Group related tests within files into descriptively named submodules
+  - Create a `mod.rs` file in each subdirectory to organize and export the test modules
+  - Share common test utilities through a root-level `common_test_helpers.rs` file
+  - Create domain-specific utilities in files like `bluetooth/common_utils.rs` for domain-specific test helpers
+
+- **Current Test Structure:**
+  ```
+  tests/
+  ├── mod.rs                   # Top-level module organization
+  ├── common_test_helpers.rs   # Utilities shared across all integration tests
+  ├── app_config_tests.rs      # Tests for application configuration
+  ├── system_tray_tests.rs     # Tests for system tray functionality
+  ├── bluetooth/
+  │   ├── mod.rs               # Bluetooth module organization
+  │   ├── common_utils.rs      # Shared utilities for bluetooth tests
+  │   ├── adapter.rs           # Tests for Bluetooth adapter management
+  │   ├── scanning.rs          # Tests for Bluetooth scanning functionality
+  │   ├── filtering.rs         # Tests for AirPods device filtering capabilities
+  │   ├── detection.rs         # Tests for AirPods detection and parsing
+  │   ├── battery_status.rs    # Tests for AirPods battery status processing
+  │   └── config.rs            # Tests for Bluetooth scanner configuration options
+  ├── event_system/
+  │   ├── mod.rs               # Event system module organization
+  │   ├── core.rs              # Tests for the event system functionality
+  │   ├── broker.rs            # Tests for the primary event broker 
+  │   ├── simple_broker.rs     # Tests for simplified event broker scenarios
+  │   └── enhanced_broker.rs   # Tests for advanced event broker features
+  └── ui/
+      ├── mod.rs               # UI module organization
+      ├── state.rs             # Tests for UI state management
+      ├── components.rs        # Tests for UI components
+      ├── rendering.rs         # Tests for UI rendering and view functions
+      ├── device_display.rs    # Tests for device display components
+      ├── integration.rs       # Tests for UI integration scenarios
+      └── messages.rs          # Tests for UI message handling
+  ```
+  This structure organizes tests by domain and functionality, making it easier to locate and manage tests as the project grows.
+
+## Unit Testing Guidelines
+
+- **Core Components Testing:**
+  - Every public function should have at least one unit test
+  - Test both expected success cases and expected failure cases
+  - Create meaningful test data that resembles real-world scenarios
+  - For complex functions, test edge cases and boundary conditions
+
+- **Helper Utilities:**
+  - Create test helper functions for frequently used test setup code
+  - Place helper functions at the top of the test module
+  - Document helper functions with clear descriptions
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    // Helper to create a test device with manufacturer data
+    fn create_test_device_with_data(
+        address: [u8; 6],
+        name: Option<&str>,
+        rssi: Option<i16>,
+        manufacturer_data: HashMap<u16, Vec<u8>>
+    ) -> DiscoveredDevice {
+        DiscoveredDevice {
+            address: BDAddr::from(address),
+            name: name.map(|s| s.to_string()),
+            rssi,
+            manufacturer_data,
+            is_potential_airpods: false,
+            last_seen: Instant::now(),
+        }
+    }
+    
+    #[test]
+    fn test_function_behavior() {
+        // Test code using helper function
+        let device = create_test_device_with_data(...);
+        assert_eq!(function_under_test(device), expected_result);
+    }
+}
+```
+
+## Integration Testing Guidelines
+
+- **Cross-Module Interaction:**
+  - Test interactions between multiple components
+  - Verify that modules integrate correctly with each other
+  - Focus on testing complete user scenarios
+  - Use real implementations rather than mocks when practical
+
+- **Bluetooth Testing:**
+  - Test adapter discovery and management
+  - Test device scanning functionality
+  - Test filtering of discovered devices
+  - Test event generation and handling
+  - Verify correct behavior with different scan configurations
+
+```rust
+#[tokio::test]
+async fn test_scan_with_filter() {
+    let mut scanner = BleScanner::new().await.unwrap();
+    let config = ScanConfig::airpods_optimized();
+    
+    scanner.set_config(config);
+    
+    // Start scanning with a filter
+    let filter = create_airpods_filter();
+    let filtered_devices = scanner.scan_with_filter(filter).await.unwrap();
+    
+    // Verify filtered results
+    for device in filtered_devices {
+        assert!(device.is_potential_airpods);
+    }
+}
+```
+
+- **Event System Testing:**
+  - Test event generation from Bluetooth operations
+  - Test event filtering with different filter types
+  - Test event subscription and delivery
+  - Test event broker management of multiple subscribers
+  - Verify concurrent handling of events
+  - Use timeout-based testing for asynchronous events
+
+```rust
+#[tokio::test]
+async fn test_event_broker_filter_by_type() {
+    // Create an event broker
+    let mut broker = EventBroker::new();
+    broker.start();
+    
+    // Subscribe to only AirPods events
+    let (subscriber_id, rx) = broker.subscribe(EventFilter::event_types(vec![EventType::AirPodsDetected]));
+    let stream = receiver_to_stream(rx);
+    pin_mut!(stream);
+    
+    // Send a device discovery event (should be filtered out)
+    let device_event = BleEvent::DeviceDiscovered(create_test_device(...));
+    broker.get_sender().send(device_event).await.unwrap();
+    
+    // Send an AirPods event (should be received)
+    let airpods_event = BleEvent::AirPodsDetected(create_test_airpods(...));
+    broker.get_sender().send(airpods_event).await.unwrap();
+    
+    // The subscriber should receive only the AirPods event
+    let received = timeout(Duration::from_millis(100), stream.next()).await;
+    assert!(received.is_ok(), "Should receive the AirPods event");
+    
+    match received.unwrap().unwrap() {
+        BleEvent::AirPodsDetected(_) => { /* Expected */ },
+        _ => panic!("Received unexpected event type"),
+    }
+    
+    // Should not receive any more events
+    let no_more_events = timeout(Duration::from_millis(100), stream.next()).await;
+    assert!(no_more_events.is_err(), "Should not receive any more events");
+}
+```
+
+- **AirPods Detection Testing:**
+  - Test identification of different AirPods models
+  - Test parsing of manufacturer data
+  - Test battery level extraction and processing
+  - Test charging status detection
+  - Verify handling of invalid or non-AirPods data
+
+```rust
+#[test]
+fn test_detect_airpods_pro() {
+    // Create manufacturer data for AirPods Pro
+    let mut manufacturer_data = HashMap::new();
+    manufacturer_data.insert(
+        APPLE_COMPANY_ID,
+        create_airpods_data(AIRPODS_PRO_PREFIX, 9, 9, 5, 0b00000110) // 90%, 90%, 50%, left+right charging
+    );
+    
+    let device = create_test_device_with_data(
+        [0x02, 0x03, 0x04, 0x05, 0x06, 0x07],
+        Some("AirPods Pro"),
+        Some(-65),
+        manufacturer_data
+    );
+    
+    // Test detection
+    let result = detect_airpods(&device);
+    assert!(result.is_some(), "Should detect AirPods Pro device");
+    
+    let airpods = result.unwrap();
+    assert_eq!(airpods.device_type, AirPodsType::AirPodsPro);
+    assert_eq!(airpods.battery.left, Some(90));
+    assert_eq!(airpods.battery.right, Some(90));
+    assert_eq!(airpods.battery.case, Some(50));
+    assert!(airpods.battery.charging.left);
+    assert!(airpods.battery.charging.right);
+    assert!(!airpods.battery.charging.case);
+}
+```
+
+## UI Testing Guidelines
+
+- **UI State Testing:**
+  - Test initialization of UI state
+  - Test state transitions from user actions
+  - Test handling of UI messages
+  - Test data flow between UI and application logic
+  - Verify correct message handling behavior
+
+```rust
+#[test]
+fn test_app_state_message_handling() {
+    let mut app_state = AppState::new();
+    
+    // Test UI message handling
+    app_state.update(Message::StartScan);
+    assert!(app_state.is_scanning);
+    
+    app_state.update(Message::StopScan);
+    assert!(!app_state.is_scanning);
+    
+    // Test data flow
+    let device = create_test_device([1, 2, 3, 4, 5, 6], "Test Device", -60);
+    app_state.update(Message::DeviceDiscovered(device.clone()));
+    assert_eq!(app_state.devices.len(), 1);
+}
+```
+
+- **UI Component Testing:**
+  - Test individual UI components in isolation
+  - Verify correct rendering with different input states
+  - Test component interactions and state updates
+  - Verify accessibility features work correctly
+  - Test UI responsiveness to different window sizes
+
+- **Iced Framework Testing:**
+  - Test component integration with Iced
+  - Verify correct subscription behavior
+  - Test message passing between components
+  - Verify UI updates in response to application events
+
+## Asynchronous Testing
+
+- **Tokio Runtime:**
+  - Use `#[tokio::test]` for asynchronous tests
+  - Properly manage async tasks with JoinHandles
+  - Use timeouts for operations that could potentially hang
+  - Ensure all async resources are properly dropped
+
+```rust
+#[tokio::test]
+async fn test_async_operation() {
+    // Use timeout to prevent test from hanging
+    let result = timeout(
+        Duration::from_secs(5),
+        async_function_under_test()
+    ).await;
+    
+    assert!(result.is_ok(), "Operation timed out");
+    assert_eq!(result.unwrap(), expected_value);
+}
+```
+
+- **Stream Testing:**
+  - Use pin_mut for properly handling Stream futures
+  - Test both synchronous and asynchronous stream operations
+  - Verify stream completion behavior
+  - Test backpressure handling where appropriate
+
+## System Tray Testing
+
+- **Headless Testing:**
+  - Focus on testing the API structure rather than actual GUI interactions
+  - Test message passing through channels
+  - Test error handling and recovery paths
+  - Use TypeId verification for type checking when actual instances can't be created
+
+```rust
+#[test]
+fn test_system_tray_api() {
+    // Create a message channel
+    let (tx, _rx) = mpsc::channel::<Message>();
+    
+    // Verify the error enum functionality
+    
+    // Instead of actually creating a tray (which would fail in CI),
+    // verify type API is correctly defined
+    let type_id = std::any::TypeId::of::<SystemTray>();
+    assert_eq!(type_id, std::any::TypeId::of::<SystemTray>());
+    
+    // Test sending messages on the channel
+    let result = tx.send(Message::ToggleVisibility);
+    assert!(result.is_ok(), "Should be able to send messages on the channel");
+}
+```
+
+- **Message Handling:**
+  - Test that UI message enum variants are correctly implemented
+  - Verify that message patterns can be properly matched
+  - Test debug formatting for messages
+  - Ensure messages can be correctly sent through channels
+
+## Configuration Testing
+
+- **AppConfig Testing:**
+  - Test default configuration values
+  - Test conversion to specialized configs (e.g., ScanConfig)
+  - Test custom configuration creation and validation
+  - Test configuration serialization and deserialization
+  - Verify platform-specific path handling
+
+```rust
+#[test]
+fn test_custom_config() {
+    // Create a fully custom config
+    let custom_config = AppConfig {
+        auto_scan_on_startup: false,
+        scan_duration: Duration::from_secs(15),
+        scan_interval: Duration::from_secs(45),
+        min_rssi: Some(-55),
+        show_notifications: false,
+        start_minimized: false,
+        theme: Theme::Dark,
+        settings_path: PathBuf::from("/custom/path/settings.json"),
+    };
+    
+    // Verify all custom values
+    assert!(!custom_config.auto_scan_on_startup);
+    assert_eq!(custom_config.scan_duration, Duration::from_secs(15));
+    
+    // Test converting to ScanConfig
+    let scan_config = custom_config.to_scan_config();
+    assert_eq!(scan_config.scan_duration, Duration::from_secs(15));
+}
+```
+
+## Platform-Specific Testing
+
+- **Conditional Compilation:**
+  - Use `#[cfg(target_os = "windows")]` for Windows-specific tests
+  - Use `#[cfg(target_family = "unix")]` for Unix-based systems (macOS, Linux)
+  - Implement platform-specific validation where needed
+  - Test platform-specific paths and configurations
+
+```rust
+// Verify the path points to a valid location
+let path = &config.settings_path;
+assert!(path.to_str().is_some(), "Path should be convertible to a string");
+
+// For Windows, expect a path that includes AppData
+#[cfg(target_os = "windows")]
+assert!(path.to_str().unwrap().contains("config") || 
+        path.to_str().unwrap().contains("Config") ||
+        path.to_str().unwrap().contains("AppData"),
+        "Windows path should contain config or AppData directory");
+
+// For Unix systems, should include .config
+#[cfg(target_family = "unix")]
+assert!(path.to_str().unwrap().contains(".config"), 
+        "Unix path should contain .config directory");
+```
+
+- **Cross-Platform Adaptation:**
+  - Skip tests that aren't compatible with all platforms
+  - Provide alternative test paths for different platforms
+  - Document platform-specific limitations in test comments
+
+## Mock Testing Patterns
+
+- **UI Mocking Approach:**
+  - Create test doubles for UI components that can't be tested in headless environments
+  - Test message handling logic without requiring actual UI rendering
+  - Verify UI state transitions using mocked user input
+
+```rust
+#[test]
+fn test_ui_state_with_mocked_input() {
+    // Create the UI state
+    let mut state = AppState::default();
+    
+    // Simulate a user action by sending a message directly
+    state.update(Message::SelectDevice("test-device-id".to_string()));
+    
+    // Verify the state changed correctly
+    assert_eq!(state.selected_device, Some("test-device-id".to_string()));
+}
+```
+
+- **Bluetooth Mocking:**
+  - Create mock Bluetooth adapters for testing scanning logic
+  - Generate synthetic device discovery events
+  - Simulate various connection scenarios
+  - Test error handling with artificially induced failures
+
+```rust
+#[test]
+fn test_bluetooth_error_handling() {
+    // Create a mock adapter that always fails to scan
+    let mock_adapter = MockAdapter::new().with_scan_error(BleError::ScanInProgress);
+    
+    // Test that the error is properly handled
+    let result = process_scan_with_adapter(&mock_adapter);
+    assert!(matches!(result, Err(RustPodsError::BluetoothError(_))));
+}
+```
+
+## Test Data Management
+
+- **Test Data Factories:**
+  - Create dedicated functions to generate test data
+  - Parameterize test data generation for different scenarios
+  - Document the purpose and structure of test data
+
+```rust
+/// Helper to create test AirPods manufacturer data with the correct format
+fn create_airpods_data(
+    prefix: &[u8],
+    left_battery: u8,
+    right_battery: u8,
+    case_battery: u8,
+    charging_status: u8
+) -> Vec<u8> {
+    // The data structure must exactly match what's expected in parse_airpods_data
+    let mut data = Vec::with_capacity(27);
+    
+    // AirPods model prefix (first two bytes)
+    data.push(prefix[0]);
+    data.push(prefix[1]);
+    
+    // Add 10 bytes of dummy data
+    data.extend_from_slice(&[0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A]);
+    
+    // Add battery and status data
+    data.push(left_battery);
+    data.push(right_battery);
+    data.push(charging_status);
+    data.push(case_battery);
+    
+    // Add padding
+    data.extend_from_slice(&[0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+    
+    data
+}
+```
+
+## Continuous Integration Considerations
+
+- **CI Environment Testing:**
+  - Ensure tests can run in headless environments (GitHub Actions, etc.)
+  - Skip UI/system tray tests that require a display server
+  - Use conditional compilation to adapt to CI environments
+  - Add CI-specific test flags where needed
+
+```rust
+// Skip tests that require a display server in CI environments
+#[test]
+#[cfg_attr(feature = "ci", ignore)]
+fn test_requires_display_server() {
+    // Test that would fail in a headless CI environment
+}
+```
+
+- **Test Tagging and Organization:**
+  - Use `#[ignore]` for tests that are long-running or require special setup
+  - Group related tests with modules or helper functions
+  - Document test dependencies and requirements
+  - Use descriptive test names that explain the purpose of the test
+
+
+
+
+
+
+
+
+
+
+

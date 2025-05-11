@@ -1,0 +1,55 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# RustPods Project Rules Index
+
+This document serves as the central index for all active Cursor rules within this repository, organized by category. These rules define processes, structures, and guidelines for development.
+
+## Core & General
+
+Fundamental project structure, setup, and general development guidelines.
+
+- [index.mdc](mdc:.cursor/rules/index.mdc) - Core principles and project-specific guidelines
+- [cursorRules.mdc](mdc:.cursor/rules/cursorRules.mdc) - How to add or edit Cursor rules in our project
+- [protectedFiles.mdc](mdc:.cursor/rules/protectedFiles.mdc) - Guidelines for handling protected files and merge conflicts
+- [icedPatterns.mdc](mdc:.cursor/rules/icedPatterns.mdc) - Guidelines for using the Iced GUI framework
+- [projectStructure.mdc](mdc:.cursor/rules/projectStructure.mdc) - Project structure and file organization guidelines
+- [memory.mdc](mdc:.cursor/rules/memory.mdc) - Memory management and optimization guidelines
+- [testGuidelines.mdc](mdc:.cursor/rules/testGuidelines.mdc) - Testing guidelines and patterns for unit and integration tests
+
+## Task Management
+
+Guidelines for managing project tasks and development workflow.
+
+- [devWorkflow.mdc](mdc:.cursor/rules/devWorkflow.mdc) - Task Master development workflow and processes
+- [taskmaster.mdc](mdc:.cursor/rules/taskmaster.mdc) - Comprehensive reference for Task Master tools and commands
+- [selfImprove.mdc](mdc:.cursor/rules/selfImprove.mdc) - Guidelines for improving Cursor rules and documentation
+
+## Bluetooth & Hardware
+
+Guidelines for Bluetooth LE communication and hardware interactions.
+
+- [bluetooth.mdc](mdc:.cursor/rules/bluetooth.mdc) - Bluetooth LE communication patterns and best practices
+- [airpodsProtocol.mdc](mdc:.cursor/rules/airpodsProtocol.mdc) - AirPods BLE protocol details and parsing guidelines
+
+## UI & Application
+
+Guidelines for UI implementation and application architecture.
+
+- [icedUi.mdc](mdc:.cursor/rules/icedUi.mdc) - UI implementation using the Iced framework
+- [systemTray.mdc](mdc:.cursor/rules/systemTray.mdc) - System tray integration guidelines
+- [errorHandling.mdc](mdc:.cursor/rules/errorHandling.mdc) - Error handling and recovery strategies
+
+## Important Notes
+
+- Follow the dependency structure defined in tasks.json when implementing features
+- Use Task Master to track development progress
+- Ensure comprehensive error handling for all Bluetooth operations
+- Maintain cross-platform compatibility where possible, with Windows as primary target
+- Keep performance impacts minimal, especially for system tray and background operations
+- Follow Rust best practices for memory management and concurrency
+
+## Contact
+For questions about these guidelines, contact project maintainers.

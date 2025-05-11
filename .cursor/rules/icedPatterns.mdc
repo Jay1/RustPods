@@ -1,0 +1,374 @@
+---
+description: Guidelines for using the Iced GUI framework, covering application structure, message-based architecture, component organization, styling, and version-specific patterns
+globs: 
+alwaysApply: false
+---
+# Iced Framework Patterns
+
+## Core Architecture
+
+- **Application Structure**
+  - Iced applications use a message-based architecture with state, messages, and views
+  - State is a central struct that holds all application data
+  - Messages are enums that represent events that can update the state
+  - Views are functions that convert state into UI elements
+  - Applications should follow the Model-View-Update (MVU) pattern
+
+- **Running the UI Application**
+  ```rust
+  // ✅ DO: Use the iced::run function with title, update, and view functions
+  pub fn run_ui() -> Result<(), iced::Error> {
+      iced::run(
+          "Application Title",
+          update,
+          view,
+      )
+  }
+  
+  // ❌ DON'T: Use the older Application trait directly
+  // impl Application for AppState { ... }
+  ```
+
+- **Update Logic Structure**
+  ```rust
+  // ✅ DO: Use a separate update function with &mut State and Message parameters
+  fn update(state: &mut AppState, message: Message) -> Command<Message> {
+      match message {
+          Message::ButtonPressed => {
+              // Update state
+              Command::none()
+          }
+      }
+  }
+  
+  // ❌ DON'T: Try to use an update method on a state struct
+  // impl AppState {
+  //     fn update(&mut self, message: Message) -> Command<Message> { ... }
+  // }
+  ```
+
+- **View Logic Structure**
+  ```rust
+  // ✅ DO: Use a separate view function that returns Element<Message>
+  fn view(state: &AppState) -> Element<Message> {
+      column![
+          text("Hello, World!"),
+          button("Click me").on_press(Message::ButtonPressed)
+      ]
+      .padding(20)
+      .into()
+  }
+  
+  // ❌ DON'T: Use a view method on a state struct directly in run_ui
+  // impl AppState {
+  //     fn view(&self) -> Element<Message> { ... }
+  // }
+  ```
+
+## Component Organization
+
+- **UI Component Trait**
+  - Define a common trait for all UI components
+  - Ensures consistent view method signatures
+  - Helps with composition and reuse
+  ```rust
+  // ✅ DO: Create a UI component trait
+  pub trait UiComponent {
+      /// Render the component
+      fn view(&self) -> iced::Element<'_, Message>;
+  }
+  
+  // Implement the trait for components
+  impl UiComponent for MyComponent {
+      fn view(&self) -> Element<'_, Message> {
+          // Component-specific view logic
+      }
+  }
+  ```
+
+- **Component Module Structure**
+  - Organize components in a modular structure
+  - Group related components in their own modules
+  - Re-export components for easier imports
+  - Follow this structure:
+  ```
+  src/ui/
+  ├── mod.rs           // Main UI module, exports
+  ├── app.rs           // Application entry point
+  ├── message.rs       // UI message types
+  ├── state.rs         // State management
+  ├── components/      // UI components
+  │   ├── mod.rs       // Components module
+  │   ├── header.rs    // Individual component
+  │   └── ...          // Other components
+  └── ...              // Other UI-related modules
+  ```
+
+- **Component Example**
+  ```rust
+  // ✅ DO: Create focused, single-responsibility components
+  // src/ui/components/battery_display.rs
+  pub struct BatteryDisplay {
+      left_level: Option<u8>,
+      right_level: Option<u8>,
+      case_level: Option<u8>,
+  }
+  
+  impl UiComponent for BatteryDisplay {
+      fn view(&self) -> Element<'_, Message> {
+          column![
+              // Component view logic
+          ]
+          .into()
+      }
+  }
+  ```
+
+## State Management
+
+- **Central State Struct**
+  - Use a single `AppState` struct to hold application state
+  - Provide methods for updating state in consistent ways
+  - Keep state immutable except in update functions
+  ```rust
+  // ✅ DO: Create a central state struct with helper methods
+  pub struct AppState {
+      pub visible: bool,
+      pub is_scanning: bool,
+      pub devices: HashMap<String, DiscoveredDevice>,
+      pub selected_device: Option<String>,
+  }
+  
+  impl AppState {
+      pub fn update_device(&mut self, device: DiscoveredDevice) {
+          let address = device.address.to_string();
+          self.devices.insert(address, device);
+      }
+      
+      pub fn select_device(&mut self, address: String) {
+          if self.devices.contains_key(&address) {
+              self.selected_device = Some(address);
+          }
+      }
+  }
+  ```
+
+- **Accessing State in View Functions**
+  - Use helper methods to access and transform state data for views
+  - Avoid complex logic in view functions
+  ```rust
+  // ✅ DO: Create methods to access state in a structured way
+  impl AppState {
+      pub fn get_selected_device(&self) -> Option<&DiscoveredDevice> {
+          self.selected_device.as_ref().and_then(|addr| self.devices.get(addr))
+      }
+  }
+  
+  // In view function
+  let battery_display = if let Some(device) = state.get_selected_device() {
+      // Create component
+  } else {
+      // Create empty component
+  };
+  ```
+
+## Widget Usage
+
+- **Container Styling**
+  - Use `container::Style` for styling containers
+  - Apply consistent styles across similar components
+  ```rust
+  // ✅ DO: Use container::Style methods
+  let styled_container = if is_selected {
+      container(btn).padding(5).style(container::Style::primary())
+  } else {
+      container(btn).padding(5)
+  };
+  
+  // For custom styles:
+  container(header_row)
+      .width(Length::Fill)
+      .style(container::Style::custom(|_| {
+          container::Appearance {
+              text_color: None,
+              background: Some(iced::Color::from_rgb(0.9, 0.9, 0.9).into()),
+              border_radius: 5.0,
+              border_width: 1.0,
+              border_color: iced::Color::from_rgb(0.7, 0.7, 0.7),
+          }
+      }))
+  ```
+
+- **Button Styling**
+  - Create styled buttons with consistent appearances
+  - Use readable helper functions for common button styles
+  ```rust
+  // ✅ DO: Create buttons with appropriate styling
+  let scan_button = if self.is_scanning {
+      button("Stop Scan")
+          .on_press(Message::StopScan)
+  } else {
+      button("Start Scan")
+          .on_press(Message::StartScan)
+  };
+
+  // Wrap in a container for styling
+  let styled_scan_button = if self.is_scanning {
+      container(scan_button).style(container::Style::destructive())
+  } else {
+      container(scan_button).style(container::Style::primary())
+  };
+  ```
+
+- **Layout Best Practices**
+  - Use Length::Fill, Length::FillPortion, and Length::Shrink appropriately
+  - Apply consistent padding and spacing
+  - Use nested containers for complex layouts
+  ```rust
+  // ✅ DO: Create well-structured layouts
+  row![
+      text(device_name).width(Length::FillPortion(3)),
+      text(device_type).width(Length::FillPortion(2)),
+      text(rssi).width(Length::FillPortion(1)),
+  ]
+  .spacing(10)
+  .padding(5)
+  ```
+
+## System Tray Integration
+
+- **System Tray Structure**
+  - Use the `tray-item` crate for system tray functionality
+  - Create a dedicated struct for system tray management
+  - Implement error handling for tray operations
+  ```rust
+  // ✅ DO: Create a dedicated SystemTray struct
+  pub struct SystemTray {
+      tray: TrayItem,
+      tx: mpsc::Sender<Message>,
+  }
+  
+  impl SystemTray {
+      pub fn new(tx: mpsc::Sender<Message>) -> Result<Self, SystemTrayError> {
+          let mut tray = TrayItem::new("AppName", "default")
+              .map_err(|e| SystemTrayError::Creation(e.to_string()))?;
+          
+          // Add menu items
+          let tx_clone = tx.clone();
+          tray.add_menu_item("Open", move || {
+              let _ = tx_clone.send(Message::ToggleVisibility);
+          })
+          .map_err(|e| SystemTrayError::MenuItem(e.to_string()))?;
+          
+          // More menu items...
+          
+          Ok(Self { tray, tx })
+      }
+      
+      pub fn update_icon(&mut self, connected: bool) -> Result<(), SystemTrayError> {
+          let icon = if connected { "connected" } else { "default" };
+          self.tray.set_icon(icon)
+              .map_err(|e| SystemTrayError::SetIcon(e.to_string()))
+      }
+  }
+  ```
+
+## RustPods-Specific Patterns
+
+- **Sandbox Implementation**
+  - RustPods uses the `Sandbox` trait for the main application
+  - The `AppState` struct implements the `Sandbox` trait
+  - A separate `run_ui` function in `ui/app.rs` launches the application
+  ```rust
+  // ✅ DO: Use this pattern for launching the UI
+  // In src/ui/app.rs
+  pub fn run_ui() -> iced::Result {
+      use iced::Sandbox;
+      AppState::run(Settings::default())
+  }
+
+  // In src/ui/state.rs
+  impl Sandbox for AppState {
+      type Message = Message;
+      
+      fn new() -> Self {
+          Self::default()
+      }
+      
+      fn title(&self) -> String {
+          String::from("RustPods")
+      }
+      
+      fn update(&mut self, message: Message) {
+          // Message handling
+      }
+      
+      fn view(&self) -> iced::Element<Message> {
+          // View rendering, often delegated to a separate function
+          crate::ui::app::view(self)
+      }
+  }
+  ```
+
+- **UI Component Structure**
+  - All UI components are in the `ui/components` directory
+  - Each component is in its own file
+  - Components include:
+    - `device_list`: Displays a list of discovered devices
+    - `battery_display`: Shows battery levels for AirPods
+    - `header`: Application header with controls
+
+- **Event System Integration**
+  - Bluetooth events are translated to UI messages
+  - Events flow from the `BleScanner` to `AppState` to UI components
+  - Use the `Message` enum to represent UI events:
+  ```rust
+  // ✅ DO: Define messages for all UI events
+  pub enum Message {
+      ToggleVisibility,
+      Exit,
+      DeviceDiscovered(DiscoveredDevice),
+      DeviceUpdated(DiscoveredDevice),
+      SelectDevice(String),
+      StartScan,
+      StopScan,
+      ToggleAutoScan(bool),
+      Tick,
+  }
+  ```
+
+- **Command-line Interface Integration**
+  - The UI is launched with a specific command: `rustpodsmon ui`
+  - The application can still function in CLI mode with other commands
+  - The entry point in `main.rs` handles command-line arguments and routing
+
+- **View Structure**
+  - The main view is created in `ui/app.rs`
+  - Views are composed of smaller components
+  - Basic structure:
+  ```rust
+  pub fn view(state: &AppState) -> Element<Message> {
+      // Simple MVP view for now
+      let content = column![
+          text("RustPods").size(30),
+          text("AirPods Battery Monitor").size(20),
+          text("MVP Version").size(16),
+      ].spacing(10);
+      
+      container(content)
+          .width(iced::Length::Fill)
+          .height(iced::Length::Fill)
+          .padding(20)
+          .center_x()
+          .center_y()
+          .into()
+  }
+  ```
+
+- **Project Configuration Integration**
+  - UI components access configuration via `AppState`
+  - The UI should reflect current configuration settings
+  - Configuration changes should be persisted
+
+
+

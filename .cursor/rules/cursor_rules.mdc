@@ -51,3 +51,96 @@ alwaysApply: true
   - Include both DO and DON'T examples
   - Reference actual code over theoretical examples
   - Use consistent formatting across rules 
+
+
+  # Cursor Rules Guidelines
+
+## Rule Location and Organization
+
+- **Rule Placement:**
+  - Always place rule files in `.cursor/rules/` directory at the project root
+  - Never place rule files in the project root or outside the designated directory
+  - Follow this directory structure:
+    ```
+    PROJECT_ROOT/
+    ├── .cursor/
+    │   └── rules/
+    │       ├── yourRuleName.mdc
+    │       └── ...
+    └── ...
+    ```
+
+- **Naming Conventions:**
+  - Use camelCase for filenames (e.g., `errorHandling.mdc`)
+  - Always use `.mdc` extension
+  - Make names descriptive of the rule's purpose
+  - Avoid generic names that don't clearly indicate content
+
+## Required Rule Structure
+
+- **Standard Format:**
+  ```markdown
+  ---
+  description: Clear, one-line description of what the rule enforces
+  globs: path/to/files/*.ext, other/path/**/*
+  alwaysApply: boolean
+  ---
+
+  - **Main Points in Bold**
+    - Sub-points with details
+    - Examples and explanations
+  ```
+
+- **Frontmatter Fields:**
+  - `description`: Concise explanation of the rule's purpose
+  - `globs`: File patterns the rule applies to (optional)
+  - `alwaysApply`: Whether the rule should be active for all files
+
+## Content Guidelines
+
+- **File References:**
+  - Use `@filename` (@filename) to reference files
+  - Example: `@icedPatterns.mdc` for rule references
+  - Example: `@main.rs` for code references
+
+- **Code Examples:**
+  - Use language-specific code blocks with proper syntax highlighting
+  ```rust
+  // ✅ DO: Show good examples
+  fn good_example() {
+      // Implementation following guidelines
+  }
+  
+  // ❌ DON'T: Show anti-patterns
+  fn bad_example() {
+      // Implementation not following guidelines
+  }
+  ```
+
+- **Rule Content Organization:**
+  - Start with high-level overview
+  - Include specific, actionable requirements
+  - Show examples of correct implementation
+  - Reference existing code when possible
+  - Keep rules DRY by referencing other rules
+
+## Maintenance and Best Practices
+
+- **Rule Maintenance:**
+  - Update rules when new patterns emerge
+  - Add examples from actual codebase
+  - Remove outdated patterns
+  - Cross-reference related rules
+
+- **IDE Integration Best Practices:**
+  - Utilize AI assistance for consistent code generation
+  - Use rules to guide documentation standards
+  - Reference rules during code reviews
+  - Keep rules in sync with actual development practices
+
+- **Writing Style:**
+  - Use bullet points for clarity
+  - Keep descriptions concise
+  - Include both DO and DON'T examples
+  - Reference actual code over theoretical examples
+  - Use consistent formatting across rules

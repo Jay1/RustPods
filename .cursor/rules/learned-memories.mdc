@@ -1,0 +1,71 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# RustPods Project Memory
+
+This file stores project-specific knowledge, conventions, and user preferences learned during the development of the RustPods application.
+
+## Project Structure
+
+- **Main Module Organization**: The application is organized into several key modules:
+  - `bluetooth`: For Bluetooth scanning and device management
+  - `airpods`: For AirPods-specific detection and data parsing
+  - `ui`: For Iced GUI components and rendering
+  - `app`: For core application state management
+  - `config`: For configuration handling
+  - `error`: For error type definitions
+
+- **Command-line Interface**: The application offers multiple running modes via command-line arguments:
+  - `adapters`: List available Bluetooth adapters
+  - `scan`: Run a basic Bluetooth scan
+  - `interval`: Run interval-based scanning
+  - `airpods`: Run AirPods filtering demo
+  - `events`: Run event system demo
+  - `ui`: Launch the GUI application
+
+## Technical Decisions
+
+- **Bluetooth Library**: Using `btleplug` v0.10 for cross-platform Bluetooth LE support
+- **Async Runtime**: Using `tokio` with full features for asynchronous operations
+- **UI Framework**: Using `iced` v0.10 with tokio and debug features for GUI implementation
+- **Error Handling**: Using `thiserror` for error type definitions
+- **System Tray**: Using `tray-item` v0.7 for system tray integration
+
+## Implementation Patterns
+
+- **Bluetooth Scanning**: 
+  - `BleScanner` implements scan operations and device discovery
+  - Scanning uses a subscription model where components can subscribe to specific events
+  - Filters are used to narrow down events to specific types or devices
+
+- **AirPods Detection**:
+  - Apple devices are identified by manufacturer data
+  - `AirPodsFilter` provides various filters for specific AirPods models
+  - Battery information is extracted from manufacturer data
+  - Battery levels are normalized to percentages (0-100%)
+
+- **Event System**:
+  - The application uses an event system for Bluetooth events
+  - Components can subscribe to specific event types
+  - Events include device discovery, device updates, battery updates, etc.
+
+- **UI Architecture**:
+  - The UI uses Iced's `Sandbox` pattern for state management
+  - `AppState` manages the application state and is passed to UI components
+  - UI components are organized into modules in the `ui` directory
+  - The UI is launched by the `run_ui` function in `ui/app.rs`
+
+## Known Issues & Workarounds
+
+- **Event System Integration**: The subscription model requires proper cleanup to avoid memory leaks
+- **UI Launch**: The UI must be launched with the `ui` command or it will default to the CLI mode
+
+## Future Improvements
+
+- Implement battery status monitoring and updates
+- Add error handling for Bluetooth connection issues
+- Enhance system tray functionality
+- Improve UI with battery status display
+- Create settings UI for configuration options

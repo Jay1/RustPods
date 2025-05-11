@@ -1,0 +1,255 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# AirPods Bluetooth Protocol
+
+This document outlines the Bluetooth Low Energy (BLE) protocol used by Apple AirPods and how to parse the data to extract device information.
+
+## Protocol Overview
+
+- **Manufacturer ID**: 
+  - Apple uses company ID `0x004C` (76 in decimal) in the manufacturer data field of BLE advertisements
+  - This is defined as `APPLE_COMPANY_ID` in the codebase
+  
+- **Advertisement Format**:
+  - AirPods data is packed into the manufacturer-specific data field of BLE advertisements
+  - The format varies by AirPods model but follows a general pattern
+  - Data typically includes device type identifier, battery levels, charging status, and other device-specific information
+
+- **Scanning Requirements**:
+  - AirPods don't advertise continuously; they only broadcast when the case is open or when in use
+  - Scanning must be performed with appropriate timing to catch advertisements
+  - Multiple scan cycles may be necessary to get complete data
+
+## Data Format
+
+- **Basic Structure**:
+  ```
+  [Header(s)] [Device Type] [Status Flags] [Battery Data] [Additional Data]
+  ```
+
+- **Common Data Positions**:
+  - Bytes 0-6: Headers and device identification
+  - Byte 7: Device subtype and model information
+  - Bytes 10-15: Status flags and battery information
+  - Detailed positions vary by model and firmware version
+
+## AirPods Identification
+
+- **Device Type Recognition**:
+  ```rust
+  // ✅ DO: Identify AirPods type by examining specific bytes
+  pub fn identify_airpods_type(data: &[u8]) -> AirPodsType {
+      // Check for minimum data length
+      if data.len() < 8 {
+          return AirPodsType::Unknown;
+      }
+      
+      // Check header byte
+      let header = data[0];
+      if header != 0x01 && header != 0x07 && header != 0x0A {
+          return AirPodsType::Unknown;
+      }
+      
+      // Get the device model byte
+      let device_model = if data.len() > 7 { data[7] } else { 0 };
+      
+      match device_model {
+          0x0E => AirPodsType::AirPods1,
+          0x0F => AirPodsType::AirPods2,
+          0x10 => AirPodsType::AirPodsPro,
+          0x11 => AirPodsType::AirPodsMax,
+          0x12 => AirPodsType::AirPodsPro2,
+          0x13 => AirPodsType::AirPods3,
+          _ => AirPodsType::Unknown,
+      }
+  }
+  ```
+
+- **AirPods Types**:
+  ```rust
+  // ✅ DO: Define an enum for AirPods types
+  #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+  pub enum AirPodsType {
+      Unknown,
+      AirPods1,
+      AirPods2,
+      AirPods3,
+      AirPodsPro,
+      AirPodsPro2,
+      AirPodsMax,
+  }
+  ```
+
+## Battery Information
+
+- **Battery Level Parsing**:
+  ```rust
+  // ✅ DO: Extract battery percentage from raw value
+  pub fn extract_battery_percentage(battery_raw: u8) -> Option<u8> {
+      // Typical values range from 0-10
+      if battery_raw <= 10 {
+          return Some(battery_raw * 10);
+      }
+      
+      // Some firmware versions report percentage directly
+      if battery_raw <= 100 {
+          return Some(battery_raw);
+      }
+      
+      // Invalid or unknown value
+      None
+  }
+  ```
+
+- **Battery Structure**:
+  ```rust
+  // ✅ DO: Create a clear structure for battery information
+  #[derive(Debug, Clone, Default)]
+  pub struct AirPodsBattery {
+      pub left: Option<u8>,
+      pub right: Option<u8>,
+      pub case: Option<u8>,
+      pub charging: ChargingStatus,
+  }
+  
+  #[derive(Debug, Clone, Default)]
+  pub struct ChargingStatus {
+      pub left: bool,
+      pub right: bool,
+      pub case: bool,
+  }
+  ```
+
+- **Charging Status**:
+  - Charging status is typically stored in bit flags
+  - Byte 14 often contains charging information:
+    - Bit 0: Case charging status
+    - Bit 1: Right AirPod charging status
+    - Bit 2: Left AirPod charging status
+
+## Data Parsing
+
+- **Full Data Parsing**:
+  ```rust
+  // ✅ DO: Parse the full manufacturer data
+  pub fn parse_airpods_data(data: &[u8]) -> Option<AirPodsBattery> {
+      // Check data length
+      if data.len() < 16 {
+          return None;
+      }
+      
+      // Get charging status
+      let charging_byte = data[14];
+      let charging = ChargingStatus {
+          left: (charging_byte & 0x04) != 0,
+          right: (charging_byte & 0x02) != 0,
+          case: (charging_byte & 0x01) != 0,
+      };
+      
+      // Get battery levels
+      let left_battery = extract_battery_percentage(data[12]);
+      let right_battery = extract_battery_percentage(data[13]);
+      let case_battery = extract_battery_percentage(data[15]);
+      
+      Some(AirPodsBattery {
+          left: left_battery,
+          right: right_battery,
+          case: case_battery,
+          charging,
+      })
+  }
+  ```
+
+## Filtering AirPods Devices
+
+- **Basic AirPods Filter**:
+  ```rust
+  // ✅ DO: Create filters for finding AirPods
+  pub fn airpods_all_models_filter() -> AirPodsFilter {
+      Box::new(|airpods: &DetectedAirPods| -> bool {
+          airpods.device_type != AirPodsType::Unknown
+      })
+  }
+  ```
+
+- **Specific Model Filter**:
+  ```rust
+  // ✅ DO: Create model-specific filters
+  pub fn airpods_pro_filter() -> AirPodsFilter {
+      Box::new(|airpods: &DetectedAirPods| -> bool {
+          airpods.device_type == AirPodsType::AirPodsPro || 
+          airpods.device_type == AirPodsType::AirPodsPro2
+      })
+  }
+  ```
+
+- **Battery Information Filter**:
+  ```rust
+  // ✅ DO: Create filters based on battery information
+  pub fn airpods_with_battery_filter() -> AirPodsFilter {
+      Box::new(|airpods: &DetectedAirPods| -> bool {
+          airpods.battery.left.is_some() || 
+          airpods.battery.right.is_some() || 
+          airpods.battery.case.is_some()
+      })
+  }
+  ```
+
+- **Custom Filter Creation**:
+  ```rust
+  // ✅ DO: Allow custom filter creation
+  pub fn create_custom_airpods_filter<F>(predicate: F) -> AirPodsFilter
+  where
+      F: Fn(&DetectedAirPods) -> bool + Send + Sync + 'static,
+  {
+      Box::new(predicate)
+  }
+  ```
+
+## Proximity and Signal Strength
+
+- **RSSI Interpretation**:
+  - RSSI (Received Signal Strength Indicator) values are in dBm (decibels relative to 1 milliwatt)
+  - Typical values range from -30 dBm (very close) to -100 dBm (very far)
+  - Values around -50 to -65 dBm typically indicate the device is nearby (within a few meters)
+
+- **Proximity Filter**:
+  ```rust
+  // ✅ DO: Create filter based on proximity
+  pub fn airpods_nearby_filter() -> AirPodsFilter {
+      Box::new(|airpods: &DetectedAirPods| -> bool {
+          if let Some(rssi) = airpods.rssi {
+              // Consider "nearby" if RSSI is stronger than -70 dBm
+              rssi > -70
+          } else {
+              false
+          }
+      })
+  }
+  ```
+
+## Implementation Notes
+
+- **Device Refresh Rate**:
+  - AirPods typically refresh their advertisement data every few seconds when the case is open
+  - In-ear AirPods advertise less frequently to conserve battery
+  - Consider stale data after ~30 seconds without updates
+
+- **Handling Missing Data**:
+  - Some data fields may be missing in certain scenarios:
+    - Case battery info might be missing when AirPods are in use
+    - Individual AirPod data might be missing if they're in the case
+  - Always handle Option types properly and provide fallbacks
+
+- **Firmware Variations**:
+  - Apple occasionally changes the data format in firmware updates
+  - Add version detection and format adaptation when needed
+  - Test with different firmware versions when possible
+
+- **Privacy Considerations**:
+  - AirPods broadcast a unique identifier
+  - Respect privacy by not tracking devices persistently without user consent
+  - Discard historical data when it's no longer needed

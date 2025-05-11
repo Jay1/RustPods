@@ -1,0 +1,297 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Project Structure Guidelines
+
+## Directory Layout
+
+- **Root Structure:**
+  - Keep the root directory clean and organized
+  - Place source code in `src/`
+  - Place tests in `tests/`
+  - Configuration in appropriate config files
+  - Documentation in `docs/`
+
+- **Source Structure:**
+  ```
+  src/
+  ├── main.rs           // Application entry point
+  ├── lib.rs            // Library exports
+  ├── app/              // Main application logic
+  │   └── mod.rs  
+  ├── bluetooth/        // Bluetooth functionality
+  │   ├── mod.rs
+  │   ├── scanner.rs
+  │   ├── scanner_config.rs
+  │   ├── adapter.rs
+  │   └── examples.rs
+  ├── airpods/          // AirPods-specific parsing and logic
+  │   ├── mod.rs
+  │   └── detector.rs
+  ├── ui/               // User interface components
+  │   ├── mod.rs
+  │   ├── app.rs
+  │   ├── components/
+  │   │   └── ...
+  │   └── ...
+  ├── config/           // Application configuration
+  │   └── mod.rs
+  └── error.rs          // Error types
+  ```
+
+## Module Organization
+
+- **Main Module Pattern:**
+  - Each primary module should have a `mod.rs` file
+  - Use `mod.rs` for re-exports and module documentation
+  - Separate distinct functionality into individual files
+  ```rust
+  // src/bluetooth/mod.rs
+  //! BLE scanning and device management
+
+  mod scanner;
+  mod adapter;
+  mod examples;
+  mod scanner_config;
+
+  pub use scanner::{
+      BleScanner, BleError, BleEvent, DiscoveredDevice,
+  };
+
+  pub use adapter::{
+      AdapterManager, AdapterInfo,
+  };
+
+  pub use scanner_config::ScanConfig;
+
+  // Export examples for testing
+  pub use examples::{
+      discover_adapters, scan_with_adapter, interval_scanning,
+  };
+  ```
+
+- **Component Organization:**
+  - Group related components in dedicated modules
+  - Re-export components for easier access
+  ```rust
+  // src/airpods/mod.rs
+  //! AirPods-specific functionality
+
+  mod detector;
+
+  pub use detector::{
+      DetectedAirPods, detect_airpods, 
+      identify_airpods_type, create_airpods_filter
+  };
+  ```
+
+## Code Organization
+
+- **File Structure:**
+  - Start files with documentation comments
+  - Place imports at the top, grouped by source
+  - Define public types first
+  - Place implementation blocks after type definitions
+  - Place tests in a `#[cfg(test)]` module at the end of the file
+  ```rust
+  //! Module purpose description
+  
+  // Standard library imports
+  use std::collections::HashMap;
+  
+  // External crate imports
+  use btleplug::api::{BDAddr, Central, CentralEvent};
+  
+  // Internal imports
+  use crate::bluetooth::DiscoveredDevice;
+  
+  /// Public type documentation
+  pub struct BleScanner {
+      // Fields...
+  }
+  
+  // Implementation
+  impl BleScanner {
+      // Methods...
+  }
+  
+  #[cfg(test)]
+  mod tests {
+      // Tests...
+  }
+  ```
+
+- **Error Handling:**
+  - Use `thiserror` for defining error types
+  - Create specific error enums for modules
+  - Use `Result<T, E>` for functions that can fail
+  ```rust
+  #[derive(Debug, thiserror::Error)]
+  pub enum BleError {
+      #[error("Failed to find a suitable Bluetooth adapter")]
+      AdapterNotFound,
+      
+      #[error("Bluetooth operation failed: {0}")]
+      BtlePlugError(#[from] btleplug::Error),
+      
+      #[error("Scanning is already in progress")]
+      ScanInProgress,
+      
+      #[error("Device communication error: {0}")]
+      DeviceError(String),
+  }
+  ```
+
+## Naming Conventions
+
+- **General Naming:**
+  - Use clear, descriptive names
+  - Follow Rust naming conventions
+  - Use snake_case for files (e.g., `scanner_config.rs`)
+  - Use snake_case for variables and functions
+  - Use PascalCase for types and traits
+  - Use SCREAMING_SNAKE_CASE for constants
+
+- **Module Names:**
+  - Use singular nouns for modules (e.g., `bluetooth`, not `bluetooths`)
+  - Use descriptive names that indicate functionality
+
+- **Component Names:**
+  - Name UI components based on their purpose
+  - Use PascalCase for component structs
+  - Examples: `BleScanner`, `AdapterManager`, `DetectedAirPods`
+
+## Documentation
+
+- **Documentation Comments:**
+  - Use `//!` for module-level documentation
+  - Use `///` for item-level documentation
+  - Document all public APIs
+  - Include examples where appropriate
+  ```rust
+  //! Bluetooth scanning functionality
+  
+  /// Bluetooth LE scanner for discovering nearby devices
+  pub struct BleScanner {
+      /// Adapter manager for handling multiple adapters
+      adapter_manager: Option<AdapterManager>,
+      /// Whether a scan is currently in progress
+      is_scanning: bool,
+  }
+  ```
+
+- **Code Comments:**
+  - Comment complex algorithms or non-obvious code
+  - Keep comments current with code changes
+  - Use TODO, FIXME, or NOTE for temporary comments
+  - Avoid unnecessary comments for self-documenting code
+
+## Testing Structure
+
+- **Unit Tests:**
+  - Place unit tests in the same file as the code being tested
+  - Use `#[cfg(test)]` module at the end of the file
+  - Follow standard naming conventions for test functions
+  ```rust
+  #[cfg(test)]
+  mod tests {
+      use super::*;
+      
+      #[test]
+      fn test_detect_airpods_no_manufacturer_data() {
+          // Test code
+      }
+      
+      #[test]
+      fn test_extract_battery_level() {
+          // Test code
+      }
+  }
+  ```
+
+- **Integration Tests:**
+  - Place integration tests in the `tests/` directory
+  - Organize by functionality
+  - Group related tests in dedicated files
+  ```
+  tests/
+  ├── bluetooth/
+  │   ├── scanning_tests.rs
+  │   └── adapter_tests.rs
+  ├── airpods/
+  │   └── detection_tests.rs
+  └── ui/
+      └── rendering_tests.rs
+  ```
+
+## Cross-Platform Considerations
+
+- **Platform-Specific Code:**
+  - Use conditional compilation for platform-specific code
+  - Keep platform-specific code isolated
+  ```rust
+  #[cfg(target_os = "windows")]
+  fn platform_specific_function() {
+      // Windows implementation
+  }
+  
+  #[cfg(target_os = "macos")]
+  fn platform_specific_function() {
+      // macOS implementation
+  }
+  ```
+
+- **Bluetooth Considerations:**
+  - Handle platform-specific Bluetooth quirks
+  - Windows is the primary target platform
+  - Ensure adapter management works across supported platforms
+  - Use feature flags for optional platform support
+  - Test adapter discovery and scanning on all platforms
+
+## Asynchronous Code Organization
+
+- **Tokio for Async Operations:**
+  - Use tokio for all async operations
+  - Create separate async functions for distinct operations
+  - Use channels for communication between async tasks
+  ```rust
+  // In BleScanner
+  pub async fn start_scanning(&mut self) -> Result<Receiver<BleEvent>, BleError> {
+      // Initialize scanning...
+      
+      // Create channels for communication
+      let (tx, rx) = channel(100);
+      self.event_sender = Some(tx.clone());
+      
+      // Create a channel for cancellation
+      let (cancel_tx, cancel_rx) = channel::<()>(1);
+      self.cancel_sender = Some(cancel_tx);
+      
+      // Start scanning task
+      let scan_task = self.start_scan_task(tx, cancel_rx).await?;
+      self.scan_task = Some(scan_task);
+      
+      Ok(rx)
+  }
+  ```
+
+- **Task Management:**
+  - Keep track of active tasks with JoinHandle
+  - Properly clean up tasks when they're no longer needed
+  - Use Arc/Mutex for shared state across tasks
+  ```rust
+  // Drop implementation for cleanup
+  impl Drop for BleScanner {
+      fn drop(&mut self) {
+          // Abort the background task if still running
+          if let Some(task) = self.scan_task.take() {
+              task.abort();
+          }
+      }
+  }
+  ```
+
+
+
