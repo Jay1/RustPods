@@ -14,7 +14,7 @@ Welcome to the RustPods documentation. This documentation is organized into diff
 - [Project Structure](development/project-structure.md) - Overview of the codebase organization
 - [UI Components](development/ui-components.md) - UI component patterns and best practices
 - [Asset Management](development/assets.md) - How assets are managed and used
-- [Contributing](development/contributing.md) - Guidelines for contributing to RustPods
+- [Contributing](../CONTRIBUTING.md) - Guidelines for contributing to RustPods
 
 ## Technical Documentation
 

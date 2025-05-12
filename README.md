@@ -10,18 +10,18 @@
 
 ---
 
-Hi there! 👋 This little project came about because I wanted a simple, no-fuss way to check my AirPods battery on Windows. I found that many existing tools were either a bit complicated to set up, weren't free, or just didn't quite fit what I needed.
+Hi guys 👋 This little project came about because I wanted a simple, no-fuss way to check my AirPods battery on Windows. I found that many existing tools were either a bit complicated to set up, weren't free, or just didn't quite fit what I needed.
 
 So, I built this: an open-source application crafted with Rust 🦀, designed to monitor Apple AirPods (and hopefully other Bluetooth headphones too!) easily and reliably.
 
 ## ✨ Features
 
 - 🔋 **Real-time battery monitoring** for AirPods and case
-- 🖥️ **Sleek UI** with Catppuccin Mocha theme
+- 🖥️ **Sleek UI** with Catppuccin Mocha theme (❤️)
 - 🔍 **Automatic device detection** with Bluetooth LE
 - 🔔 **System tray integration** for quick access
 - ⚙️ **Customizable settings** for your preferences
-- 🚀 **Lightweight and efficient** with minimal resource usage
+- 🚀 **Lightweight and efficient** built with Rust
 
 ## 📥 Installation
 
@@ -96,7 +96,7 @@ cargo run --release
 
 ## 🤝 Contributing
 
-Contributions are welcome! Check out our [contribution guidelines](docs/development/contributing.md) to get started.
+Contributions are welcome! Check out our [CONTRIBUTING.md](CONTRIBUTING.md) guide to get started.
 
 ## 🛠️ Development Status
 

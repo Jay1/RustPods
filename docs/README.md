@@ -6,7 +6,7 @@ Welcome to the RustPods documentation! This directory contains detailed document
 
 - [Main Documentation Index](index.md)
 - [User Guide](user-guide/getting-started.md)
-- [Developer Guide](development/contributing.md)
+- [Developer Guide](development/project-structure.md)
 
 ## Documentation Structure
 
@@ -16,7 +16,7 @@ docs/
 ├── README.md                     - This file
 ├── development/                  - Developer documentation
 │   ├── assets.md                 - Asset management guide
-│   ├── contributing.md           - Contribution guidelines
+│   ├── contributing.md           - Redirects to root CONTRIBUTING.md
 │   └── (other technical docs)    
 ├── user-guide/                   - User documentation
 │   ├── getting-started.md        - Installation and setup
@@ -46,4 +46,4 @@ For local development, we recommend:
 
 ## Contributing to Documentation
 
-Documentation improvements are highly valued contributions! If you find something that could be explained better, is missing, or is incorrect, please submit a pull request following our [contribution guidelines](development/contributing.md). 
+Documentation improvements are highly valued contributions! If you find something that could be explained better, is missing, or is incorrect, please submit a pull request following our [contribution guidelines](../CONTRIBUTING.md). 

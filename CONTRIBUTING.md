@@ -1,10 +1,6 @@
 # Contributing to RustPods
 
-> **Note**: This document has been moved to the root of the project as [CONTRIBUTING.md](../../CONTRIBUTING.md).
-> 
-> Please refer to the root [CONTRIBUTING.md](../../CONTRIBUTING.md) file for the most up-to-date contribution guidelines.
-
-This document is kept for reference purposes and may be removed in a future update.
+Thank you for your interest in contributing to RustPods! This document provides guidelines and instructions for contributing to the project.
 
 ## Code of Conduct
 
@@ -86,23 +82,24 @@ We welcome the following types of contributions:
 - Performance optimizations
 - UI/UX improvements
 - Test coverage improvements
+- Support for additional headphone models
 
-## Development Workflow
+## Project Structure
 
-This project follows a feature branch workflow:
+The project is structured as follows:
 
-1. Create a new branch for each feature or bug fix
-2. Make your changes in that branch
-3. Submit a pull request to merge your branch into the main branch
-4. After review and approval, your changes will be merged
-
-## Asset Contributions
-
-If you're contributing new assets (icons, images, etc.):
-
-1. Follow the [asset management guidelines](assets.md)
-2. Ensure assets are properly licensed and you have rights to use them
-3. Follow the design guidelines for consistency
+```
+RustPods/
+├── src/               # Source code
+│   ├── bluetooth/     # Bluetooth functionality
+│   ├── airpods/       # AirPods-specific parsing and logic
+│   ├── ui/            # User interface components
+│   └── config/        # Application configuration
+├── tests/             # Integration tests
+├── examples/          # Example code
+├── assets/            # Icons and other assets
+└── docs/              # Documentation
+```
 
 ## Code Style
 
@@ -110,6 +107,21 @@ If you're contributing new assets (icons, images, etc.):
 - Use meaningful variable and function names
 - Write comments for complex logic
 - Include documentation comments for public APIs
+- Run `cargo fmt` before submitting your code
+- Ensure your code passes `cargo clippy` with no warnings
+
+## Testing
+
+- Write unit tests for your code
+- Ensure all tests pass with `cargo test`
+- For UI changes, include tests that verify the functionality
+- For Bluetooth functionality, provide mocks where appropriate
+
+## Documentation
+
+- Update documentation to reflect your changes
+- Document public APIs with doc comments
+- For significant changes, update the relevant guides in the `docs/` directory
 
 ## Licensing
 
