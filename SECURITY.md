@@ -16,7 +16,7 @@ The RustPods team takes security issues seriously. We appreciate your efforts to
 
 Instead, please follow these steps:
 
-1. **Email**: Send details to [insert_email@example.com]
+1. **Email**: Send details to [j-chiasson@outlook.com]
    - Replace this with your preferred security contact method
 
 2. **Include Information**:

@@ -3,6 +3,17 @@ description:
 globs: 
 alwaysApply: true
 ---
+# ⚠️ PUBLIC REPOSITORY NOTICE ⚠️
+
+**IMPORTANT: THIS IS A PUBLIC REPOSITORY. ALWAYS EXERCISE EXTREME CAUTION WHEN PUSHING CODE.**
+
+- Never commit sensitive information (API keys, credentials, personal data)
+- Carefully review all code changes before pushing 
+- Consider security implications of all contributions
+- Follow the guidelines in CONTRIBUTING.md
+
+---
+
 # RustPods Project Rules Index
 
 This document serves as the central index for all active Cursor rules within this repository, organized by category. These rules define processes, structures, and guidelines for development.

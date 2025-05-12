@@ -446,5 +446,121 @@ alwaysApply: false
   - The UI should reflect current configuration settings
   - Configuration changes should be persisted
 
+## Reference and Ownership Management
+
+- **Handling Temporary Value References**
+  - Be careful with references to temporary values in view methods
+  - Ensure component views don't return references to local variables created within the view method
+  - Common error: "cannot return value referencing temporary value"
+  ```rust
+  // ❌ DON'T: Return references to temporary values
+  fn view(&self) -> Element<'_, Message, iced::Renderer<Theme>> {
+      // The 'status' is a temporary local variable
+      let status = ConnectionStatus::new(
+          self.is_connected,
+          self.is_scanning
+      );
+      
+      // PROBLEM: This returns a reference to 'status' which won't 
+      // live beyond this function
+      status.view()
+  }
+  ```
+
+- **Wrapper Component Pattern**
+  - Create wrapper components that own their data and return owned Elements
+  - Use render() methods that don't return references to self
+  - Implement From trait for Element to allow direct use in macros
+  ```rust
+  // ✅ DO: Create wrapper components that own their data
+  #[derive(Debug, Clone)]
+  pub struct ConnectionStatusWrapper {
+      pub is_connected: bool,
+      pub is_scanning: bool,
+      pub animation_progress: f32,
+  }
+  
+  impl ConnectionStatusWrapper {
+      // Method that renders directly to an owned Element
+      pub fn render(&self) -> Element<'static, Message, iced::Renderer<Theme>> {
+          // Create a fully owned representation, no borrowing of 'self'
+          let text = if self.is_connected { "Connected" } else { "Disconnected" };
+          text(text).into()
+      }
+  }
+  
+  impl UiComponent for ConnectionStatusWrapper {
+      fn view(&self) -> Element<'_, Message, iced::Renderer<Theme>> {
+          self.render()
+      }
+  }
+  
+  // Allow direct use in column! and other macros
+  impl<'a> From<ConnectionStatusWrapper> for Element<'a, Message, iced::Renderer<Theme>> {
+      fn from(wrapper: ConnectionStatusWrapper) -> Self {
+          wrapper.render()
+      }
+  }
+  ```
+
+- **Component Composition Best Practices**
+  - Create components that are self-contained and own their data
+  - Use component composition rather than complex rendering logic
+  - Pass data to components rather than sharing references
+  ```rust
+  // ✅ DO: Prefer component composition with owned data
+  impl UiComponent for MainWindow {
+      fn view(&self) -> Element<'_, Message, iced::Renderer<Theme>> {
+          let header = self.create_header();
+          
+          // Use a component that owns its data, 
+          // avoiding temporary value reference issues
+          let connection_status = ConnectionStatusWrapper::new(
+              self.selected_device.is_some(),
+              self.is_scanning
+          )
+          .with_animation_progress(self.animation_progress);
+          
+          column![
+              header,
+              connection_status,  // Implicitly converted to Element
+              iced::widget::Space::new(Length::Fill, Length::Fixed(20.0)),
+              self.view_content()
+          ]
+          .into()
+      }
+  }
+  ```
+
+- **Helper Method Pattern**
+  - Create helper methods that return owned Elements for complex UI sections
+  - Use proper method signatures with explicit lifetimes
+  - Compose larger views from smaller helper methods
+  ```rust
+  // ✅ DO: Create helper methods for view sections
+  impl MainWindow {
+      // Helper method to create a section of the UI
+      fn create_header(&self) -> Element<'_, Message, iced::Renderer<Theme>> {
+          column![
+              text("RustPods")
+                  .size(30)
+                  .horizontal_alignment(Horizontal::Center),
+              iced::widget::Space::new(Length::Fill, Length::Fixed(10.0)),
+          ]
+          .width(Length::Fill)
+          .align_items(iced::Alignment::Center)
+          .into()
+      }
+      
+      fn view_content(&self) -> Element<'_, Message, iced::Renderer<Theme>> {
+          if let Some(device) = &self.selected_device {
+              self.render_connected_device(device)
+          } else {
+              self.render_device_list()
+          }
+      }
+  }
+  ```
+
 
 

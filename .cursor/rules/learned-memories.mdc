@@ -57,6 +57,16 @@ This file stores project-specific knowledge, conventions, and user preferences l
   - `AppState` manages the application state and is passed to UI components
   - UI components are organized into modules in the `ui` directory
   - The UI is launched by the `run_ui` function in `ui/app.rs`
+  - Components follow the UiComponent trait pattern for consistent view method signatures
+
+- **UI Component Lifetime Handling**:
+  - UI components must handle temporary value references carefully
+  - Components should avoid returning references to local variables in view() methods
+  - The wrapper component pattern is used to solve "cannot return value referencing temporary value" errors
+  - ComponentWrappers implement From<Component> for Element to enable direct use in column/row macros
+  - All components should implement UiComponent with appropriate lifetime parameters
+  - Complex components are broken down into helper methods that return owned Elements
+  - The connection_status_wrapper.rs demonstrates proper component ownership patterns
 
 - **Theme Implementation**:
   - Theme is defined in the `ui/theme.rs` module

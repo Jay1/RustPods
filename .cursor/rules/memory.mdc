@@ -41,6 +41,15 @@ alwaysApply: true
 - Use references when passing data to UI components
 - Be cautious with caching rendered UI components
 
+## UI Component Lifetime Management
+- Avoid returning references to temporary values in `view()` methods
+- Use wrapper components that own their data for complex UI elements
+- Implement `From<Component> for Element<'_, Message>` for components used in column/row macros
+- Create `render()` methods that return owned `Element<'static, Message>` values
+- Break complex UI components into smaller helper methods that own their return values
+- When component borrows cause lifetime issues, consider refactoring to use component composition
+- Use the wrapper component pattern to avoid the "cannot return value referencing temporary value" error
+
 # AI Memory Rule
 
 This rule defines how the AI should manage and utilize its "memory" regarding the RustPods project, including user preferences, learned facts, and project-specific conventions.
