@@ -59,4 +59,5 @@ dev-debug.log
 *.sw?
 # OS specific
 # Task files
-tasks.json
+tasks.json# Specific files to protect API keys
+.cursor/mcp.json
