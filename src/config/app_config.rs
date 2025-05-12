@@ -5,7 +5,7 @@ use serde::{Serialize, Deserialize};
 use crate::bluetooth::ScanConfig;
 
 /// Application configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AppConfig {
     /// Bluetooth scanning configuration
     #[serde(default)]
@@ -19,13 +19,17 @@ pub struct AppConfig {
     #[serde(default)]
     pub system: SystemConfig,
     
+    /// Battery monitoring configuration
+    #[serde(default)]
+    pub battery: BatteryConfig,
+    
     /// Path to save settings (not serialized)
     #[serde(skip)]
     pub settings_path: PathBuf,
 }
 
 /// Bluetooth scanning and connection configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BluetoothConfig {
     /// Automatically start scanning on startup
     #[serde(default = "default_auto_scan")]
@@ -54,10 +58,38 @@ pub struct BluetoothConfig {
     /// Reconnect attempts before giving up
     #[serde(default = "default_reconnect_attempts")]
     pub reconnect_attempts: u32,
+    
+    /// Use adaptive polling for battery status
+    #[serde(default = "default_true")]
+    pub adaptive_polling: bool,
+}
+
+/// Window position information
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WindowPosition {
+    /// X coordinate
+    pub x: i32,
+    /// Y coordinate
+    pub y: i32,
+}
+
+impl From<iced::Point> for WindowPosition {
+    fn from(point: iced::Point) -> Self {
+        Self {
+            x: point.x as i32,
+            y: point.y as i32,
+        }
+    }
+}
+
+impl From<WindowPosition> for iced::Point {
+    fn from(pos: WindowPosition) -> Self {
+        iced::Point::new(pos.x as f32, pos.y as f32)
+    }
 }
 
 /// User interface configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct UiConfig {
     /// Show battery notifications
     #[serde(default = "default_true")]
@@ -82,10 +114,30 @@ pub struct UiConfig {
     /// Low battery threshold percentage
     #[serde(default = "default_low_battery_threshold")]
     pub low_battery_threshold: u8,
+    
+    /// Remember window position
+    #[serde(default = "default_true")]
+    pub remember_window_position: bool,
+    
+    /// Last window position
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_window_position: Option<WindowPosition>,
+    
+    /// Minimize to tray when closed
+    #[serde(default = "default_true")]
+    pub minimize_to_tray_on_close: bool,
+    
+    /// Minimize to tray when window loses focus
+    #[serde(default = "default_false")]
+    pub minimize_on_blur: bool,
+    
+    /// Auto-hide window after inactivity timeout (in seconds)
+    #[serde(default)]
+    pub auto_hide_timeout: Option<u64>,
 }
 
 /// System configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SystemConfig {
     /// Launch application at system startup
     #[serde(default)]
@@ -98,6 +150,30 @@ pub struct SystemConfig {
     /// Enable application telemetry
     #[serde(default)]
     pub enable_telemetry: bool,
+}
+
+/// Battery monitoring configuration
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct BatteryConfig {
+    /// Low battery threshold percentage
+    #[serde(default = "default_low_battery_threshold")]
+    pub low_threshold: u8,
+    
+    /// Enable smoothing of battery readings to prevent display fluctuations
+    #[serde(default = "default_true")]
+    pub smoothing_enabled: bool,
+    
+    /// Minimum level change to trigger faster polling (percentage)
+    #[serde(default = "default_change_threshold")]
+    pub change_threshold: u8,
+    
+    /// Send notifications for low battery
+    #[serde(default = "default_true")]
+    pub notify_low: bool,
+    
+    /// Send notifications for charging completed
+    #[serde(default = "default_true")]
+    pub notify_charged: bool,
 }
 
 /// UI theme
@@ -159,12 +235,14 @@ impl std::fmt::Display for LogLevel {
 
 // Default functions for serde
 fn default_true() -> bool { true }
+fn default_false() -> bool { false }
 fn default_scan_duration_secs() -> Duration { Duration::from_secs(5) }
 fn default_scan_interval_secs() -> Duration { Duration::from_secs(30) }
 fn default_auto_scan() -> bool { true }
 fn default_battery_refresh_interval() -> u64 { 10 }
 fn default_reconnect_attempts() -> u32 { 3 }
 fn default_low_battery_threshold() -> u8 { 20 }
+fn default_change_threshold() -> u8 { 5 }
 
 // Custom serialization for Duration
 mod duration_serde {
@@ -196,6 +274,7 @@ impl Default for AppConfig {
             bluetooth: BluetoothConfig::default(),
             ui: UiConfig::default(),
             system: SystemConfig::default(),
+            battery: BatteryConfig::default(),
             settings_path: default_settings_path(),
         }
     }
@@ -211,6 +290,7 @@ impl Default for BluetoothConfig {
             battery_refresh_interval: default_battery_refresh_interval(),
             auto_reconnect: default_true(),
             reconnect_attempts: default_reconnect_attempts(),
+            adaptive_polling: default_true(),
         }
     }
 }
@@ -224,6 +304,11 @@ impl Default for UiConfig {
             show_percentage_in_tray: default_true(),
             show_low_battery_warning: default_true(),
             low_battery_threshold: default_low_battery_threshold(),
+            remember_window_position: default_true(),
+            last_window_position: None,
+            minimize_to_tray_on_close: default_true(),
+            minimize_on_blur: default_false(),
+            auto_hide_timeout: None,
         }
     }
 }
@@ -234,6 +319,18 @@ impl Default for SystemConfig {
             launch_at_startup: false,
             log_level: LogLevel::Info,
             enable_telemetry: false,
+        }
+    }
+}
+
+impl Default for BatteryConfig {
+    fn default() -> Self {
+        Self {
+            low_threshold: default_low_battery_threshold(),
+            smoothing_enabled: default_true(),
+            change_threshold: default_change_threshold(),
+            notify_low: default_true(),
+            notify_charged: default_true(),
         }
     }
 }
@@ -251,7 +348,7 @@ impl AppConfig {
             .with_scan_duration(self.bluetooth.scan_duration)
             .with_interval(self.bluetooth.scan_interval)
             .with_min_rssi(self.bluetooth.min_rssi)
-            .with_active_scanning(true)
+            .with_continuous(true)
     }
     
     /// Load configuration from file, using a path derived from the default settings path
@@ -404,6 +501,11 @@ impl AppConfig {
         &self.system
     }
     
+    /// Get the battery configuration section
+    pub fn battery(&self) -> &BatteryConfig {
+        &self.battery
+    }
+    
     /// Validate the configuration
     pub fn validate(&self) -> Result<(), ConfigError> {
         // Validate Bluetooth configuration
@@ -414,6 +516,9 @@ impl AppConfig {
         
         // Validate system configuration
         self.system.validate()?;
+        
+        // Validate battery configuration
+        self.battery.validate()?;
         
         Ok(())
     }
@@ -479,6 +584,16 @@ impl UiConfig {
             ));
         }
         
+        // Auto-hide timeout should be reasonable if set
+        if let Some(timeout) = self.auto_hide_timeout {
+            if timeout < 5 || timeout > 3600 {
+                return Err(ConfigError::ValidationFailed(
+                    "auto_hide_timeout".to_string(),
+                    format!("Auto-hide timeout must be between 5 and 3600 seconds, got {}", timeout)
+                ));
+            }
+        }
+        
         Ok(())
     }
 }
@@ -487,6 +602,29 @@ impl SystemConfig {
     /// Validate system configuration
     pub fn validate(&self) -> Result<(), ConfigError> {
         // No specific validation for system config yet
+        Ok(())
+    }
+}
+
+impl BatteryConfig {
+    /// Validate the battery configuration
+    pub fn validate(&self) -> Result<(), ConfigError> {
+        // Validate low threshold
+        if self.low_threshold > 100 {
+            return Err(ConfigError::ValidationFailed(
+                "battery.low_threshold".to_string(),
+                "Low battery threshold must be between 0 and 100".to_string(),
+            ));
+        }
+        
+        // Validate change threshold
+        if self.change_threshold > 50 {
+            return Err(ConfigError::ValidationFailed(
+                "battery.change_threshold".to_string(),
+                "Level change threshold must be between 0 and 50".to_string(),
+            ));
+        }
+        
         Ok(())
     }
 }
@@ -547,7 +685,7 @@ mod tests {
         
         assert_eq!(scan_config.scan_duration, Duration::from_secs(5));
         assert_eq!(scan_config.interval_between_scans, Duration::from_secs(30));
-        assert!(scan_config.active_scanning);
+        assert!(scan_config.continuous);
         assert_eq!(scan_config.min_rssi, Some(-70));
     }
     

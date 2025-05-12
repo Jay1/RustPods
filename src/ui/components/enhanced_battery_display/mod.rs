@@ -22,6 +22,45 @@ impl EnhancedBatteryDisplay {
     pub fn empty() -> Self {
         Self { battery: None }
     }
+    
+    /// Create a static view with the given battery information
+    pub fn create_static_view(battery: AirPodsBattery) -> Element<'static, Message, iced::Renderer<Theme>> {
+        // Clone the battery before moving it to display
+        let battery_clone = battery.clone();
+        let display = Self::new(Some(battery));
+        
+        // Create a title for the section
+        let title = text("Battery Status")
+            .size(22)
+            .width(Length::Fill)
+            .horizontal_alignment(alignment::Horizontal::Center);
+            
+        // Create rows for each component
+        let left_row = display.create_battery_row("Left", battery_clone.left, battery_clone.charging.left);
+        let right_row = display.create_battery_row("Right", battery_clone.right, battery_clone.charging.right);
+        let case_row = display.create_battery_row("Case", battery_clone.case, battery_clone.charging.case);
+        
+        // Create a status row
+        let status = text(display.get_battery_status())
+            .size(16)
+            .width(Length::Fill)
+            .horizontal_alignment(alignment::Horizontal::Center);
+            
+        // Combine rows into a column
+        let content = Column::new()
+            .push(title)
+            .push(left_row)
+            .push(right_row)
+            .push(case_row)
+            .push(status)
+            .spacing(10)
+            .padding(10)
+            .width(Length::Fill);
+            
+        container(content)
+            .width(Length::Fill)
+            .into()
+    }
 }
 
 impl UiComponent for EnhancedBatteryDisplay {

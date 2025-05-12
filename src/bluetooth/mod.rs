@@ -1,11 +1,14 @@
 //! BLE scanning and device management
 
-mod scanner;
-mod adapter;
-mod examples;
+pub mod scanner;
+pub mod adapter;
+pub mod examples;
 mod scanner_config;
+mod filter;
+mod peripheral;
 pub mod events;
 pub mod battery;
+pub mod battery_monitor;
 
 pub use scanner::{
     BleScanner, BleError, DiscoveredDevice,
@@ -25,6 +28,10 @@ pub use battery::{
     AirPodsBatteryStatus, extract_battery_status, start_battery_monitoring
 };
 
+pub use battery_monitor::{
+    BatteryMonitor, BatteryMonitorOptions, BatteryAlert
+};
+
 // Export examples for testing
 pub use examples::{
     discover_adapters, scan_with_adapter, interval_scanning,
@@ -33,4 +40,11 @@ pub use examples::{
 
 pub struct BluetoothManager;
 
-pub trait BluetoothDevice {} 
+pub trait BluetoothDevice {}
+
+pub use adapter::BluetoothAdapter;
+pub use adapter::BleAdapterEvent;
+pub use adapter::AdapterCapabilities;
+pub use adapter::AdapterStatus;
+pub use filter::*;
+pub use peripheral::*; 

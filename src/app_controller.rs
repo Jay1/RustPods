@@ -370,6 +370,14 @@ impl AppController {
             Ok(())
         })
     }
+
+    /// Start the controller
+    pub fn start(&mut self) -> Result<(), String> {
+        // Since we can't use run_async with self.initialize() without borrowing issues,
+        // create a blocking runtime for the initialization only
+        let rt = Runtime::new().expect("Failed to create blocking runtime");
+        rt.block_on(self.initialize())
+    }
 }
 
 /// Standalone function to start battery monitoring for the connected device

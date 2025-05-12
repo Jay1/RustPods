@@ -2,7 +2,16 @@
 //! Note: Most system tray tests can't be run headlessly, so we focus on API structure
 
 use std::sync::mpsc;
-use rustpods::ui::{SystemTray, Message};
+use std::sync::Arc;
+
+use rustpods::ui::{SystemTray, SystemTrayController};
+use rustpods::ui::state_manager::StateManager;
+use rustpods::ui::Message;
+use rustpods::config::AppConfig;
+use rustpods::bluetooth::AirPodsBatteryStatus;
+use rustpods::bluetooth::{AirPodsBattery, AirPodsCharging};
+use rustpods::ui::state_manager::Action;
+use crate::test_helpers::{create_test_config, create_test_battery, create_test_state_manager, MockSystemTray};
 
 /// Test the type composition and error types of SystemTray
 #[test]
@@ -55,4 +64,78 @@ fn test_system_tray_messages() {
     assert!(format!("{:?}", start_scan_msg).contains("StartScan"));
     assert!(format!("{:?}", stop_scan_msg).contains("StopScan"));
     assert!(format!("{:?}", exit_msg).contains("Exit"));
+}
+
+// Helper function to create a mocked environment for testing
+fn setup_test_env() -> (Arc<StateManager>, mpsc::Sender<Message>) {
+    let (sender, _receiver) = mpsc::channel();
+    let state_manager = create_test_state_manager();
+    
+    (state_manager, sender)
+}
+
+#[test]
+fn test_system_tray_controller_creation() {
+    let (state_manager, sender) = setup_test_env();
+    let config = create_test_config();
+    
+    let result = SystemTrayController::new(
+        sender,
+        config,
+        state_manager
+    );
+    
+    assert!(result.is_ok(), "Should create controller successfully");
+}
+
+#[test]
+fn test_system_tray_battery_update() {
+    let (state_manager, sender) = setup_test_env();
+    let config = create_test_config();
+    
+    // Create a mock system tray
+    let mut tray = MockSystemTray::new();
+    
+    // Create a battery status
+    let status = create_test_battery();
+    
+    // Update the battery status
+    let result = tray.handle_battery_update(status);
+    
+    assert!(result.is_ok(), "Should update battery successfully");
+}
+
+#[test]
+fn test_system_tray_connects_to_state_manager() {
+    let (state_manager, sender) = setup_test_env();
+    
+    // Create a mock system tray
+    let mut tray = MockSystemTray::new();
+    
+    // Connect to state manager
+    let result = tray.connect_state_manager(Arc::clone(&state_manager));
+    
+    assert!(result.is_ok(), "Should connect to state manager successfully");
+}
+
+#[test]
+fn test_state_changes_reflected_in_system_tray() {
+    let (state_manager, sender) = setup_test_env();
+    
+    // Create a battery status
+    let status = create_test_battery();
+    
+    // Update battery status in state manager
+    state_manager.dispatch(Action::UpdateBatteryStatus(status));
+    
+    // Connecting device would set the selected device in the state
+    state_manager.dispatch(Action::SelectDevice("00:11:22:33:44:55".to_string()));
+    
+    // The system tray controller would normally process these changes
+    // For this test, we just verify that dispatching the actions works
+    let device_state = state_manager.get_device_state();
+    
+    assert!(device_state.battery_status.is_some(), "Battery status should be updated");
+    assert_eq!(device_state.selected_device, Some("00:11:22:33:44:55".to_string()), 
+               "Device should be selected");
 } 

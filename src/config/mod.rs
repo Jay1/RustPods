@@ -1,13 +1,13 @@
 //! Settings management
 
-mod app_config;
+pub mod app_config;
 // Replace the external test module import with the actual tests
 // #[cfg(test)]
 // mod tests;
 
 pub use app_config::AppConfig;
 pub use app_config::Theme;
-pub use app_config::{BluetoothConfig, UiConfig, SystemConfig, LogLevel, ConfigError};
+pub use app_config::{BluetoothConfig, UiConfig, SystemConfig, LogLevel, ConfigError, WindowPosition};
 
 use std::path::{Path, PathBuf};
 use std::fs;

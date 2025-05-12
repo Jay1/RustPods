@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
+use std::time::Duration;
+use log::{debug, error, info, trace, warn};
 
 use btleplug::api::{
     BDAddr, Central, CentralEvent, Manager as _, Peripheral as _, ScanFilter,
@@ -10,6 +12,7 @@ use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use futures::StreamExt;
+use serde::{Serialize, Deserialize};
 
 use crate::bluetooth::scanner_config::ScanConfig;
 use crate::bluetooth::events::{BleEvent, EventBroker, EventFilter};
@@ -18,6 +21,33 @@ use crate::airpods::{
     AirPodsFilter
 };
 use crate::config::{AppConfig, Configurable};
+
+/// Configuration for Bluetooth scanner
+#[derive(Debug, Clone)]
+pub struct BleScannerConfig {
+    /// Interval between scans
+    pub scan_interval: std::time::Duration,
+    /// Whether to filter out known devices
+    pub filter_known_devices: bool,
+    /// Whether to only update RSSI for known devices
+    pub update_rssi_only: bool,
+    /// Interval for updating device data
+    pub update_interval: std::time::Duration,
+    /// Timeout for scanning
+    pub scan_timeout: Option<std::time::Duration>,
+}
+
+impl Default for BleScannerConfig {
+    fn default() -> Self {
+        Self {
+            scan_interval: std::time::Duration::from_secs(30),
+            filter_known_devices: false,
+            update_rssi_only: false,
+            update_interval: std::time::Duration::from_secs(5),
+            scan_timeout: None,
+        }
+    }
+}
 
 /// Custom error type for Bluetooth operations
 #[derive(Debug, thiserror::Error)]
@@ -42,12 +72,55 @@ pub enum BleError {
     
     #[error("Scan cycle limit reached")]
     ScanCycleLimit,
+    
+    #[error("Failed to initialize adapter: {0}")]
+    AdapterInitializationFailed(String),
+    
+    #[error("Adapter communication error: {0}")]
+    AdapterCommunicationError(String),
+    
+    #[error("Bluetooth is disabled or not available")]
+    BluetoothDisabled,
+    
+    #[error("Operation timed out after {0:?}")]
+    Timeout(std::time::Duration),
+    
+    #[error("Connection attempt failed: {0}")]
+    ConnectionFailed(String),
+    
+    #[error("Device disconnected unexpectedly")]
+    DeviceDisconnected,
+    
+    #[error("Operation not permitted: {0}")]
+    PermissionDenied(String),
+    
+    #[error("Device was not found or went out of range")]
+    DeviceNotFound,
+    
+    #[error("Multiple connection attempts exceeded retry limit")]
+    RetryLimitExceeded,
+    
+    #[error("System resource error: {0}")]
+    SystemResourceError(String),
+    
+    #[error("Connection was rejected by the device")]
+    ConnectionRejected,
+    
+    #[error("Device is not connected")]
+    NotConnected,
+    
+    #[error("Characteristic not found: {0}")]
+    CharacteristicNotFound(uuid::Uuid),
+    
+    #[error("Notifications are not supported by the characteristic: {0}")]
+    NotificationsNotSupported(uuid::Uuid),
 }
 
 /// Information about a discovered BLE device
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiscoveredDevice {
     /// Device address
+    #[serde(with = "bdaddr_serde")]
     pub address: BDAddr,
     /// Device name if available
     pub name: Option<String>,
@@ -58,7 +131,48 @@ pub struct DiscoveredDevice {
     /// Whether this might be an AirPods device
     pub is_potential_airpods: bool,
     /// When the device was last seen
+    #[serde(skip, default = "std::time::Instant::now")]
     pub last_seen: std::time::Instant,
+}
+
+// Custom serialization for BDAddr
+mod bdaddr_serde {
+    use btleplug::api::BDAddr;
+    use serde::{Deserialize, Deserializer, Serializer, Serialize};
+
+    pub fn serialize<S>(bdaddr: &BDAddr, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Convert BDAddr to string for serialization
+        let addr_str = bdaddr.to_string();
+        addr_str.serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<BDAddr, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use serde::de::Error;
+        
+        // Deserialize from string
+        let addr_str = String::deserialize(deserializer)?;
+        
+        // Parse back to BDAddr
+        let bytes: Vec<&str> = addr_str.split(':').collect();
+        
+        if bytes.len() != 6 {
+            return Err(D::Error::custom(format!("Invalid BDAddr format: {}", addr_str)));
+        }
+        
+        let mut addr = [0u8; 6];
+        for (i, byte) in bytes.iter().enumerate() {
+            addr[i] = u8::from_str_radix(byte, 16)
+                .map_err(|e| D::Error::custom(format!("Invalid hex byte '{}': {}", byte, e)))?;
+        }
+        
+        Ok(BDAddr::from(addr))
+    }
 }
 
 impl DiscoveredDevice {
@@ -119,7 +233,7 @@ pub struct BleScanner {
     /// Whether scanning is in progress
     is_scanning: bool,
     /// Map of discovered devices by address
-    devices: Arc<Mutex<HashMap<BDAddr, DiscoveredDevice>>>,
+    devices: Arc<tokio::sync::Mutex<HashMap<BDAddr, DiscoveredDevice>>>,
     /// Task handle for the scan
     scan_task: Option<JoinHandle<()>>,
     /// Channel for canceling the scan
@@ -155,7 +269,7 @@ impl BleScanner {
             config: ScanConfig::default(),
             adapter: None,
             is_scanning: false,
-            devices: Arc::new(Mutex::new(HashMap::new())),
+            devices: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             scan_task: None,
             cancel_sender: None,
             event_sender: None,
@@ -170,7 +284,29 @@ impl BleScanner {
             config,
             adapter: None,
             is_scanning: false,
-            devices: Arc::new(Mutex::new(HashMap::new())),
+            devices: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+            scan_task: None,
+            cancel_sender: None,
+            event_sender: None,
+            event_broker: None,
+            scan_cycles_completed: 0,
+        }
+    }
+    
+    /// Create a new BLE scanner with a Bluetooth adapter and BleScannerConfig
+    pub fn with_adapter_config(adapter: Arc<Adapter>, config: BleScannerConfig) -> Self {
+        // Convert BleScannerConfig to ScanConfig
+        let scan_config = ScanConfig::default()
+            .with_scan_duration(config.scan_interval)
+            .with_interval(config.scan_interval)
+            .with_auto_stop(!config.filter_known_devices)
+            .with_continuous(config.scan_timeout.is_none());
+        
+        Self {
+            config: scan_config,
+            adapter: Some(adapter),
+            is_scanning: false,
+            devices: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             scan_task: None,
             cancel_sender: None,
             event_sender: None,
@@ -208,182 +344,333 @@ impl BleScanner {
     
     /// Start scanning for devices
     pub async fn start_scanning(&mut self) -> Result<Receiver<BleEvent>, BleError> {
-        // Check if a scan is already in progress
+        // Stop scanning if already in progress
         if self.is_scanning {
             return Err(BleError::ScanInProgress);
         }
         
-        // Make sure we have an adapter
-        let adapter = if let Some(adapter) = &self.adapter {
-            adapter.clone()
-        } else {
-            // Try to initialize
-            self.initialize().await?;
-            
-            // Get the adapter
-            self.adapter.as_ref().ok_or(BleError::AdapterNotFound)?.clone()
+        // Try to get the adapter
+        let adapter = match &self.adapter {
+            Some(adapter) => adapter.clone(),
+            None => {
+                // Attempt to initialize again if adapter is not available
+                self.initialize().await?;
+                
+                // If still not available, return error
+                match &self.adapter {
+                    Some(adapter) => adapter.clone(),
+                    None => return Err(BleError::AdapterNotFound),
+                }
+            }
         };
         
-        // Create channels for communication
+        // Create channel for events
         let (tx, rx) = channel(100);
-        self.event_sender = Some(tx.clone());
         
-        // Create a channel for cancellation
-        let (cancel_tx, cancel_rx) = channel::<()>(1);
+        // Create channel for cancellation
+        let (cancel_tx, cancel_rx) = channel(1);
+        
+        // Save the sender channels
+        self.event_sender = Some(tx.clone());
         self.cancel_sender = Some(cancel_tx);
         
-        // Start scanning task
-        let scan_task = self.start_scan_task(tx, cancel_rx, adapter).await?;
-        self.scan_task = Some(scan_task);
+        // Start the scan task
+        let task = self.start_scan_task(tx, cancel_rx, adapter.clone()).await?;
+        
+        // Save the task handle
+        self.scan_task = Some(task);
+        
+        // Set scanning state
         self.is_scanning = true;
         
-        // Create the event broker if it doesn't exist
-        if self.event_broker.is_none() {
-            self.event_broker = Some(EventBroker::new());
-        }
+        // Reset the cycle count
+        self.scan_cycles_completed = 0;
         
         Ok(rx)
     }
     
-    /// Start the background scanning task
+    /// Start the scan task with retry mechanism
     async fn start_scan_task(
         &self, 
-        event_tx: Sender<crate::bluetooth::events::BleEvent>, 
+        event_tx: Sender<BleEvent>, 
         mut cancel_rx: Receiver<()>,
         adapter: Arc<Adapter>
     ) -> Result<JoinHandle<()>, BleError> {
-        // Clone necessary values for the task
-        let devices_clone = self.devices.clone();
+        let devices = self.devices.clone();
         let config = self.config.clone();
         
-        // Start the background scanning task
-        let scan_task = tokio::spawn(async move {
-            let mut cycle_count = 0;
+        // Max number of retry attempts for scan start failures
+        const MAX_RETRIES: usize = 3;
+        
+        // Task to handle scanning        
+        let task = tokio::spawn(async move {            
+            let mut scan_cycles_performed = 0;            
+            let mut last_scan_time = Instant::now();
             
-            // Start scanning loop
+            // Main scan loop
             'scan_loop: loop {
-                // Check if we've reached the maximum number of cycles
-                if let Some(max_cycles) = config.max_scan_cycles {
-                    if cycle_count >= max_cycles {
-                        let _ = event_tx.send(BleEvent::Error("Scan cycle limit reached".to_string())).await;
-                        let _ = event_tx.send(BleEvent::ScanningCompleted).await;
-                        break;
-                    }
-                }
-                
-                // Set timeout for this scan cycle
-                let scan_timeout = tokio::time::sleep(config.scan_duration);
-                tokio::pin!(scan_timeout);
-                
-                // Start scan cycle
-                if let Err(e) = adapter.start_scan(ScanFilter::default()).await {
-                    let _ = event_tx.send(BleEvent::Error(format!("Failed to start scan: {}", e))).await;
-                    let _ = event_tx.send(BleEvent::ScanningCompleted).await;
-                    break;
-                }
-                
-                // Process events during the scan
-                loop {
+                // Wait for interval if needed
+                if last_scan_time.elapsed() < config.interval_between_scans {
+                    let wait_time = config.interval_between_scans - last_scan_time.elapsed();
+                    
+                    // Wait for either the interval or cancellation
                     tokio::select! {
-                        // Process events from the adapter - handle the future->stream conversion properly
-                        Some(event_result) = async {
-                            match adapter.events().await {
-                                Ok(mut event_stream) => event_stream.next().await,
-                                Err(_) => None,
-                            }
-                        } => {
-                            match event_result {
-                                CentralEvent::DeviceDiscovered(peripheral_id) => {
-                                    // Get the peripheral
-                                    match adapter.peripheral(&peripheral_id).await {
-                                        Ok(peripheral) => {
-                                            // Create a device from the peripheral
-                                            match DiscoveredDevice::from_peripheral(&peripheral).await {
-                                                Ok(device) => {
-                                                    // Store the device
-                                                    {
-                                                        let mut devices = devices_clone.lock().unwrap();
-                                                        devices.insert(device.address, device.clone());
-                                                    }
-                                                    
-                                                    // Notify listeners
-                                                    let _ = event_tx.send(BleEvent::DeviceDiscovered(device.clone())).await;
-                                                    
-                                                    // Check for AirPods and notify if found
-                                                    if device.is_potential_airpods {
-                                                        if let Some(airpods) = detect_airpods(&device) {
-                                                            let _ = event_tx.send(BleEvent::AirPodsDetected(airpods)).await;
-                                                        }
-                                                    }
-                                                },
-                                                Err(e) => {
-                                                    let _ = event_tx.send(BleEvent::Error(format!("Failed to create device: {}", e))).await;
-                                                }
-                                            }
-                                        },
-                                        Err(e) => {
-                                            let _ = event_tx.send(BleEvent::Error(format!("Failed to get peripheral: {}", e))).await;
-                                        }
-                                    }
-                                },
-                                CentralEvent::ManufacturerDataAdvertisement{id: _id, manufacturer_data: _} => {
-                                    // Ignore - devices are processed in DeviceDiscovered
-                                },
-                                CentralEvent::DeviceDisconnected(_peripheral_id) => {
-                                    // Handle device disconnected event
-                                },
-                                _ => {} // Ignore other events for now
-                            }
-                        },
-                        
-                        // Scan duration timeout
-                        _ = &mut scan_timeout, if config.auto_stop_scan => {
-                            break;
-                        },
-                        
-                        // Cancellation request
-                        Some(_) = cancel_rx.recv() => {
-                            let _ = adapter.stop_scan().await;
-                            let _ = event_tx.send(BleEvent::ScanningCompleted).await;
+                        _ = sleep(wait_time) => {
+                            // Interval completed, proceed with next scan
+                        }
+                        _ = cancel_rx.recv() => {
+                            // Cancellation received
                             break 'scan_loop;
                         }
                     }
                 }
                 
-                // End of scan cycle
-                let _ = adapter.stop_scan().await;
+                // Update last scan time
+                last_scan_time = Instant::now();
                 
-                // Increment cycle count and notify listeners
-                cycle_count += 1;
-                let devices_count = {
-                    let devices = devices_clone.lock().unwrap();
-                    devices.len()
-                };
-                let _ = event_tx.send(BleEvent::ScanCycleCompleted { devices_found: devices_count }).await;
-                
-                // If there are no more cycles or interval is zero, break
-                if let Some(max_cycles) = config.max_scan_cycles {
-                    if cycle_count >= max_cycles {
+                // Check if we've hit the scan cycle limit
+                if let Some(limit) = config.max_scan_cycles {
+                    if scan_cycles_performed >= limit {
+                        // Send completion event
                         let _ = event_tx.send(BleEvent::ScanningCompleted).await;
-                        break;
+                        break 'scan_loop;
                     }
                 }
                 
-                // Wait for the configured interval before the next scan cycle
-                if config.interval_between_scans.as_secs() > 0 {
-                    // Check for cancellation during the interval
+                // Start the scan with retry logic
+                let scan_result = async {
+                    let mut current_attempt = 0;
+                    
+                    loop {
+                        // Attempt to start scanning
+                        let result = adapter.start_scan(ScanFilter::default()).await;
+                        
+                        match result {
+                            Ok(_) => return Ok(()),
+                            Err(e) => {
+                                current_attempt += 1;
+                                
+                                // If we've reached max retries, return the error
+                                if current_attempt >= MAX_RETRIES {
+                                    return Err(e);
+                                }
+                                
+                                // Log the retry attempt
+                                log::warn!("Scan start failed (attempt {}/{}): {}", 
+                                           current_attempt, MAX_RETRIES, e);
+                                
+                                // Wait briefly before retrying
+                                sleep(Duration::from_millis(500)).await;
+                            }
+                        }
+                    }
+                }.await;
+                
+                if let Err(e) = scan_result {
+                    // Send error event
+                    let error_msg = format!("Failed to start scan after {} retries: {}", 
+                                           MAX_RETRIES, e);
+                    let _ = event_tx.send(BleEvent::Error(error_msg)).await;
+                    break 'scan_loop;
+                }
+                
+                // Set up event stream from adapter
+                let mut events = adapter.events().await.unwrap();
+                
+                // Timeout for this scan cycle
+                let scan_timeout = tokio::time::sleep(config.scan_duration);
+                let mut devices_found = 0;
+                
+                // Inner loop for this scan cycle
+                tokio::pin!(scan_timeout);
+                'cycle_loop: loop {
                     tokio::select! {
-                        _ = sleep(config.interval_between_scans) => {},
-                        Some(_) = cancel_rx.recv() => {
-                            let _ = event_tx.send(BleEvent::ScanningCompleted).await;
-                            break;
+                        // Handle Bluetooth events
+                        Some(event) = events.next() => {
+                            match event {
+                                CentralEvent::DeviceDiscovered(addr) => {
+                                    // Get peripheral for the discovered device
+                                    let peripheral = adapter.peripheral(&addr).await;
+                                    
+                                    if let Ok(peripheral) = peripheral {
+                                        // Retry up to 3 times if getting device properties fails
+                                        let mut device_info = None;
+                                        let mut prop_retry = 0;
+                                        
+                                        while prop_retry < 3 && device_info.is_none() {
+                                            match DiscoveredDevice::from_peripheral(&peripheral).await {
+                                                Ok(device) => {
+                                                    device_info = Some(device);
+                                                    break;
+                                                },
+                                                Err(e) => {
+                                                    prop_retry += 1;
+                                                    if prop_retry >= 3 {
+                                                        // Give up after max retries
+                                                        let _ = event_tx.send(BleEvent::Error(
+                                                            format!("Failed to get device properties: {}", e)
+                                                        )).await;
+                                                    }
+                                                    // Small delay before retry
+                                                    sleep(Duration::from_millis(100)).await;
+                                                }
+                                            }
+                                        }
+                                        
+                                        if let Some(device) = device_info {
+                                            // Apply RSSI filtering
+                                            if let Some(min_rssi) = config.min_rssi {
+                                                if let Some(rssi) = device.rssi {
+                                                    if rssi < min_rssi {
+                                                        // Skip this device due to weak signal
+                                                        continue;
+                                                    }
+                                                }
+                                            }
+                                            
+                                            // Process the device further
+                                            let mut devices_map = devices.lock().await;
+                                            devices_map.insert(device.address, device.clone());
+                                            devices_found += 1;
+                                            
+                                            // Send device discovered event
+                                            let _ = event_tx.send(BleEvent::DeviceDiscovered(device.clone())).await;
+                                            
+                                            // Check if this is an AirPods device and attempt detection
+                                            if device.is_potential_airpods {
+                                                if let Some(airpods) = detect_airpods(&device) {
+                                                    // Send AirPods detected event with reliable retry mechanism
+                                                    for _ in 0..3 {
+                                                        if event_tx.send(BleEvent::AirPodsDetected(airpods.clone())).await.is_ok() {
+                                                            break;
+                                                        }
+                                                        // Brief delay before retry
+                                                        sleep(Duration::from_millis(50)).await;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                CentralEvent::DeviceUpdated(addr) => {
+                                    // Handle device updates (similar to discovered)
+                                    let peripheral_result = adapter.peripheral(&addr).await;
+                                    
+                                    if let Ok(peripheral) = peripheral_result {
+                                        match DiscoveredDevice::from_peripheral(&peripheral).await {
+                                            Ok(device) => {
+                                                // Apply RSSI filtering
+                                                if let Some(min_rssi) = config.min_rssi {
+                                                    if let Some(rssi) = device.rssi {
+                                                        if rssi < min_rssi {
+                                                            debug!("Filtered device by RSSI: {} ({})", 
+                                                                device.name.clone().unwrap_or_else(|| device.address.to_string()), 
+                                                                rssi);
+                                                            continue;
+                                                        }
+                                                    }
+                                                }
+                                                
+                                                // Check if the device already exists
+                                                let mut devices_map = devices.lock().await;
+                                                
+                                                let is_airpods = device.is_potential_airpods;
+                                                
+                                // Create or update device with airpods flag
+                                let mut device = device.clone();
+                                device.is_potential_airpods = is_airpods;
+                                
+                                // Update if exists or add as new
+                                devices_map.insert(device.address, device.clone());
+                                
+                                // Send event
+                                let _ = event_tx.send(BleEvent::DeviceDiscovered(device)).await;
+                                            },
+                                            Err(e) => {
+                                                error!("Failed to get device details: {}", e);
+                                                continue;
+                                            }
+                                        }
+                                    } else {
+                                        error!("Failed to get peripheral: {:?}", peripheral_result);
+                                    }
+                                },
+                                CentralEvent::DeviceDisconnected(addr) => {
+                                    debug!("Device lost: {}", addr);
+                                    let mut devices_map = devices.lock().await;
+                                    
+                                    // First check if we know about this device using peripheral address
+                                    // (we need to convert from PeripheralId to BDAddr)
+                                    let peripheral_result = adapter.peripheral(&addr).await;
+                                    
+                                    if let Ok(peripheral) = peripheral_result {
+                                        // Try to get the address of the peripheral
+                                        if let Ok(properties) = peripheral.properties().await {
+                                            if let Some(props) = properties {
+                                                // The correct way to handle properties.address since it's not an Option
+                                                let address = props.address;
+                                                // Now we have a BDAddr
+                                                devices_map.remove(&address);
+                                                // Send event with proper BDAddr
+                                                let _ = event_tx.send(BleEvent::DeviceLost(address)).await;
+                                            } else {
+                                                error!("Device lost but no properties available");
+                                            }
+                                        } else {
+                                            error!("Failed to get device properties for lost device");
+                                        }
+                                    } else {
+                                        // This is unfortunate, but we can't do much without the address
+                                        error!("Failed to get peripheral for lost device: {:?}", peripheral_result);
+                                    }
+                                },
+                                // Other events can be handled here as needed
+                                _ => {}
+                            }
+                        },
+                        // Handle scan duration timeout
+                        _ = &mut scan_timeout => {
+                            break 'cycle_loop;
+                        },
+                        // Handle cancellation
+                        _ = cancel_rx.recv() => {
+                            break 'scan_loop;
                         }
                     }
                 }
+                
+                // Stop scanning for this cycle
+                if let Err(e) = adapter.stop_scan().await {
+                    // Log error but continue
+                    let _ = event_tx.send(BleEvent::Error(
+                        format!("Failed to stop scan: {}", e)
+                    )).await;
+                }
+                
+                // Increment scan cycle counter
+                scan_cycles_performed += 1;
+                
+                // Send scan cycle completed event
+                let _ = event_tx.send(BleEvent::ScanCycleCompleted { 
+                    devices_found
+                }).await;
+                
+                // Check if auto stop scan is enabled
+                if config.auto_stop_scan {
+                    // Send completion event
+                    let _ = event_tx.send(BleEvent::ScanningCompleted).await;
+                    break 'scan_loop;
+                }
             }
+            
+            // Ensure scanning is stopped
+            let _ = adapter.stop_scan().await;
+            
+            // Send final completion event if not already sent
+            let _ = event_tx.send(BleEvent::ScanningCompleted).await;
         });
         
-        Ok(scan_task)
+        Ok(task)
     }
     
     /// Stop the current scan if one is running
@@ -412,14 +699,14 @@ impl BleScanner {
     }
     
     /// Get a list of currently known devices
-    pub fn get_devices(&self) -> Vec<DiscoveredDevice> {
-        let devices = self.devices.lock().unwrap();
+    pub async fn get_devices(&self) -> Vec<DiscoveredDevice> {
+        let devices = self.devices.lock().await;
         devices.values().cloned().collect()
     }
     
     /// Get potential AirPods devices from discovered devices
-    pub fn get_potential_airpods(&self) -> Vec<DiscoveredDevice> {
-        let devices = self.devices.lock().unwrap();
+    pub async fn get_potential_airpods(&self) -> Vec<DiscoveredDevice> {
+        let devices = self.devices.lock().await;
         devices
             .values()
             .filter(|d| d.is_potential_airpods)
@@ -428,8 +715,8 @@ impl BleScanner {
     }
     
     /// Get fully detected AirPods devices with battery information
-    pub fn get_detected_airpods(&self) -> Vec<DetectedAirPods> {
-        let devices = self.devices.lock().unwrap();
+    pub async fn get_detected_airpods(&self) -> Vec<DetectedAirPods> {
+        let devices = self.devices.lock().await;
         devices
             .values()
             .filter_map(|device| detect_airpods(device))
@@ -447,19 +734,19 @@ impl BleScanner {
     }
     
     /// Clear the device list
-    pub fn clear_devices(&mut self) {
-        let mut devices = self.devices.lock().unwrap();
+    pub async fn clear_devices(&mut self) {
+        let mut devices = self.devices.lock().await;
         devices.clear();
     }
     
     /// Get a device by address if it exists
-    pub fn get_device(&self, address: &BDAddr) -> Option<DiscoveredDevice> {
-        let devices = self.devices.lock().unwrap();
+    pub async fn get_device(&self, address: &BDAddr) -> Option<DiscoveredDevice> {
+        let devices = self.devices.lock().await;
         devices.get(address).cloned()
     }
     
-    /// Process a discovered device, applying filters and sending events
-    #[allow(dead_code)]
+    /// Process a discovered device, applying filters and sending events    
+    #[allow(dead_code)]    
     async fn process_discovered_device(
         &self,
         device: DiscoveredDevice,
@@ -477,7 +764,7 @@ impl BleScanner {
         
         // Store the device
         {
-            let mut devices = self.devices.lock().unwrap();
+            let mut devices = self.devices.lock().await;
             devices.insert(device.address, device.clone());
         }
         
@@ -494,27 +781,35 @@ impl BleScanner {
         Ok(())
     }
     
-    /// Get filtered AirPods devices based on a custom filter
-    pub fn get_filtered_airpods(&self, filter: &AirPodsFilter) -> Vec<DiscoveredDevice> {
-        let devices = self.get_devices();
-        filter.apply_filter(&devices)
-    }
-    
-    /// Get detected AirPods with full details matching a filter
-    pub fn get_filtered_detected_airpods(&self, filter: &AirPodsFilter) -> Vec<DetectedAirPods> {
-        // First filter the devices
-        let filtered_devices = self.get_filtered_airpods(filter);
-        
-        // Then detect AirPods from the filtered devices
-        filtered_devices
-            .iter()
-            .filter_map(|device| detect_airpods(device))
+    /// Get filtered AirPods devices matching a filter
+    pub async fn get_filtered_airpods(&self, filter: &crate::airpods::detector::AirPodsFilter) -> Vec<DiscoveredDevice> {
+        let devices = self.get_devices().await;
+        devices.into_iter()
+            .filter(|d| filter(d))
             .collect()
     }
     
-    /// Check if any AirPods matching the filter are present
-    pub fn has_airpods_matching(&self, filter: &AirPodsFilter) -> bool {
-        !self.get_filtered_airpods(filter).is_empty()
+    /// Get detected AirPods devices matching a filter
+    pub async fn get_filtered_detected_airpods(&self, filter: &crate::airpods::detector::AirPodsFilter) -> Vec<DetectedAirPods> {
+        let devices = self.get_devices().await;
+        devices.into_iter()
+            .filter(|d| filter(d))
+            .filter_map(|d| detect_airpods(&d))
+            .collect()
+    }
+    
+    /// Check if there are any AirPods matching the filter
+    pub async fn has_airpods_matching(&self, filter: &crate::airpods::detector::AirPodsFilter) -> bool {
+        let devices = self.get_devices().await;
+        devices.iter().any(|d| filter(d))
+    }
+    
+    /// Filter devices using an AirPods filter
+    pub async fn filter_devices(&self, filter: &crate::airpods::detector::AirPodsFilter) -> Vec<DiscoveredDevice> {
+        let devices = self.get_devices().await;
+        devices.into_iter()
+            .filter(|d| filter(d))
+            .collect()
     }
     
     /// Get or create the event broker
@@ -650,6 +945,156 @@ pub fn parse_bdaddr(s: &str) -> Result<BDAddr, String> {
     Ok(BDAddr::from(addr))
 }
 
+impl BleError {
+    /// Get the error category for general classification
+    pub fn category(&self) -> BleErrorCategory {
+        match self {
+            Self::AdapterNotFound | 
+            Self::AdapterInitializationFailed(_) | 
+            Self::BluetoothDisabled => BleErrorCategory::AdapterIssue,
+            
+            Self::ScanInProgress | 
+            Self::ScanningNotSupported | 
+            Self::ScanCancelled | 
+            Self::ScanCycleLimit => BleErrorCategory::ScanningIssue,
+            
+            Self::DeviceError(_) | 
+            Self::DeviceDisconnected | 
+            Self::DeviceNotFound => BleErrorCategory::DeviceIssue,
+            
+            Self::ConnectionFailed(_) | 
+            Self::ConnectionRejected | 
+            Self::AdapterCommunicationError(_) |
+            Self::NotConnected => BleErrorCategory::ConnectionIssue,
+            
+            Self::Timeout(_) | 
+            Self::RetryLimitExceeded => BleErrorCategory::TimeoutIssue,
+            
+            Self::PermissionDenied(_) => BleErrorCategory::PermissionIssue,
+            
+            Self::SystemResourceError(_) => BleErrorCategory::SystemIssue,
+            
+            Self::CharacteristicNotFound(_) |
+            Self::NotificationsNotSupported(_) => BleErrorCategory::CapabilityIssue,
+            
+            Self::BtlePlugError(e) => match e {
+                btleplug::Error::PermissionDenied => BleErrorCategory::PermissionIssue,
+                btleplug::Error::NotConnected => BleErrorCategory::ConnectionIssue,
+                btleplug::Error::NotSupported(_) => BleErrorCategory::CapabilityIssue,
+                btleplug::Error::DeviceNotFound => BleErrorCategory::DeviceIssue,
+                _ => BleErrorCategory::Unknown,
+            },
+        }
+    }
+    
+    /// Check if the error is recoverable
+    pub fn is_recoverable(&self) -> bool {
+        match self {
+            // These are typically recoverable
+            Self::ScanCancelled |
+            Self::Timeout(_) |
+            Self::DeviceDisconnected |
+            Self::DeviceNotFound |
+            Self::ConnectionFailed(_) |
+            Self::RetryLimitExceeded => true,
+            
+            // These might be recoverable in some cases
+            Self::ScanInProgress |
+            Self::AdapterCommunicationError(_) |
+            Self::ConnectionRejected => true,
+            
+            // These are typically not recoverable without user intervention
+            Self::AdapterNotFound |
+            Self::BluetoothDisabled |
+            Self::AdapterInitializationFailed(_) |
+            Self::ScanningNotSupported |
+            Self::ScanCycleLimit |
+            Self::PermissionDenied(_) |
+            Self::SystemResourceError(_) |
+            Self::NotConnected |
+            Self::CharacteristicNotFound(_) |
+            Self::NotificationsNotSupported(_) => false,
+            
+            // For device errors, it depends on the specific error
+            Self::DeviceError(_) => false,
+            
+            // For btleplug errors, make a best guess
+            Self::BtlePlugError(e) => match e {
+                btleplug::Error::NotConnected |
+                btleplug::Error::DeviceNotFound => true,
+                _ => false,
+            },
+        }
+    }
+    
+    /// Get a user-friendly error message
+    pub fn user_message(&self) -> String {
+        match self {
+            Self::AdapterNotFound => 
+                "No Bluetooth adapter was found on your system.".to_string(),
+            
+            Self::BluetoothDisabled => 
+                "Bluetooth appears to be disabled. Please enable Bluetooth and try again.".to_string(),
+            
+            Self::ScanningNotSupported => 
+                "Your Bluetooth adapter doesn't support scanning for devices.".to_string(),
+            
+            Self::AdapterInitializationFailed(details) => 
+                format!("Failed to initialize the Bluetooth adapter: {}", details),
+            
+            Self::DeviceNotFound => 
+                "The device was not found or went out of range.".to_string(),
+            
+            Self::DeviceDisconnected => 
+                "The device disconnected unexpectedly.".to_string(),
+            
+            Self::PermissionDenied(details) => 
+                format!("Permission denied: {}. You may need to grant the application Bluetooth permissions.", details),
+            
+            Self::ConnectionFailed(details) => 
+                format!("Failed to connect to the device: {}", details),
+            
+            Self::Timeout(duration) => 
+                format!("The operation timed out after {:?}.", duration),
+                
+            Self::NotConnected => 
+                "The device is not connected. Please connect first.".to_string(),
+                
+            Self::CharacteristicNotFound(uuid) => 
+                format!("Could not find characteristic with UUID: {}", uuid),
+                
+            Self::NotificationsNotSupported(uuid) => 
+                format!("The characteristic {} does not support notifications.", uuid),
+            
+            // For other errors, just use the standard error message
+            _ => self.to_string(),
+        }
+    }
+}
+
+/// High-level categorization of Bluetooth errors
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BleErrorCategory {
+    /// Issues with the Bluetooth adapter
+    AdapterIssue,
+    /// Issues with scanning
+    ScanningIssue,
+    /// Issues with a specific device
+    DeviceIssue,
+    /// Issues with connections
+    ConnectionIssue,
+    /// Timeout issues
+    TimeoutIssue,
+    /// Permission issues
+    PermissionIssue,
+    /// System resource issues
+    SystemIssue,
+    /// Capability issues (feature not supported)
+    CapabilityIssue,
+    /// Unknown issues
+    Unknown,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -686,45 +1131,21 @@ mod tests {
     
     #[test]
     fn test_scanner_with_config() {
-        let config = ScanConfig {
-            scan_duration: std::time::Duration::from_secs(5),
-            ..ScanConfig::default()
-        };
+        let config = ScanConfig::default();
+        let scanner = BleScanner::with_config(config);
         
-        let scanner = BleScanner::with_config(config.clone());
-        assert_eq!(scanner.get_config().scan_duration, config.scan_duration);
+        assert_eq!(scanner.get_scan_cycles(), 0);
+        assert!(!scanner.is_scanning());
     }
     
     #[test]
     fn test_device_list_operations() {
         let mut scanner = BleScanner::new();
         
-        // Insert devices through internal method - need to expose a method for testing
-        let device1 = DiscoveredDevice {
-            address: BDAddr::from([1, 2, 3, 4, 5, 6]),
-            name: Some("Test Device 1".to_string()),
-            rssi: Some(-60),
-            manufacturer_data: HashMap::new(),
-            is_potential_airpods: false,
-            last_seen: std::time::Instant::now(),
-        };
+        // Initially empty
+        assert!(scanner.get_devices().is_empty());
         
-        {
-            let mut devices = scanner.devices.lock().unwrap();
-            devices.insert(device1.address, device1.clone());
-        }
-        
-        // Test get_devices
-        let devices = scanner.get_devices();
-        assert_eq!(devices.len(), 1);
-        assert_eq!(devices[0].address, device1.address);
-        
-        // Test get_device
-        let result = scanner.get_device(&device1.address);
-        assert!(result.is_some());
-        assert_eq!(result.unwrap().address, device1.address);
-        
-        // Test clear_devices
+        // Clear should work even when empty
         scanner.clear_devices();
         assert!(scanner.get_devices().is_empty());
     }

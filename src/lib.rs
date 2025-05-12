@@ -1,8 +1,14 @@
-// Module exports for library users
+// Root module exports
+pub mod config;
 pub mod bluetooth;
 pub mod airpods;
 pub mod ui;
-pub mod config;
+pub mod errors;
+pub mod state_persistence;
+pub mod lifecycle_manager;
+pub mod app_state_controller;
+
+// Module exports for library users
 pub mod app;
 pub mod error;
 pub mod app_controller;

@@ -1,7 +1,7 @@
 //! UI application and related functionality
 
 use iced::widget::{text, button, row, Column, Space};
-use iced::{Settings, Length, Subscription, Application, Element};
+use iced::{Settings, Length, Subscription, Application, Element, Command};
 use iced::alignment::Horizontal;
 use tokio::sync::mpsc;
 use crate::ui::{Message, UiComponent, MainWindow, SettingsWindow};
@@ -9,6 +9,80 @@ use crate::app_controller::AppController;
 use crate::ui::state::AppState;
 use crate::ui::theme::Theme;
 use std::thread;
+use std::sync::Arc;
+
+use crate::ui::state_manager::StateManager;
+use crate::ui::window_management::{DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH};
+use crate::config::AppConfig;
+use crate::ui::state_app::StateApp;
+
+/// Application entry point using Iced
+pub struct App {
+    state_manager: Arc<StateManager>,
+}
+
+impl Application for App {
+    type Message = Message;
+    type Theme = crate::ui::theme::Theme;
+    type Executor = iced::executor::Default;
+    type Flags = Arc<StateManager>;
+
+    fn new(flags: Self::Flags) -> (Self, Command<Message>) {
+        let state_manager = flags;
+        
+        (
+            Self {
+                state_manager,
+            },
+            Command::none(),
+        )
+    }
+
+    fn title(&self) -> String {
+        "RustPods".to_string()
+    }
+
+    fn update(&mut self, message: Message) -> Command<Message> {
+        match message {
+            Message::Exit => iced::window::close(),
+            _ => Command::none(),
+        }
+    }
+
+    fn view(&self) -> Element<'_, Message, iced::Renderer<Self::Theme>> {
+        // This is just a placeholder - the actual UI is managed by the system tray
+        text("RustPods running in system tray").into()
+    }
+
+    fn subscription(&self) -> Subscription<Message> {
+        Subscription::none()
+    }
+}
+
+/// Create application settings for Iced
+pub fn create_app_settings(state_manager: Arc<StateManager>) -> Settings<Arc<StateManager>> {
+    Settings {
+        id: Some("rustpods".to_string()),
+        window: iced::window::Settings {
+            size: (DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT),
+            position: iced::window::Position::Default,
+            min_size: Some((400, 300)),
+            max_size: None,
+            visible: false,
+            resizable: true,
+            decorations: true,
+            transparent: false,
+            icon: None,
+            level: iced::window::Level::Normal,
+            platform_specific: Default::default(),
+        },
+        flags: state_manager,
+        default_font: iced::Font::DEFAULT,
+        default_text_size: 16.0,
+        antialiasing: true,
+        exit_on_close_request: false,
+    }
+}
 
 /// Runs the UI application
 pub fn run_ui() -> iced::Result {
@@ -58,16 +132,19 @@ pub fn run_ui() -> iced::Result {
         return Err(iced::Error::WindowCreationFailed(e.into()));
     }
     
+    // Create the state manager
+    let state_manager = Arc::new(StateManager::new(sender));
+    
     // Run the Iced application
-    <AppState as Application>::run(Settings {
-        flags: (),
+    <StateApp as Application>::run(Settings {
+        flags: state_manager,
         antialiasing: true,
         exit_on_close_request: true,
         id: Some(String::from("rustpods")),
         window: iced::window::Settings {
             size: (800, 600),
             position: iced::window::Position::Default,
-            min_size: Some(400, 300),
+            min_size: Some((400, 300)),
             max_size: None,
             visible: true,
             resizable: true,
@@ -77,7 +154,8 @@ pub fn run_ui() -> iced::Result {
             icon: None,
             platform_specific: Default::default(),
         },
-        ..Default::default()
+        default_font: iced::Font::DEFAULT,
+        default_text_size: 16.0,
     })
 }
 

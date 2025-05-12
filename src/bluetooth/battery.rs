@@ -3,11 +3,12 @@
 use std::fmt;
 use btleplug::platform::Peripheral;
 use btleplug::api::Peripheral as _;  // Import the Peripheral trait
+use serde::{Serialize, Deserialize};
 use crate::airpods::{AirPodsBattery, parse_airpods_data};
 use crate::bluetooth::BleError;
 
 /// Battery status information for AirPods devices
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct AirPodsBatteryStatus {
     /// Battery levels for the AirPods
     pub battery: AirPodsBattery,

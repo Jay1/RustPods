@@ -6,6 +6,9 @@ pub mod config;
 pub mod app;
 pub mod error;
 pub mod app_controller;
+pub mod app_state_controller;
+pub mod lifecycle_manager;
+pub mod state_persistence;
 
 use std::process;
 
@@ -16,52 +19,77 @@ enum AppCommand {
     AirPods,
     Events,
     UI,
+    StateUI, // New command for using the state-based UI
     Help,
 }
 
 fn main() {
-    println!("RustPods - AirPods Battery Monitor");
+    // Initialize logging
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+        .format_timestamp_millis()
+        .init();
+    
+    log::info!("RustPods - Starting up application");
     
     // Parse command-line arguments
     match parse_args() {
         Ok(command) => {
-            // For UI command, use a different execution path to avoid Tokio runtime conflicts
-            if matches!(command, AppCommand::UI) {
-                if let Err(e) = ui::run_ui() {
-                    eprintln!("Error launching UI: {}", e);
-                    process::exit(6);
+            // For UI commands, use a different execution path to avoid Tokio runtime conflicts
+            match command {
+                AppCommand::UI => {
+                    log::info!("Launching UI mode");
+                    if let Err(e) = ui::run_ui() {
+                        log::error!("Error launching UI: {}", e);
+                        eprintln!("Error launching UI: {}", e);
+                        process::exit(6);
+                    }
+                    return;
+                },
+                AppCommand::StateUI => {
+                    log::info!("Launching state-based UI mode with lifecycle management");
+                    if let Err(e) = ui::run_state_ui() {
+                        log::error!("Error launching state-based UI: {}", e);
+                        eprintln!("Error launching state-based UI: {}", e);
+                        process::exit(6);
+                    }
+                    return;
+                },
+                _ => {
+                    // For other commands, use tokio runtime
+                    let runtime = tokio::runtime::Builder::new_multi_thread()
+                        .enable_all()
+                        .build()
+                        .expect("Failed to create tokio runtime");
+                        
+                    let result = runtime.block_on(async {
+                        execute_command(command).await
+                    });
+                    
+                    if let Err(err_code) = result {
+                        log::error!("Command failed with error code: {}", err_code);
+                        process::exit(err_code);
+                    }
                 }
-                return;
-            }
-            
-            // For other commands, use tokio runtime
-            let runtime = tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .build()
-                .expect("Failed to create tokio runtime");
-                
-            let result = runtime.block_on(async {
-                execute_command(command).await
-            });
-            
-            if let Err(err_code) = result {
-                process::exit(err_code);
             }
         },
         Err(err_msg) => {
+            log::error!("Error parsing arguments: {}", err_msg);
             eprintln!("Error: {}", err_msg);
             print_usage();
             process::exit(1);
         }
     }
+    
+    // Log application exit
+    log::info!("RustPods - Application exiting normally");
 }
 
 fn parse_args() -> Result<AppCommand, String> {
     let args: Vec<String> = std::env::args().collect();
     
     if args.len() <= 1 {
-        // No command provided, default to Help
-        return Ok(AppCommand::Help);
+        // No command provided, default to StateUI - Using our new state management system
+        return Ok(AppCommand::StateUI);
     }
 
     // Parse the command
@@ -72,6 +100,7 @@ fn parse_args() -> Result<AppCommand, String> {
         "airpods" => Ok(AppCommand::AirPods),
         "events" => Ok(AppCommand::Events),
         "ui" => Ok(AppCommand::UI),
+        "stateui" => Ok(AppCommand::StateUI),
         "help" | "--help" | "-h" => Ok(AppCommand::Help),
         _ => Err(format!("Unknown command: '{}'", args[1]))
     }
@@ -111,9 +140,9 @@ async fn execute_command(command: AppCommand) -> Result<(), i32> {
             println!("Running event system demo...");
             println!("To run the event system demo, use: cargo run --example event_system");
         },
-        AppCommand::UI => {
+        AppCommand::UI | AppCommand::StateUI => {
             // UI is handled separately in main to avoid Tokio runtime conflicts
-            unreachable!("UI command should be handled outside this function");
+            unreachable!("UI commands should be handled outside this function");
         },
         AppCommand::Help => {
             print_usage();
@@ -130,6 +159,7 @@ fn print_usage() {
     println!("  rustpods interval    - Run interval-based scanning");
     println!("  rustpods airpods     - Run AirPods filtering demo");
     println!("  rustpods events      - Run event system demo (use cargo run --example event_system)");
-    println!("  rustpods ui          - Launch the UI application");
+    println!("  rustpods ui          - Launch the UI application with original state management");
+    println!("  rustpods stateui     - Launch the UI application with new state management");
     println!("  rustpods help        - Show this help message");
 }

@@ -1,28 +1,24 @@
 use std::time::Duration;
 
-/// Configuration for BLE scanning
+/// Configuration for the Bluetooth scanner
 #[derive(Debug, Clone)]
 pub struct ScanConfig {
-    /// How long to actively scan for devices
+    /// Duration of each scan
     pub scan_duration: Duration,
-    
-    /// How long to wait between scan cycles
+    /// Interval between scans
     pub interval_between_scans: Duration,
-    
-    /// Whether to automatically stop scanning after scan_duration
-    pub auto_stop_scan: bool,
-    
-    /// Maximum number of scan cycles (None for unlimited)
+    /// Maximum number of scan cycles before auto-stop
+    /// None means indefinite scanning
     pub max_scan_cycles: Option<usize>,
-    
-    /// Whether to keep device history between scans
-    pub maintain_device_history: bool,
-    
-    /// Whether to use active scanning (more data, but higher power usage)
-    pub active_scanning: bool,
-    
-    /// Minimum signal strength to consider devices (None for no filtering)
+    /// Whether to automatically stop scanning after the first cycle
+    pub auto_stop_scan: bool,
+    /// Minimum RSSI (signal strength) filter
+    /// Devices with lower RSSI will be ignored
     pub min_rssi: Option<i16>,
+    /// Timeout after which inactive devices are removed
+    pub device_inactive_timeout: Option<Duration>,
+    /// Whether to continue scanning in a loop
+    pub continuous: bool,
 }
 
 impl Default for ScanConfig {
@@ -32,8 +28,8 @@ impl Default for ScanConfig {
             interval_between_scans: Duration::from_secs(20),
             auto_stop_scan: true,
             max_scan_cycles: None,
-            maintain_device_history: true,
-            active_scanning: true,
+            device_inactive_timeout: None,
+            continuous: false,
             min_rssi: None,
         }
     }
@@ -52,8 +48,8 @@ impl ScanConfig {
             interval_between_scans: Duration::from_secs(2),
             auto_stop_scan: true,
             max_scan_cycles: None,
-            maintain_device_history: true,
-            active_scanning: true,
+            device_inactive_timeout: None,
+            continuous: true,
             min_rssi: None,
         }
     }
@@ -65,8 +61,8 @@ impl ScanConfig {
             interval_between_scans: Duration::from_secs(60),
             auto_stop_scan: true,
             max_scan_cycles: None,
-            maintain_device_history: true,
-            active_scanning: false,
+            device_inactive_timeout: None,
+            continuous: false,
             min_rssi: Some(-80), // Filter out weak signals
         }
     }
@@ -78,8 +74,8 @@ impl ScanConfig {
             interval_between_scans: Duration::from_secs(10),
             auto_stop_scan: true,
             max_scan_cycles: None,
-            maintain_device_history: true,
-            active_scanning: true,
+            device_inactive_timeout: None,
+            continuous: false,
             min_rssi: Some(-70), // AirPods are usually nearby
         }
     }
@@ -91,8 +87,8 @@ impl ScanConfig {
             interval_between_scans: Duration::from_secs(0),
             auto_stop_scan: true,
             max_scan_cycles: Some(1),
-            maintain_device_history: false,
-            active_scanning: true,
+            device_inactive_timeout: None,
+            continuous: false,
             min_rssi: None,
         }
     }
@@ -121,15 +117,15 @@ impl ScanConfig {
         self
     }
     
-    /// Set whether to maintain device history between scans
-    pub fn with_history(mut self, maintain_history: bool) -> Self {
-        self.maintain_device_history = maintain_history;
+    /// Set the device inactive timeout
+    pub fn with_device_inactive_timeout(mut self, timeout: Option<Duration>) -> Self {
+        self.device_inactive_timeout = timeout;
         self
     }
     
-    /// Set whether to use active scanning
-    pub fn with_active_scanning(mut self, active: bool) -> Self {
-        self.active_scanning = active;
+    /// Set whether to continue scanning in a loop
+    pub fn with_continuous(mut self, continuous: bool) -> Self {
+        self.continuous = continuous;
         self
     }
     
@@ -152,8 +148,8 @@ mod tests {
         assert_eq!(config.interval_between_scans, Duration::from_secs(20));
         assert!(config.auto_stop_scan);
         assert_eq!(config.max_scan_cycles, None);
-        assert!(config.maintain_device_history);
-        assert!(config.active_scanning);
+        assert_eq!(config.device_inactive_timeout, None);
+        assert!(!config.continuous);
         assert_eq!(config.min_rssi, None);
     }
 
@@ -167,8 +163,8 @@ mod tests {
         assert_eq!(config.interval_between_scans, default_config.interval_between_scans);
         assert_eq!(config.auto_stop_scan, default_config.auto_stop_scan);
         assert_eq!(config.max_scan_cycles, default_config.max_scan_cycles);
-        assert_eq!(config.maintain_device_history, default_config.maintain_device_history);
-        assert_eq!(config.active_scanning, default_config.active_scanning);
+        assert_eq!(config.device_inactive_timeout, default_config.device_inactive_timeout);
+        assert_eq!(config.continuous, default_config.continuous);
         assert_eq!(config.min_rssi, default_config.min_rssi);
     }
 
@@ -180,8 +176,8 @@ mod tests {
         assert_eq!(config.interval_between_scans, Duration::from_secs(2));
         assert!(config.auto_stop_scan);
         assert_eq!(config.max_scan_cycles, None);
-        assert!(config.maintain_device_history);
-        assert!(config.active_scanning);
+        assert_eq!(config.device_inactive_timeout, None);
+        assert!(config.continuous);
         assert_eq!(config.min_rssi, None);
     }
 
@@ -193,8 +189,8 @@ mod tests {
         assert_eq!(config.interval_between_scans, Duration::from_secs(60));
         assert!(config.auto_stop_scan);
         assert_eq!(config.max_scan_cycles, None);
-        assert!(config.maintain_device_history);
-        assert!(!config.active_scanning);
+        assert_eq!(config.device_inactive_timeout, None);
+        assert!(!config.continuous);
         assert_eq!(config.min_rssi, Some(-80));
     }
 
@@ -206,8 +202,8 @@ mod tests {
         assert_eq!(config.interval_between_scans, Duration::from_secs(10));
         assert!(config.auto_stop_scan);
         assert_eq!(config.max_scan_cycles, None);
-        assert!(config.maintain_device_history);
-        assert!(config.active_scanning);
+        assert_eq!(config.device_inactive_timeout, None);
+        assert!(!config.continuous);
         assert_eq!(config.min_rssi, Some(-70));
     }
 
@@ -220,8 +216,8 @@ mod tests {
         assert_eq!(config.interval_between_scans, Duration::from_secs(0));
         assert!(config.auto_stop_scan);
         assert_eq!(config.max_scan_cycles, Some(1));
-        assert!(!config.maintain_device_history);
-        assert!(config.active_scanning);
+        assert_eq!(config.device_inactive_timeout, None);
+        assert!(!config.continuous);
         assert_eq!(config.min_rssi, None);
     }
 
@@ -257,17 +253,18 @@ mod tests {
     }
 
     #[test]
-    fn test_with_history() {
-        let config = ScanConfig::default().with_history(false);
+    fn test_with_device_inactive_timeout() {
+        let timeout = Some(Duration::from_secs(60));
+        let config = ScanConfig::default().with_device_inactive_timeout(timeout);
         
-        assert!(!config.maintain_device_history);
+        assert_eq!(config.device_inactive_timeout, timeout);
     }
 
     #[test]
-    fn test_with_active_scanning() {
-        let config = ScanConfig::default().with_active_scanning(false);
+    fn test_with_continuous() {
+        let config = ScanConfig::default().with_continuous(true);
         
-        assert!(!config.active_scanning);
+        assert!(config.continuous);
     }
 
     #[test]
@@ -285,16 +282,16 @@ mod tests {
             .with_interval(Duration::from_secs(30))
             .with_auto_stop(false)
             .with_max_cycles(Some(3))
-            .with_history(false)
-            .with_active_scanning(false)
+            .with_device_inactive_timeout(Some(Duration::from_secs(60)))
+            .with_continuous(true)
             .with_min_rssi(Some(-75));
         
         assert_eq!(config.scan_duration, Duration::from_secs(15));
         assert_eq!(config.interval_between_scans, Duration::from_secs(30));
         assert!(!config.auto_stop_scan);
         assert_eq!(config.max_scan_cycles, Some(3));
-        assert!(!config.maintain_device_history);
-        assert!(!config.active_scanning);
+        assert_eq!(config.device_inactive_timeout, Some(Duration::from_secs(60)));
+        assert!(config.continuous);
         assert_eq!(config.min_rssi, Some(-75));
     }
 } 

@@ -1,6 +1,6 @@
 //! AirPods-specific functionality
 
-mod detector;
+pub mod detector;
 mod filter;
 
 pub use detector::{
@@ -17,6 +17,8 @@ pub use filter::{
     airpods_with_battery_filter,
     APPLE_COMPANY_ID
 };
+
+use serde::{Serialize, Deserialize};
 
 /// AirPods device types
 #[derive(Debug, Clone, PartialEq)]
@@ -37,8 +39,35 @@ pub enum AirPodsType {
     Unknown,
 }
 
+impl AirPodsType {
+    /// Detect AirPods model based on device name
+    pub fn detect_from_name(name: &str) -> Self {
+        let name_lower = name.to_lowercase();
+        
+        if name_lower.contains("airpods pro") {
+            if name_lower.contains("2") || name_lower.contains("second") {
+                Self::AirPodsPro2
+            } else {
+                Self::AirPodsPro
+            }
+        } else if name_lower.contains("airpods max") {
+            Self::AirPodsMax
+        } else if name_lower.contains("airpods") {
+            if name_lower.contains("3") || name_lower.contains("third") {
+                Self::AirPods3
+            } else if name_lower.contains("2") || name_lower.contains("second") {
+                Self::AirPods2
+            } else {
+                Self::AirPods1
+            }
+        } else {
+            Self::Unknown
+        }
+    }
+}
+
 /// AirPods battery status
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AirPodsBattery {
     /// Left earbud battery level (0-100)
     pub left: Option<u8>,
@@ -51,7 +80,7 @@ pub struct AirPodsBattery {
 }
 
 /// Charging status for AirPods
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ChargingStatus {
     /// Left earbud charging status
     pub left: bool,
@@ -83,46 +112,29 @@ impl Default for AirPodsBattery {
     }
 }
 
-/// Parse AirPods manufacturer data to extract battery and charging information
+/// Parse AirPods data from manufacturer data bytes
 pub fn parse_airpods_data(data: &[u8]) -> Option<AirPodsBattery> {
-    // Ensure we have enough data for parsing
+    // Minimum data length check
     if data.len() < 16 {
         return None;
     }
     
-    // For most AirPods, battery info is in these offsets
-    // However, different models might have slight variations
-    
-    // The status byte containing charging information
-    // Bit 0: case charging, Bit 1: right pod charging, Bit 2: left pod charging
-    let charging_flags = if data.len() > 14 { data[14] } else { 0 };
-    
-    // Extract charging status information
-    let charging = ChargingStatus {
-        left: (charging_flags & 0x04) != 0,
-        right: (charging_flags & 0x02) != 0,
-        case: (charging_flags & 0x01) != 0,
-    };
-    
     // Extract battery levels
-    // AirPods typically report battery levels from 0-10
-    // We convert to percentage by multiplying by 10
-    let left_battery = if data.len() > 12 {
-        extract_battery_percentage(data[12])
-    } else {
-        None
-    };
+    // AirPods protocol: Each battery level is 0-10 (multiply by 10 for percentage)
+    // 0xFF means unknown/unavailable
+    let left_battery = extract_battery_level(data[12]);
+    let right_battery = extract_battery_level(data[13]);
+    let case_battery = extract_battery_level(data[15]);
     
-    let right_battery = if data.len() > 13 {
-        extract_battery_percentage(data[13])
-    } else {
-        None
-    };
-    
-    let case_battery = if data.len() > 15 {
-        extract_battery_percentage(data[15])
-    } else {
-        None
+    // Extract charging status from byte 14
+    // Bit 0 (LSB): Case charging
+    // Bit 1: Right AirPod charging
+    // Bit 2: Left AirPod charging
+    let charging_flags = data[14];
+    let charging = ChargingStatus {
+        left: (charging_flags & 0b100) != 0,
+        right: (charging_flags & 0b010) != 0,
+        case: (charging_flags & 0b001) != 0,
     };
     
     Some(AirPodsBattery {
@@ -133,13 +145,14 @@ pub fn parse_airpods_data(data: &[u8]) -> Option<AirPodsBattery> {
     })
 }
 
-/// Helper function to convert AirPods battery value to percentage
-fn extract_battery_percentage(value: u8) -> Option<u8> {
+/// Extract battery level from AirPods data
+fn extract_battery_level(value: u8) -> Option<u8> {
+    // 0xFF = unknown/unavailable
     if value == 0xFF {
-        None  // 0xFF means unknown/unavailable
+        None
     } else {
-        // Cap at 10 (which is 100%) in case we get invalid values
-        Some((value.min(10) * 10) as u8)
+        // Convert 0-10 scale to 0-100 percentage
+        Some(value.min(10) * 10)
     }
 }
 
@@ -200,10 +213,10 @@ mod tests {
     
     #[test]
     fn test_extract_battery_percentage() {
-        assert_eq!(extract_battery_percentage(0), Some(0));
-        assert_eq!(extract_battery_percentage(5), Some(50));
-        assert_eq!(extract_battery_percentage(10), Some(100));
-        assert_eq!(extract_battery_percentage(15), Some(100)); // Capping at 100%
-        assert_eq!(extract_battery_percentage(0xFF), None);    // Unknown value
+        assert_eq!(extract_battery_level(0), Some(0));
+        assert_eq!(extract_battery_level(5), Some(50));
+        assert_eq!(extract_battery_level(10), Some(100));
+        assert_eq!(extract_battery_level(15), Some(100)); // Capping at 100%
+        assert_eq!(extract_battery_level(0xFF), None);    // Unknown value
     }
 } 

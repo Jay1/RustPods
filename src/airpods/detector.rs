@@ -1,8 +1,11 @@
 use btleplug::api::BDAddr;
 use std::default::Default;
+use std::collections::HashMap;
+use std::convert::TryFrom;
 
 use crate::bluetooth::DiscoveredDevice;
 use super::{AirPodsType, AirPodsBattery, parse_airpods_data};
+use log::{debug, trace};
 
 /// Constants for AirPods detection
 pub const APPLE_COMPANY_ID: u16 = 0x004C;
@@ -55,27 +58,82 @@ impl Default for DetectedAirPods {
     }
 }
 
+/// AirPods detector for identifying and parsing AirPods data
+#[derive(Clone, Debug, Default)]
+pub struct AirPodsDetector {
+    /// Known AirPods devices
+    known_devices: HashMap<String, AirPodsType>,
+}
+
+impl AirPodsDetector {
+    /// Create a new AirPods detector
+    pub fn new() -> Self {
+        Self {
+            known_devices: HashMap::new(),
+        }
+    }
+    
+    /// Check if a device is an AirPods based on device information
+    pub fn is_airpods(&self, device: &crate::bluetooth::scanner::DiscoveredDevice) -> bool {
+        // Check if name contains "AirPods"
+        if let Some(name) = &device.name {
+            if name.contains("AirPods") {
+                return true;
+            }
+        }
+        
+        // Check for Apple manufacturer data with the right structure
+        if device.manufacturer_data.contains_key(&APPLE_COMPANY_ID) {
+            let data = &device.manufacturer_data[&APPLE_COMPANY_ID];
+            // AirPods advertisement data is typically 27 bytes
+            if data.len() >= 16 {
+                // Check for common AirPods data patterns
+                // This is simplified - real implementation would check specific byte patterns
+                return true;
+            }
+        }
+        
+        false
+    }
+    
+    /// Remember a device as AirPods
+    pub fn remember_device(&mut self, address: &str, device_type: AirPodsType) {
+        self.known_devices.insert(address.to_string(), device_type);
+    }
+    
+    /// Check if a device is a known AirPods device
+    pub fn is_known_airpods(&self, address: &str) -> bool {
+        self.known_devices.contains_key(address)
+    }
+    
+    /// Get the device type for a known AirPods device
+    pub fn get_device_type(&self, address: &str) -> Option<AirPodsType> {
+        self.known_devices.get(address).cloned()
+    }
+}
+
 /// Detects if a discovered device is an AirPods device and extracts its information
 pub fn detect_airpods(device: &DiscoveredDevice) -> Option<DetectedAirPods> {
-    // Check if the device has Apple's manufacturer data
-    let data = device.manufacturer_data.get(&APPLE_COMPANY_ID)?;
-    
-    // Perform preliminary validation of data format
-    if !is_valid_airpods_data(data) {
+    // Only process potential AirPods devices
+    if !device.is_potential_airpods {
         return None;
     }
     
-    // Determine AirPods type
-    let device_type = identify_airpods_type(data);
-    
-    // If it's an unknown type, it's not AirPods
-    if matches!(device_type, AirPodsType::Unknown) {
+    // Check for Apple manufacturer data
+    if !device.manufacturer_data.contains_key(&APPLE_COMPANY_ID) {
         return None;
     }
     
-    // Parse battery levels and charging status
+    // Get the manufacturer data
+    let data = &device.manufacturer_data[&APPLE_COMPANY_ID];
+    
+    // Parse battery data (if available)
     let battery = parse_airpods_data(data).unwrap_or_default();
     
+    // Determine device type
+    let device_type = identify_airpods_type(&device.name, data);
+    
+    // Create DetectedAirPods
     Some(DetectedAirPods {
         address: device.address,
         name: device.name.clone(),
@@ -121,65 +179,101 @@ fn starts_with_any(data: &[u8], prefixes: &[&[u8]]) -> bool {
 }
 
 /// Identifies the AirPods type from manufacturer data
-pub fn identify_airpods_type(data: &[u8]) -> AirPodsType {
-    if data.len() < 2 {
-        return AirPodsType::Unknown;
+pub fn identify_airpods_type(name: &Option<String>, data: &[u8]) -> AirPodsType {
+    // First check if we can determine from the name
+    if let Some(name) = name {
+        if name.contains("AirPods Pro") {
+            if name.contains("2") {
+                return AirPodsType::AirPodsPro2;
+            } else {
+                return AirPodsType::AirPodsPro;
+            }
+        } else if name.contains("AirPods Max") {
+            return AirPodsType::AirPodsMax;
+        } else if name.contains("AirPods") {
+            if name.contains("3") {
+                return AirPodsType::AirPods3;
+            } else if name.contains("2") {
+                return AirPodsType::AirPods2;
+            } else {
+                return AirPodsType::AirPods1;
+            }
+        }
     }
     
-    // Match against known device identifiers in the manufacturer data
-    match &data[0..2] {
-        // These patterns are based on known AirPods identifiers
-        // The actual implementation might need to be refined based on real-world testing
-        d if d == AIRPODS_1_2_PREFIX => {
-            // Further distinguish between AirPods 1 and 2 based on additional data
-            // This is a simplified approach and might need refinement
-            if data.len() > 4 && data[4] >= 0x10 {
-                AirPodsType::AirPods2
-            } else {
-                AirPodsType::AirPods1
-            }
-        },
-        d if d == AIRPODS_PRO_PREFIX => AirPodsType::AirPodsPro,
-        d if d == AIRPODS_PRO_2_PREFIX => AirPodsType::AirPodsPro2,
-        d if d == AIRPODS_3_PREFIX => AirPodsType::AirPods3,
-        d if d == AIRPODS_MAX_PREFIX => AirPodsType::AirPodsMax,
-        _ => AirPodsType::Unknown,
+    // If the name doesn't help, try to determine from the data
+    // This is simplified - real implementation would check specific byte patterns
+    if data.len() > 16 {
+        // Use byte 7 as identifier (simplified)
+        match data[7] {
+            0x0E => AirPodsType::AirPodsPro,
+            0x0F => AirPodsType::AirPodsPro2,
+            0x0A => AirPodsType::AirPodsMax,
+            0x0B => AirPodsType::AirPods3,
+            0x09 => AirPodsType::AirPods2,
+            _ => AirPodsType::AirPods1,
+        }
+    } else {
+        // Unknown
+        AirPodsType::Unknown
     }
 }
 
 /// Creates a filter function for use with the BleScanner
-pub fn create_airpods_filter() -> impl Fn(&DiscoveredDevice) -> bool + Clone {
-    // Create the filter as a static value so it lives long enough
-    move |device| {
-        // Basic Apple manufacturer data check - minimum requirement
-        if !device.manufacturer_data.contains_key(&APPLE_COMPANY_ID) {
-            return false;
+pub fn create_airpods_filter() -> crate::airpods::AirPodsFilter {
+    Box::new(|device: &DiscoveredDevice| {
+        // Check if name contains "AirPods"
+        if let Some(name) = &device.name {
+            if name.contains("AirPods") {
+                return true;
+            }
         }
         
-        // Apply checks similar to AirPodsFilter but directly in this function
-        if let Some(data) = device.manufacturer_data.get(&APPLE_COMPANY_ID) {
-            is_valid_airpods_data(data)
-        } else {
-            false
+        // Check for Apple manufacturer data
+        if device.manufacturer_data.contains_key(&APPLE_COMPANY_ID) {
+            let data = &device.manufacturer_data[&APPLE_COMPANY_ID];
+            // AirPods advertisement data is typically at least 16 bytes
+            if data.len() >= 16 {
+                return true;
+            }
         }
-    }
+        
+        false
+    })
 }
 
 /// Creates a custom filter function that combines the basic AirPods detection with additional criteria
-pub fn create_custom_airpods_filter<F>(custom_filter: F) -> impl Fn(&DiscoveredDevice) -> bool + Clone
-where
-    F: Fn(&DiscoveredDevice) -> bool + Clone + 'static,
-{
+pub fn create_custom_airpods_filter(
+    min_rssi: Option<i16>,
+    model_type: Option<AirPodsType>,
+) -> crate::airpods::AirPodsFilter {
     let base_filter = create_airpods_filter();
-    move |device| {
-        // First check if it's an AirPods device using the base filter
-        if !base_filter(device) {
+    Box::new(move |device: &DiscoveredDevice| {
+        // Apply RSSI filter if specified
+        if let Some(min_rssi_value) = min_rssi {
+            if let Some(rssi) = device.rssi {
+                if rssi < min_rssi_value {
+                    return false;
+                }
+            }
+        }
+        
+        // Check basic AirPods criteria
+        let is_airpods = base_filter(device);
+        if !is_airpods {
             return false;
         }
         
-        // Then apply the custom filter
-        custom_filter(device)
-    }
+        // If model type specified, check for that specific type
+        if let Some(model) = &model_type {
+            if let Some(detected) = detect_airpods(device) {
+                return detected.device_type == *model;
+            }
+            return false;
+        }
+        
+        true
+    })
 }
 
 /// Helper to extract and interpret AirPods battery values
@@ -194,6 +288,9 @@ pub fn extract_battery_level(value: u8) -> Option<u8> {
         Some((value as u8).min(10) * 10)
     }
 }
+
+/// Filter function type for AirPods detection
+pub type AirPodsFilter = Box<dyn Fn(&DiscoveredDevice) -> bool + Send + Sync>;
 
 #[cfg(test)]
 mod tests {
@@ -290,16 +387,16 @@ mod tests {
     #[test]
     fn test_identify_airpods_type() {
         // Test various AirPods type identification
-        assert!(matches!(identify_airpods_type(&[0x07, 0x19, 0x01]), AirPodsType::AirPods1 | AirPodsType::AirPods2));
-        assert_eq!(identify_airpods_type(&[0x0E, 0x19, 0x01]), AirPodsType::AirPodsPro);
-        assert_eq!(identify_airpods_type(&[0x0F, 0x19, 0x01]), AirPodsType::AirPodsPro2);
-        assert_eq!(identify_airpods_type(&[0x13, 0x19, 0x01]), AirPodsType::AirPods3);
-        assert_eq!(identify_airpods_type(&[0x0A, 0x19, 0x01]), AirPodsType::AirPodsMax);
-        assert_eq!(identify_airpods_type(&[0xFF, 0xFF, 0x01]), AirPodsType::Unknown);
+        assert!(matches!(identify_airpods_type(&Some("AirPods 1"), &[0x07, 0x19, 0x01]), AirPodsType::AirPods1 | AirPodsType::AirPods2));
+        assert_eq!(identify_airpods_type(&Some("AirPods Pro"), &[0x0E, 0x19, 0x01]), AirPodsType::AirPodsPro);
+        assert_eq!(identify_airpods_type(&Some("AirPods Pro 2"), &[0x0F, 0x19, 0x01]), AirPodsType::AirPodsPro2);
+        assert_eq!(identify_airpods_type(&Some("AirPods 3"), &[0x13, 0x19, 0x01]), AirPodsType::AirPods3);
+        assert_eq!(identify_airpods_type(&Some("AirPods Max"), &[0x0A, 0x19, 0x01]), AirPodsType::AirPodsMax);
+        assert_eq!(identify_airpods_type(&Some("Unknown Device"), &[0xFF, 0xFF, 0x01]), AirPodsType::Unknown);
         
         // Test with data that's too short
-        assert_eq!(identify_airpods_type(&[0x01]), AirPodsType::Unknown);
-        assert_eq!(identify_airpods_type(&[]), AirPodsType::Unknown);
+        assert_eq!(identify_airpods_type(&Some(""), &[0x01]), AirPodsType::Unknown);
+        assert_eq!(identify_airpods_type(&None, &[]), AirPodsType::Unknown);
     }
     
     #[test]
@@ -375,9 +472,7 @@ mod tests {
     #[test]
     fn test_create_custom_airpods_filter() {
         // Create a custom filter that only accepts devices with RSSI > -55
-        let custom_filter = create_custom_airpods_filter(|device| {
-            device.rssi.unwrap_or(-100) > -55
-        });
+        let custom_filter = create_custom_airpods_filter(Some(-55), None);
         
         // Create a valid AirPods device with strong signal
         let mut apple_data_strong = HashMap::new();

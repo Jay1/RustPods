@@ -189,15 +189,17 @@ pub async fn airpods_filtering() -> Result<(), Box<dyn std::error::Error>> {
                         airpods.battery.case.unwrap_or(0));
                     
                     // Get filtered devices
-                    let all_airpods = scanner_clone.get_filtered_airpods(&airpods_all_models_filter());
-                    let pro_airpods = scanner_clone.get_filtered_airpods(&airpods_pro_filter());
-                    let nearby_airpods = scanner_clone.get_filtered_airpods(&airpods_nearby_filter(-70));
+                    let all_airpods = scanner_clone.get_filtered_airpods(&airpods_all_models_filter()).await;
+                    let pro_airpods = scanner_clone.get_filtered_airpods(&airpods_pro_filter()).await;
+                    let nearby_airpods = scanner_clone.get_filtered_airpods(&airpods_nearby_filter(-70)).await;
                     
                     // Custom filter: AirPods with strong signal
-                    let custom_airpods_filter = crate::airpods::AirPodsFilter::new()
-                        .with_min_rssi(-70); // Strong signal filter
+                    let custom_airpods_filter = crate::airpods::detector::create_custom_airpods_filter(
+                        Some(-70), // Strong signal filter
+                        None // Any AirPods model
+                    );
                     
-                    let custom_filtered = scanner_clone.get_filtered_airpods(&custom_airpods_filter);
+                    let custom_filtered = scanner_clone.get_filtered_airpods(&custom_airpods_filter).await;
                     
                     // Display filter results
                     println!();
@@ -206,7 +208,6 @@ pub async fn airpods_filtering() -> Result<(), Box<dyn std::error::Error>> {
                     println!("  - Pro models only: {} device(s)", pro_airpods.len());
                     println!("  - Nearby AirPods (-60 RSSI): {} device(s)", nearby_airpods.len());
                     println!("  - Custom filter: {} device(s)", custom_filtered.len());
-                    println!();
                 },
                 _ => {} // Ignore other events
             }

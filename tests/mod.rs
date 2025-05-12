@@ -26,3 +26,31 @@ pub mod settings_ui_tests;
 // Note: In Rust's test system, each .rs file in the tests directory 
 // is compiled as a separate test binary by default, even when there's a mod.rs file.
 // The mod.rs file imports allow us to share utilities and helpers across test binaries. 
+
+//! RustPods Test Suite
+//! This file organizes all test modules
+
+// Include common test helpers
+mod test_helpers;
+
+// Test modules
+mod form_validation_tests;
+mod window_visibility_tests;
+mod system_tray_tests;
+mod system_tray_integration_tests;
+mod settings_window_tests;
+mod state_manager_tests;
+mod app_config_tests;
+mod app_battery_monitoring_tests;
+mod error_handling_tests;
+mod settings_ui_tests;
+
+#[cfg(test)]
+mod tests {
+    // Global test setup if needed
+    #[test]
+    fn test_suite_setup() {
+        // Verify test suite is set up correctly
+        assert!(true);
+    }
+} 

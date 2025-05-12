@@ -11,8 +11,9 @@ use crate::config::{AppConfig, ConfigManager, ConfigError};
 use crate::ui::Message;
 use crate::ui::components::{BluetoothSetting, UiSetting, SystemSetting};
 use crate::ui::{MainWindow, SettingsWindow, SettingsTab};
-use crate::ui::components::SystemTray;
+use crate::ui::SystemTray;
 use crate::ui::system_tray::SystemTrayError;
+use crate::ui::state_manager::{StateManager, Action};
 
 /// Main application state
 #[derive(Debug, Clone)]
@@ -102,10 +103,16 @@ impl Application for AppState {
     type Message = Message;
     type Theme = crate::ui::theme::Theme;
     type Executor = executor::Default;
-    type Flags = ();
+    type Flags = std::sync::Arc<StateManager>;
 
-    fn new(_flags: Self::Flags) -> (Self, Command<Message>) {
-        (Self::default(), Command::none())
+    fn new(flags: Self::Flags) -> (Self, Command<Message>) {
+        let mut state = Self::default();
+        
+        // Store the state manager reference in some way
+        // This is a placeholder - ideally we'd have a way to store and use the state manager
+        // For now, we'll just use the default state
+        
+        (state, Command::none())
     }
     
     fn title(&self) -> String {
@@ -176,18 +183,9 @@ impl Application for AppState {
                 self.animation_progress = (self.animation_progress + 0.01) % 1.0;
                 
                 // Update main window with current animation progress
-                if let Some(device) = self.get_selected_device() {
-                    self.main_window = MainWindow::new(
-                        self.battery_status.clone(),
-                        self.is_scanning,
-                        true, // is_connected
-                        device.name.clone(),
-                        device.rssi,
-                        self.connection_timestamp.map(|timestamp| {
-                            let now = std::time::Instant::now();
-                            now.duration_since(timestamp).as_secs()
-                        })
-                    ).with_animation_progress(self.animation_progress);
+                if let Some(_device) = self.get_selected_device() {
+                    self.main_window = MainWindow::new()
+                        .with_animation_progress(self.animation_progress);
                 }
             }
             Message::AnimationProgress(progress) => {
@@ -202,18 +200,9 @@ impl Application for AppState {
                 self.battery_status = Some(status);
                 
                 // Update main window with new battery status
-                if let Some(device) = self.get_selected_device() {
-                    self.main_window = MainWindow::new(
-                        self.battery_status.clone(),
-                        self.is_scanning,
-                        true, // is_connected
-                        device.name.clone(),
-                        device.rssi,
-                        self.connection_timestamp.map(|timestamp| {
-                            let now = std::time::Instant::now();
-                            now.duration_since(timestamp).as_secs()
-                        })
-                    ).with_animation_progress(self.animation_progress);
+                if let Some(_device) = self.get_selected_device() {
+                    self.main_window = MainWindow::new()
+                        .with_animation_progress(self.animation_progress);
                 }
                 
                 // Update system tray with battery status if available
@@ -350,6 +339,11 @@ impl Application for AppState {
                 
                 // Update settings window
                 self.settings_window.update_config(config);
+            }
+            // Add wildcard pattern to handle all other Message variants
+            _ => {
+                // Other message types can be ignored or logged
+                log::debug!("Unhandled message in state.rs");
             }
         }
         
