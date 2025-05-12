@@ -1,0 +1,47 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build and Package Release
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+        
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        
+      - name: Build release
+        run: cargo build --release --verbose
+        
+      - name: Run tests
+        run: cargo test --release --verbose
+        
+      - name: Package release
+        run: |
+          mkdir RustPods
+          copy target\release\rustpods.exe RustPods\
+          copy README.md RustPods\
+          copy LICENSE RustPods\
+          mkdir RustPods\assets
+          xcopy /E assets RustPods\assets\
+          powershell Compress-Archive RustPods RustPods-${{ github.ref_name }}.zip
+          
+      - name: Create GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: RustPods-${{ github.ref_name }}.zip
+          draft: false
+          prerelease: contains(github.ref, '-rc') || contains(github.ref, '-beta') || contains(github.ref, '-alpha')
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 

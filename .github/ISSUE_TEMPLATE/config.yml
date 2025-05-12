@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: RustPods Documentation
+    url: https://github.com/Jay1/RustPods/blob/main/docs/index.md
+    about: Check our documentation for answers to common questions.
+  - name: GitHub Discussions
+    url: https://github.com/Jay1/RustPods/discussions
+    about: Please ask and answer questions here for community support. 

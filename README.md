@@ -8,6 +8,17 @@
   A simple, elegant battery monitor for Apple AirPods on Windows
 </p>
 
+<p align="center">
+  <a href="https://github.com/Jay1/RustPods/actions/workflows/rust-ci.yml">
+    <img src="https://github.com/Jay1/RustPods/actions/workflows/rust-ci.yml/badge.svg" alt="Rust CI">
+  </a>
+  <a href="https://opensource.org/licenses/MIT">
+    <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
+  </a>
+  <img src="https://img.shields.io/badge/platform-windows-blue" alt="Platform: Windows">
+  <img src="https://img.shields.io/badge/Powered%20by-Rust-orange" alt="Powered by: Rust">
+</p>
+
 ---
 
 Hi guys 👋 This little project came about because I wanted a simple, no-fuss way to check my AirPods battery on Windows. I found that many existing tools were either a bit complicated to set up, weren't free, or just didn't quite fit what I needed.
@@ -111,4 +122,6 @@ Active development continues with a focus on reliability and adding support for 
 
 ## 📄 License
 
-MIT 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. 
