@@ -38,6 +38,40 @@ So, I built this: an open-source application crafted with Rust 🦀, designed to
 3. Open the AirPods case or take them out to make them discoverable
 4. RustPods will automatically scan and show battery levels
 
+## 🖥️ Command-Line Interface
+
+RustPods can be run in different modes through the command line:
+
+```
+Usage:
+  rustpods adapters    - Discover Bluetooth adapters
+  rustpods scan        - Run a basic Bluetooth scan
+  rustpods interval    - Run interval-based scanning
+  rustpods airpods     - Run AirPods filtering demo
+  rustpods events      - Run event system demo (use cargo run --example event_system)
+  rustpods ui          - Launch the UI application with original state management
+  rustpods stateui     - Launch the UI application with new state management (default)
+  rustpods help        - Show this help message
+```
+
+When run without any arguments, RustPods defaults to `stateui` mode, launching the main application with the new state management system.
+
+### Examples:
+
+```sh
+# Launch the main UI application (default)
+rustpods
+
+# Show all available Bluetooth adapters on your system
+rustpods adapters
+
+# Run a scan for AirPods devices
+rustpods airpods
+
+# Show command-line help
+rustpods help
+```
+
 ## 📖 Documentation
 
 Visit our [documentation](docs/index.md) for detailed guides:

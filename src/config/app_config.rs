@@ -150,6 +150,14 @@ pub struct SystemConfig {
     /// Enable application telemetry
     #[serde(default)]
     pub enable_telemetry: bool,
+    
+    /// Auto-save interval in seconds (default: 5 minutes)
+    #[serde(default)]
+    pub auto_save_interval: Option<u64>,
+    
+    /// Create crash recovery snapshots
+    #[serde(default = "default_true")]
+    pub enable_crash_recovery: bool,
 }
 
 /// Battery monitoring configuration
@@ -317,8 +325,10 @@ impl Default for SystemConfig {
     fn default() -> Self {
         Self {
             launch_at_startup: false,
-            log_level: LogLevel::Info,
+            log_level: LogLevel::default(),
             enable_telemetry: false,
+            auto_save_interval: Some(300), // 5 minutes default
+            enable_crash_recovery: true,
         }
     }
 }
@@ -601,7 +611,16 @@ impl UiConfig {
 impl SystemConfig {
     /// Validate system configuration
     pub fn validate(&self) -> Result<(), ConfigError> {
-        // No specific validation for system config yet
+        // Validate auto_save_interval
+        if let Some(interval) = self.auto_save_interval {
+            if interval < 30 {
+                return Err(ConfigError::ValidationFailed(
+                    "system.auto_save_interval".to_string(),
+                    "Auto-save interval must be at least 30 seconds".to_string(),
+                ));
+            }
+        }
+        
         Ok(())
     }
 }

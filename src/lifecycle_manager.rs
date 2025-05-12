@@ -201,108 +201,92 @@ impl LifecycleManager {
         // Create the system event task
         #[cfg(target_os = "windows")]
         let task = tokio::spawn(async move {
-            // On Windows, we would normally use the Power APIs to listen for sleep/wake events
-            // But for this implementation, we'll use a timer-based approach to simulate these events
-            let mut interval = tokio::time::interval(Duration::from_secs(2));
+            use windows::Win32::UI::WindowsAndMessaging::{
+                GetMessageW, MSG, WM_POWERBROADCAST, PBT_APMSUSPEND, PBT_APMRESUMESUSPEND,
+                PBT_APMRESUMEAUTOMATIC, PBT_APMPOWERSTATUSCHANGE
+            };
+            
+            log::info!("Starting system event monitor for Windows");
+            
+            // Create a message-only window to receive power notifications
+            let mut msg = MSG::default();
             
             loop {
-                interval.tick().await;
+                // Process Windows messages
+                // In a real implementation, this would use a proper message-only window
+                // For demonstration purposes, we'll implement a simple polling mechanism
                 
-                // Simulate receiving a power event
-                // In a real implementation, this would come from Windows message loop
-                
-                // Check current state
-                let current_state = {
-                    let state_guard = state.lock().unwrap();
-                    (*state_guard).clone()
-                };
-                
-                // Handle based on current state
-                match current_state {
-                    LifecycleState::Sleep => {
-                        if rand::random::<f32>() < 0.1 {
-                            *state.lock().unwrap() = LifecycleState::Running;
-                            ui_sender.send(Message::SystemWake).ok();
-                            let action = crate::ui::state_manager::Action::SystemWake;
-                            state_manager.dispatch(action);
-                            log::info!("System woke from sleep");
-                        }
-                    },
-                    LifecycleState::Running => {
-                        if rand::random::<f32>() < 0.01 {
-                            *state.lock().unwrap() = LifecycleState::Sleep;
-                            
-                            // Save state before sleep
-                            if let Some(mut persistence_manager) = persistence_manager.clone() {
-                                if let Err(e) = persistence_manager.save_state() {
-                                    log::error!("Failed to save state before sleep: {}", e);
+                // Check for power events
+                unsafe {
+                    if GetMessageW(&mut msg, None, 0, 0).as_bool() {
+                        if msg.message == WM_POWERBROADCAST {
+                            match msg.wParam.0 as u32 {
+                                PBT_APMSUSPEND => {
+                                    *state.lock().unwrap() = LifecycleState::Sleep;
+                                    ui_sender.send(crate::ui::Message::SystemSleep).ok();
+                                    
+                                    // Save state before sleep
+                                    state_manager.dispatch(crate::ui::state_manager::Action::SystemSleep);
+                                    
+                                    // Save state before sleep
+                                    if let Some(mut persistence_manager) = persistence_manager.clone() {
+                                        if let Err(e) = persistence_manager.save_state() {
+                                            log::error!("Failed to save state before sleep: {}", e);
+                                        } else {
+                                            log::info!("Successfully saved state before sleep");
+                                        }
+                                    }
+                                    
+                                    log::info!("System entering sleep mode");
                                 }
+                                PBT_APMRESUMESUSPEND | PBT_APMRESUMEAUTOMATIC => {
+                                    *state.lock().unwrap() = LifecycleState::Running;
+                                    ui_sender.send(crate::ui::Message::SystemWake).ok();
+                                    state_manager.dispatch(crate::ui::state_manager::Action::SystemWake);
+                                    
+                                    log::info!("System waking from sleep");
+                                }
+                                PBT_APMPOWERSTATUSCHANGE => {
+                                    log::debug!("Power status changed (e.g., battery level)");
+                                }
+                                _ => {}
                             }
-                            
-                            ui_sender.send(Message::SystemSleep).ok();
-                            let config = state_manager.get_config();
-                            if let Err(e) = config.save() {
-                                log::error!("Failed to save config before sleep: {}", e);
-                            }
-                            log::info!("System entering sleep mode");
                         }
-                    },
-                    _ => {}
+                    }
                 }
+                
+                // Sleep to avoid high CPU usage in this polling loop
+                tokio::time::sleep(Duration::from_millis(500)).await;
             }
         });
         
+        // For non-Windows platforms, implement a different strategy
         #[cfg(not(target_os = "windows"))]
         let task = tokio::spawn(async move {
-            // For non-Windows platforms, implement similar logic
-            // but using platform-specific APIs
+            log::info!("Starting generic system event monitor");
             
+            // For non-Windows platforms, we'll use a simple timer-based approach
+            // In a real implementation, this would use platform-specific mechanisms
             let mut interval = tokio::time::interval(Duration::from_secs(2));
             
             loop {
                 interval.tick().await;
                 
-                // Simplified logic similar to Windows version
-                // Would be replaced with proper OS-specific event handling
+                // Check for platform-specific signals
+                // This is a placeholder for platform-specific implementations
                 
-                let current_state = {
-                    let state_guard = state.lock().unwrap();
-                    (*state_guard).clone()
-                };
+                // For demonstration only: occasionally check system status
+                // In reality, this would hook into OS-specific signals
+                #[cfg(target_os = "macos")]
+                {
+                    // On macOS, we might use IOKit notifications
+                    // This is a placeholder
+                }
                 
-                // Simple state machine similar to Windows version
-                // but without the Windows-specific API calls
-                
-                match current_state {
-                    LifecycleState::Sleep => {
-                        if rand::random::<f32>() < 0.1 {
-                            *state.lock().unwrap() = LifecycleState::Running;
-                            ui_sender.send(Message::SystemWake).ok();
-                            let action = crate::ui::state_manager::Action::SystemWake;
-                            state_manager.dispatch(action);
-                            log::info!("System woke from sleep");
-                        }
-                    },
-                    LifecycleState::Running => {
-                        if rand::random::<f32>() < 0.01 {
-                            *state.lock().unwrap() = LifecycleState::Sleep;
-                            
-                            // Save state before sleep
-                            if let Some(mut persistence_manager) = persistence_manager.clone() {
-                                if let Err(e) = persistence_manager.save_state() {
-                                    log::error!("Failed to save state before sleep: {}", e);
-                                }
-                            }
-                            
-                            ui_sender.send(Message::SystemSleep).ok();
-                            let config = state_manager.get_config();
-                            if let Err(e) = config.save() {
-                                log::error!("Failed to save config before sleep: {}", e);
-                            }
-                            log::info!("System entering sleep mode");
-                        }
-                    },
-                    _ => {}
+                #[cfg(target_os = "linux")]
+                {
+                    // On Linux, we might use D-Bus signals
+                    // This is a placeholder
                 }
             }
         });
@@ -312,87 +296,162 @@ impl LifecycleManager {
     
     /// Handle shutdown request
     pub fn shutdown(&mut self) -> Result<(), String> {
+        log::info!("Shutting down lifecycle manager");
+        
         // Set state to shutting down
-        let mut state = self.state.lock().unwrap();
-        *state = LifecycleState::ShuttingDown;
+        {
+            let mut state = self.state.lock().unwrap();
+            if *state == LifecycleState::ShuttingDown {
+                log::warn!("Lifecycle manager is already shutting down");
+                return Ok(());
+            }
+            *state = LifecycleState::ShuttingDown;
+        }
+        
+        // Force save state
+        self.force_save()?;
         
         // Cancel auto-save task
         if let Some(task) = self.auto_save_task.take() {
+            log::debug!("Cancelling auto-save task");
             task.abort();
         }
         
         // Cancel system event task
         if let Some(task) = self.system_event_task.take() {
+            log::debug!("Cancelling system event task");
             task.abort();
         }
         
-        // Save persistent state
-        if let Some(ref mut persistence_manager) = self.persistence_manager {
+        // Cancel crash recovery task
+        if let Some(task) = self.crash_recovery_task.take() {
+            log::debug!("Cancelling crash recovery task");
+            task.abort();
+        }
+        
+        // Release resources in state manager
+        let shutdown_action = crate::ui::state_manager::Action::Shutdown;
+        self.state_manager.dispatch(shutdown_action);
+        
+        // Save final recovery point and mark as clean shutdown
+        if let Some(persistence_manager) = &mut self.persistence_manager {
+            // Save final state
             if let Err(e) = persistence_manager.save_state() {
-                log::error!("Failed to save persistent state on shutdown: {}", e);
+                log::warn!("Failed to save final state during shutdown: {}", e);
             }
+            
+            // Create a marker file to indicate clean shutdown
+            let clean_shutdown_path = get_recovery_file_path()
+                .map_err(|e| format!("Failed to get recovery path: {}", e))?
+                .with_file_name("clean_shutdown");
+                
+            std::fs::write(&clean_shutdown_path, "")
+                .map_err(|e| format!("Failed to write clean shutdown marker: {}", e))?;
+                
+            log::debug!("Created clean shutdown marker at {:?}", clean_shutdown_path);
         }
         
-        // Save config before exit
-        let config = self.state_manager.get_config();
-        if let Err(e) = config.save() {
-            log::error!("Failed to save config on shutdown: {}", e);
-        }
-        
+        log::info!("Lifecycle manager shutdown complete");
         Ok(())
     }
     
     /// Handle system sleep event
     pub fn handle_sleep(&mut self) {
+        log::info!("Handling system sleep event");
+        
         // Set state to sleep
-        let mut state = self.state.lock().unwrap();
-        *state = LifecycleState::Sleep;
-        
-        // Save persistent state
-        if let Some(ref mut persistence_manager) = self.persistence_manager {
-            if let Err(e) = persistence_manager.save_state() {
-                log::error!("Failed to save persistent state before sleep: {}", e);
-            }
+        {
+            let mut state = self.state.lock().unwrap();
+            *state = LifecycleState::Sleep;
         }
         
-        // Save config before sleep
-        let config = self.state_manager.get_config();
-        if let Err(e) = config.save() {
-            log::error!("Failed to save config before sleep: {}", e);
+        // Save state before sleep
+        if let Err(e) = self.force_save() {
+            log::warn!("Failed to save state before sleep: {}", e);
         }
         
-        // Disconnect from devices to prevent issues during sleep
-        let action = crate::ui::state_manager::Action::SystemSleep;
-        self.state_manager.dispatch(action);
+        // Notify state manager
+        let sleep_action = crate::ui::state_manager::Action::SystemSleep;
+        self.state_manager.dispatch(sleep_action);
+        
+        // Perform any sleep-specific actions
+        // e.g., Disconnect Bluetooth devices to save power
+        let device_state = self.state_manager.get_device_state();
+        if device_state.is_scanning {
+            // Stop scanning during sleep
+            let stop_scan_action = crate::ui::state_manager::Action::StopScanning;
+            self.state_manager.dispatch(stop_scan_action);
+        }
     }
     
     /// Handle system wake event
     pub fn handle_wake(&mut self) {
-        // Set state to running
-        let mut state = self.state.lock().unwrap();
-        *state = LifecycleState::Running;
+        log::info!("Handling system wake event");
         
-        // Reconnect to devices if needed
-        let action = crate::ui::state_manager::Action::SystemWake;
-        self.state_manager.dispatch(action);
+        // Set state to running
+        {
+            let mut state = self.state.lock().unwrap();
+            *state = LifecycleState::Running;
+        }
+        
+        // Notify state manager
+        let wake_action = crate::ui::state_manager::Action::SystemWake;
+        self.state_manager.dispatch(wake_action);
+        
+        // Perform wake-specific actions
+        // e.g., Reconnect to devices
+        let device_state = self.state_manager.get_device_state();
+        
+        // If auto-scan is enabled, restart scanning
+        if device_state.auto_scan {
+            let start_scan_action = crate::ui::state_manager::Action::StartScanning;
+            self.state_manager.dispatch(start_scan_action);
+        }
+        
+        // If we had a selected device before, try to reconnect
+        if let Some(device_address) = &device_state.selected_device {
+            if device_state.connection_state != crate::ui::state_manager::ConnectionState::Disconnected {
+                let reconnect_action = crate::ui::state_manager::Action::RestorePreviousConnection(
+                    device_address.clone()
+                );
+                self.state_manager.dispatch(reconnect_action);
+            }
+        }
     }
     
-    /// Force save the current state
+    /// Force save all state immediately
     pub fn force_save(&mut self) -> Result<(), String> {
-        // Get the persistence manager
-        let mut persistence_manager = match &mut self.persistence_manager {
-            Some(manager) => manager.clone(),
-            None => return Err("Persistence manager not initialized".to_string()),
-        };
+        log::info!("Forcing immediate state save");
         
-        // Save the state
-        let result = persistence_manager.save_state();
-        
-        // Check for errors
-        match result {
-            Ok(()) => Ok(()),
-            Err(e) => Err(format!("Failed to save state: {}", e)),
+        // Save config
+        let config = self.state_manager.get_config();
+        if let Err(e) = config.save() {
+            log::error!("Failed to save config: {}", e);
+            return Err(format!("Failed to save config: {}", e));
         }
+        
+        // Save persistent state
+        if let Some(persistence_manager) = &mut self.persistence_manager {
+            if let Err(e) = persistence_manager.save_state() {
+                log::error!("Failed to save persistent state: {}", e);
+                return Err(format!("Failed to save persistent state: {}", e));
+            }
+        }
+        
+        // Save recovery state
+        if let Err(e) = self.save_recovery_state() {
+            log::warn!("Failed to save recovery state: {}", e);
+            // Don't return error for recovery state failure
+        }
+        
+        // Update last save time
+        {
+            let mut last_save_time = self.last_save.lock().unwrap();
+            *last_save_time = Instant::now();
+        }
+        
+        log::info!("Force save completed successfully");
+        Ok(())
     }
     
     /// Save crash recovery state
@@ -403,7 +462,7 @@ impl LifecycleManager {
         
         // Create recovery data
         let recovery_data = RecoveryData {
-            timestamp: chrono::Utc::now().to_string(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
             selected_device: device_state.selected_device.clone(),
             connection_state: format!("{:?}", device_state.connection_state),
             is_scanning: device_state.is_scanning,
@@ -507,40 +566,64 @@ impl LifecycleManager {
     /// Start crash recovery task
     fn start_crash_recovery_task(&mut self) {
         // Get necessary clones for the task
-        let lifecycle_manager = Arc::new(self.clone());
+        let state_manager = Arc::clone(&self.state_manager);
         
         // Create the crash recovery task
         let task = tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(60)); // Save state every minute
+            let mut interval = tokio::time::interval(Duration::from_secs(30)); // Save recovery data every 30 seconds
             
             loop {
                 interval.tick().await;
                 
-                // Save recovery state
-                if let Err(e) = lifecycle_manager.save_recovery_state() {
-                    log::error!("Failed to save recovery state: {}", e);
+                // Capture current state for recovery
+                let device_state = state_manager.get_device_state();
+                let config = state_manager.get_config();
+                
+                // Create recovery data
+                let recovery_data = RecoveryData {
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                    selected_device: device_state.selected_device.clone(),
+                    connection_state: format!("{:?}", device_state.connection_state),
+                    is_scanning: device_state.is_scanning,
+                    auto_scan: device_state.auto_scan,
+                    last_error: device_state.last_error.clone(),
+                };
+                
+                // Save recovery data
+                if let Err(e) = save_recovery_data(&recovery_data) {
+                    log::warn!("Failed to save recovery data: {}", e);
                 }
                 
-                // Also save persistent state occasionally
-                if let Some(mut persistence_manager) = lifecycle_manager.persistence_manager.clone() {
-                    // Only save if enough time has passed since last save
-                    if persistence_manager.time_since_last_save().num_seconds() > 300 {
-                        if let Err(e) = persistence_manager.save_state() {
-                            log::error!("Failed to save persistent state in recovery task: {}", e);
-                        }
-                    }
+                // Perform periodic cleanup of old recovery files
+                if let Err(e) = cleanup_old_recovery_files() {
+                    log::warn!("Failed to clean up old recovery files: {}", e);
                 }
             }
         });
         
-        // Store task
         self.crash_recovery_task = Some(task);
     }
 }
 
 impl Drop for LifecycleManager {
     fn drop(&mut self) {
-        // Clean up tasks on drop
+        log::info!("LifecycleManager being dropped, ensuring clean shutdown");
+        
+        // Get current state
+        let state = {
+            let state_guard = self.state.lock().unwrap();
+            (*state_guard).clone()
+        };
+        
+        // Only run shutdown if we're not already in shutdown process
+        if state != LifecycleState::ShuttingDown {
+            // Try to do a clean shutdown
+            if let Err(e) = self.shutdown() {
+                log::error!("Error during LifecycleManager drop shutdown: {}", e);
+            }
+        }
+        
+        // Abort any remaining tasks
         if let Some(task) = self.auto_save_task.take() {
             task.abort();
         }
@@ -553,9 +636,7 @@ impl Drop for LifecycleManager {
             task.abort();
         }
         
-        // Try to save config one last time
-        let config = self.state_manager.get_config();
-        let _ = config.save();
+        log::info!("LifecycleManager cleanup complete");
     }
 }
 
@@ -591,4 +672,78 @@ fn get_recovery_file_path() -> Result<std::path::PathBuf, String> {
     
     let recovery_path = app_dir.join("recovery.json");
     Ok(recovery_path)
+}
+
+/// Save recovery data to disk
+fn save_recovery_data(data: &RecoveryData) -> Result<(), String> {
+    // Get recovery file path
+    let path = get_recovery_file_path()?;
+    
+    // Create directory if it doesn't exist
+    if let Some(parent) = path.parent() {
+        if !parent.exists() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create recovery directory: {}", e))?;
+        }
+    }
+    
+    // Serialize data to JSON
+    let json = serde_json::to_string_pretty(data)
+        .map_err(|e| format!("Failed to serialize recovery data: {}", e))?;
+    
+    // Write to file
+    std::fs::write(&path, json)
+        .map_err(|e| format!("Failed to write recovery file: {}", e))?;
+    
+    Ok(())
+}
+
+/// Cleanup old recovery files
+fn cleanup_old_recovery_files() -> Result<(), String> {
+    // Get recovery directory
+    let path = get_recovery_file_path()?;
+    let parent = path.parent()
+        .ok_or_else(|| "Recovery file has no parent directory".to_string())?;
+    
+    // Check if directory exists
+    if !parent.exists() {
+        return Ok(());
+    }
+    
+    // Get current time
+    let now = chrono::Utc::now();
+    
+    // List all files in directory
+    let entries = std::fs::read_dir(parent)
+        .map_err(|e| format!("Failed to read recovery directory: {}", e))?;
+    
+    // Process each file
+    for entry in entries {
+        if let Ok(entry) = entry {
+            let path = entry.path();
+            
+            // Check if it's a recovery file
+            if let Some(extension) = path.extension() {
+                if extension == "json" {
+                    // Check file age
+                    if let Ok(metadata) = std::fs::metadata(&path) {
+                        if let Ok(modified) = metadata.modified() {
+                            if let Ok(age) = modified.elapsed() {
+                                // Delete files older than 7 days
+                                if age > Duration::from_secs(7 * 24 * 60 * 60) {
+                                    if let Err(e) = std::fs::remove_file(&path) {
+                                        log::warn!("Failed to delete old recovery file {:?}: {}", path, e);
+                                    } else {
+                                        log::debug!("Deleted old recovery file: {:?}", path);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    Ok(())
 } 

@@ -23,6 +23,8 @@ Cargo.lock
 .windsurfrules
 .roo/
 .brainstorm/
+.cursor/
+.cursor-rules/
 
 # Example code
 /iced_minimal/

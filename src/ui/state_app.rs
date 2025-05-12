@@ -256,22 +256,40 @@ pub fn run_state_ui() -> Result<(), iced::Error> {
     // Create state manager
     let state_manager = Arc::new(StateManager::new(sender));
     
-    // Create lifecycle manager
+    // Create lifecycle manager with appropriate auto-save interval based on config
+    let config = state_manager.get_config();
+    let auto_save_interval = match config.system.auto_save_interval {
+        Some(seconds) if seconds >= 60 => Duration::from_secs(seconds as u64),
+        _ => Duration::from_secs(300), // Default 5 minutes
+    };
+    
     let mut lifecycle_manager = crate::lifecycle_manager::LifecycleManager::new(
         Arc::clone(&state_manager),
         sender_clone.clone()
-    );
+    ).with_auto_save_interval(auto_save_interval);
     
-    // Start lifecycle manager
-    if let Err(e) = lifecycle_manager.start() {
-        log::error!("Failed to start lifecycle manager: {}", e);
+    // Start lifecycle manager with proper error handling
+    match lifecycle_manager.start() {
+        Ok(_) => {
+            log::info!("Lifecycle manager started successfully");
+        },
+        Err(e) => {
+            log::error!("Failed to start lifecycle manager: {}", e);
+            // Continue without full lifecycle management, but still try basic features
+        }
     }
     
     // Create a separate thread for the AppStateController
     let state_manager_clone = Arc::clone(&state_manager);
     let controller_thread = thread::spawn(move || {
         // Create a tokio runtime for the controller
-        let runtime = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
+        let runtime = match tokio::runtime::Runtime::new() {
+            Ok(rt) => rt,
+            Err(e) => {
+                log::error!("Failed to create tokio runtime for controller: {}", e);
+                return;
+            }
+        };
         
         // Run the controller with the state manager
         let mut controller = crate::app_state_controller::AppStateController::new(sender_clone);
@@ -303,12 +321,17 @@ pub fn run_state_ui() -> Result<(), iced::Error> {
         log::info!("Received Ctrl+C, initiating graceful shutdown");
         
         // Trigger shutdown actions
-        state_manager_for_ctrlc.dispatch(Action::Shutdown);
+        state_manager_for_ctrlc.dispatch(crate::ui::state_manager::Action::Shutdown);
         
         // Shutdown lifecycle manager
-        let mut manager = lifecycle_manager_for_ctrlc.lock().unwrap();
-        if let Err(e) = manager.shutdown() {
-            log::error!("Error during lifecycle manager shutdown: {}", e);
+        if let Ok(mut manager) = lifecycle_manager_for_ctrlc.lock() {
+            if let Err(e) = manager.shutdown() {
+                log::error!("Error during lifecycle manager shutdown: {}", e);
+            } else {
+                log::info!("Lifecycle manager shutdown completed");
+            }
+        } else {
+            log::error!("Failed to acquire lock on lifecycle manager for shutdown");
         }
         
         // Allow some time for cleanup before forcing exit
@@ -330,7 +353,11 @@ pub fn run_state_ui() -> Result<(), iced::Error> {
     
     // Join controller thread (will only happen if UI has exited)
     if controller_thread.is_finished() {
-        let _ = controller_thread.join();
+        if let Err(e) = controller_thread.join() {
+            log::error!("Failed to join controller thread: thread panicked");
+        }
+    } else {
+        log::warn!("Controller thread is still running after UI exit");
     }
     
     result
