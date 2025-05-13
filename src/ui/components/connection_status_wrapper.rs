@@ -5,7 +5,6 @@
 use iced::Element;
 
 use crate::ui::{Message, UiComponent};
-use crate::ui::components::ConnectionStatus;
 use crate::ui::theme::Theme;
 
 /// A wrapper for ConnectionStatus that owns it and can render it
@@ -155,7 +154,7 @@ impl UiComponent for ConnectionStatusWrapper {
 }
 
 // Implement From<ConnectionStatusWrapper> for Element to allow direct use in column! macro
-impl<'a> From<ConnectionStatusWrapper> for Element<'a, Message, iced::Renderer<Theme>> {
+impl From<ConnectionStatusWrapper> for Element<'_, Message, iced::Renderer<Theme>> {
     fn from(wrapper: ConnectionStatusWrapper) -> Self {
         wrapper.render()
     }

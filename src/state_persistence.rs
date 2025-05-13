@@ -5,16 +5,15 @@
 //! preserved across application restarts.
 
 use std::sync::Arc;
-use std::path::{Path, PathBuf};
-use std::fs::{self, File};
-use std::io::{Read, Write};
+use std::path::PathBuf;
+use std::fs::{self};
 use chrono::{DateTime, Utc};
 use serde::{Serialize, Deserialize};
 use std::sync::Mutex;
 
 use crate::bluetooth::AirPodsBatteryStatus;
 use crate::config::AppConfig;
-use crate::ui::state_manager::{StateManager, ConnectionState};
+use crate::ui::state_manager::StateManager;
 use crate::bluetooth::scanner::DiscoveredDevice;
 
 /// Persistent state data structure

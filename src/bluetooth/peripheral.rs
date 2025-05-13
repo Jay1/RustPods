@@ -2,7 +2,7 @@
 //! 
 //! Provides utilities for managing Bluetooth peripherals and connections
 
-use std::sync::Arc;
+
 use std::time::Duration;
 
 use btleplug::api::{
@@ -11,7 +11,7 @@ use btleplug::api::{
 };
 use uuid::Uuid;
 use btleplug::platform::{Adapter, Peripheral};
-use tokio::sync::mpsc::{self, Sender, Receiver};
+use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use log::{debug, error, info, warn};
@@ -60,7 +60,16 @@ impl PeripheralManager {
     
     /// Check if the peripheral is connected
     pub async fn is_connected(&self) -> Result<bool, BleError> {
-        Ok(self.peripheral.is_connected().await?)
+        match self.peripheral.is_connected().await {
+            Ok(connected) => {
+                if connected != self.connected {
+                    debug!("Connection state mismatch for {}: peripheral reports {}, we have {}", 
+                          self.address(), connected, self.connected);
+                }
+                Ok(connected)
+            },
+            Err(e) => Err(BleError::BtlePlugError(e.to_string())),
+        }
     }
     
     /// Connect to the peripheral
@@ -91,14 +100,14 @@ impl PeripheralManager {
                 },
                 Ok(Err(e)) => {
                     warn!("Failed to connect to {}: {}", self.address(), e);
-                    last_error = Some(e);
+                    last_error = Some(e.to_string());
                     
                     // Wait before retrying
                     tokio::time::sleep(Duration::from_secs(1)).await;
                 },
                 Err(_) => {
                     warn!("Connection timeout for {}", self.address());
-                    last_error = Some(btleplug::Error::NotConnected);
+                    last_error = Some("Connection timeout".to_string());
                     
                     // Wait before retrying
                     tokio::time::sleep(Duration::from_secs(1)).await;
@@ -108,8 +117,8 @@ impl PeripheralManager {
         
         // If we get here, all connection attempts failed
         error!("Failed to connect to {} after {} attempts", self.address(), attempts);
-        Err(BleError::ConnectionFailed(format!("Failed after {} attempts: {}", 
-            attempts, last_error.unwrap_or(btleplug::Error::NotConnected))))
+        Err(BleError::Other(format!("Failed after {} attempts: {}", 
+            attempts, last_error.unwrap_or_else(|| "Unknown error".to_string()))))
     }
     
     /// Disconnect from the peripheral
@@ -134,14 +143,14 @@ impl PeripheralManager {
     pub async fn read_characteristic(&self, uuid: Uuid) -> Result<Vec<u8>, BleError> {
         // Ensure connected
         if !self.is_connected().await? {
-            return Err(BleError::NotConnected);
+            return Err(BleError::Other("Not connected".to_string()));
         }
         
         // Find the characteristic
         let characteristics = self.peripheral.characteristics();
         let characteristic = characteristics.iter()
             .find(|c| c.uuid == uuid)
-            .ok_or(BleError::CharacteristicNotFound(uuid))?;
+            .ok_or(BleError::Other(format!("Characteristic not found: {}", uuid)))?;
         
         // Read the value
         debug!("Reading characteristic {}", uuid);
@@ -155,14 +164,14 @@ impl PeripheralManager {
     pub async fn write_characteristic(&self, uuid: Uuid, data: &[u8], write_type: WriteType) -> Result<(), BleError> {
         // Ensure connected
         if !self.is_connected().await? {
-            return Err(BleError::NotConnected);
+            return Err(BleError::Other("Not connected".to_string()));
         }
         
         // Find the characteristic
         let characteristics = self.peripheral.characteristics();
         let characteristic = characteristics.iter()
             .find(|c| c.uuid == uuid)
-            .ok_or(BleError::CharacteristicNotFound(uuid))?;
+            .ok_or(BleError::Other(format!("Characteristic not found: {}", uuid)))?;
         
         // Write the value
         debug!("Writing {} bytes to characteristic {}", data.len(), uuid);
@@ -175,18 +184,18 @@ impl PeripheralManager {
     pub async fn subscribe(&mut self, uuid: Uuid, handler: NotificationHandler) -> Result<(), BleError> {
         // Ensure connected
         if !self.is_connected().await? {
-            return Err(BleError::NotConnected);
+            return Err(BleError::Other("Not connected".to_string()));
         }
         
         // Find the characteristic
         let characteristics = self.peripheral.characteristics();
         let characteristic = characteristics.iter()
             .find(|c| c.uuid == uuid)
-            .ok_or(BleError::CharacteristicNotFound(uuid))?;
+            .ok_or(BleError::Other(format!("Characteristic not found: {}", uuid)))?;
         
         // Check if the characteristic supports notifications
         if !characteristic.properties.contains(btleplug::api::CharPropFlags::NOTIFY) {
-            return Err(BleError::NotificationsNotSupported(uuid));
+            return Err(BleError::Other(format!("Notifications not supported for characteristic: {}", uuid)));
         }
         
         // Subscribe to notifications
@@ -232,14 +241,14 @@ impl PeripheralManager {
     pub async fn unsubscribe(&self, uuid: Uuid) -> Result<(), BleError> {
         // Ensure connected
         if !self.is_connected().await? {
-            return Err(BleError::NotConnected);
+            return Err(BleError::Other("Not connected".to_string()));
         }
         
         // Find the characteristic
         let characteristics = self.peripheral.characteristics();
         let characteristic = characteristics.iter()
             .find(|c| c.uuid == uuid)
-            .ok_or(BleError::CharacteristicNotFound(uuid))?;
+            .ok_or(BleError::Other(format!("Characteristic not found: {}", uuid)))?;
         
         // Unsubscribe from notifications
         debug!("Unsubscribing from notifications for characteristic {}", uuid);
@@ -252,12 +261,31 @@ impl PeripheralManager {
     pub async fn discover_characteristics(&self) -> Result<Vec<Characteristic>, BleError> {
         // Ensure connected
         if !self.is_connected().await? {
-            return Err(BleError::NotConnected);
+            return Err(BleError::Other("Not connected".to_string()));
         }
         
         // Discover services and characteristics
         debug!("Discovering characteristics for {}", self.address());
         Ok(self.peripheral.characteristics().into_iter().collect())
+    }
+    
+    /// Connect to a service by UUID
+    pub async fn connect_service(&mut self, service_uuid: Uuid) -> Result<(), BleError> {
+        // Ensure connected
+        if !self.is_connected().await? {
+            return Err(BleError::Other("Not connected".to_string()));
+        }
+        
+        // Find the service
+        debug!("Looking for service {}", service_uuid);
+        self.peripheral.discover_services().await?;
+        
+        let services = self.peripheral.services();
+        services.iter()
+            .find(|s| s.uuid == service_uuid)
+            .ok_or_else(|| BleError::Other(format!("Service not found: {}", service_uuid)))?;
+            
+        Ok(())
     }
 }
 

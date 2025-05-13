@@ -190,9 +190,9 @@ impl EnhancedBatteryDisplay {
             }
             
             // Check if any component has low battery
-            let has_low_battery = battery.case.map_or(false, |level| level < 20) ||
-                                 battery.left.map_or(false, |level| level < 20) ||
-                                 battery.right.map_or(false, |level| level < 20);
+            let has_low_battery = battery.case.is_some_and(|level| level < 20) ||
+                                 battery.left.is_some_and(|level| level < 20) ||
+                                 battery.right.is_some_and(|level| level < 20);
             
             if has_low_battery {
                 return "Low Battery";
@@ -215,9 +215,9 @@ fn status_text_color(status: &str) -> iced::theme::Text {
 
 /// Helper function to check if any component has a low battery
 fn battery_level_low(battery: &AirPodsBattery) -> bool {
-    let is_left_low = battery.left.map_or(false, |level| level <= 20);
-    let is_right_low = battery.right.map_or(false, |level| level <= 20);
-    let is_case_low = battery.case.map_or(false, |level| level <= 20);
+    let is_left_low = battery.left.is_some_and(|level| level <= 20);
+    let is_right_low = battery.right.is_some_and(|level| level <= 20);
+    let is_case_low = battery.case.is_some_and(|level| level <= 20);
     
     is_left_low || is_right_low || is_case_low
 }

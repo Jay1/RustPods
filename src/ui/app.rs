@@ -1,19 +1,16 @@
 //! UI application and related functionality
 
-use iced::widget::{text, button, row, Column, Space};
-use iced::{Settings, Length, Subscription, Application, Element, Command};
-use iced::alignment::Horizontal;
+use iced::widget::text;
+use iced::{Settings, Subscription, Application, Element, Command};
 use tokio::sync::mpsc;
-use crate::ui::{Message, UiComponent, MainWindow, SettingsWindow};
+use crate::ui::{Message, UiComponent};
 use crate::app_controller::AppController;
 use crate::ui::state::AppState;
 use crate::ui::theme::Theme;
-use std::thread;
 use std::sync::Arc;
 
 use crate::ui::state_manager::StateManager;
 use crate::ui::window_management::{DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH};
-use crate::config::AppConfig;
 use crate::ui::state_app::StateApp;
 
 /// Application entry point using Iced

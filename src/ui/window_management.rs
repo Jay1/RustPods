@@ -3,10 +3,8 @@
 //! This module handles window-related operations like dragging, positioning,
 //! and maintaining window state.
 
-use iced::{Event, Rectangle, Point, Vector, Length, mouse, Size};
+use iced::{Event, Rectangle, Point, Vector, Length, mouse};
 use iced::widget::container;
-use iced::event::{self};
-use iced::window;
 
 use crate::ui::Message;
 use crate::config::AppConfig;
@@ -142,11 +140,7 @@ pub fn handle_window_events(
             }
             mouse::Event::CursorMoved { position } => {
                 if window_state.dragging {
-                    if let Some(new_position) = window_state.calculate_window_position(*position) {
-                        Some(Message::WindowMove(new_position))
-                    } else {
-                        None
-                    }
+                    window_state.calculate_window_position(*position).map(Message::WindowMove)
                 } else {
                     None
                 }

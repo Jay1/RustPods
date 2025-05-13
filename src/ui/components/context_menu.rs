@@ -3,10 +3,8 @@
 //! This component provides a popup menu for contextual actions
 //! in response to right-clicks or other triggers.
 
-use iced::widget::{button, column, container, row, text, Column};
-use iced::{alignment, Color, Element, Length, Padding, Point, Rectangle, Vector};
-use iced::event;
-use iced::widget::container::Appearance;
+use iced::widget::{button, column, container, row, text};
+use iced::{alignment, Element, Length, Padding, Point, Rectangle};
 
 use crate::ui::{Message, UiComponent};
 use crate::ui::theme::Theme;

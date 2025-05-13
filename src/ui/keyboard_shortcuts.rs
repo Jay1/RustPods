@@ -5,7 +5,6 @@
 
 use iced::keyboard::{self, KeyCode, Modifiers};
 use iced::Event;
-use iced::event::{self};
 use std::collections::HashMap;
 
 use crate::ui::Message;
@@ -203,21 +202,15 @@ pub fn handle_events(
     event: Event,
     shortcut_manager: &KeyboardShortcutManager,
 ) -> Option<Message> {
-    match event {
-        Event::Keyboard(keyboard_event) => {
-            match keyboard_event {
-                keyboard::Event::KeyPressed { key_code, modifiers, .. } => {
-                    // Check if this key combination matches any registered shortcut
-                    for (shortcut, message) in shortcut_manager.get_shortcuts() {
-                        if shortcut.matches(key_code, modifiers) {
-                            return Some(message.clone());
-                        }
-                    }
+    if let Event::Keyboard(keyboard_event) = event {
+        if let keyboard::Event::KeyPressed { key_code, modifiers, .. } = keyboard_event {
+            // Check if this key combination matches any registered shortcut
+            for (shortcut, message) in shortcut_manager.get_shortcuts() {
+                if shortcut.matches(key_code, modifiers) {
+                    return Some(message.clone());
                 }
-                _ => {}
             }
         }
-        _ => {}
     }
     
     None

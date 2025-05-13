@@ -1,8 +1,8 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Instant;
 use std::time::Duration;
-use log::{debug, error, info, trace, warn};
+use log::{debug, error};
 
 use btleplug::api::{
     BDAddr, Central, CentralEvent, Manager as _, Peripheral as _, ScanFilter,
@@ -13,13 +13,11 @@ use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use futures::StreamExt;
 use serde::{Serialize, Deserialize};
+use uuid::Uuid;
 
 use crate::bluetooth::scanner_config::ScanConfig;
 use crate::bluetooth::events::{BleEvent, EventBroker, EventFilter};
-use crate::airpods::{
-    DetectedAirPods, detect_airpods, create_airpods_filter,
-    AirPodsFilter
-};
+use crate::airpods::{    DetectedAirPods, create_airpods_filter, detect_airpods};
 use crate::config::{AppConfig, Configurable};
 
 /// Configuration for Bluetooth scanner
@@ -50,73 +48,37 @@ impl Default for BleScannerConfig {
 }
 
 /// Custom error type for Bluetooth operations
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Clone)]
 pub enum BleError {
     #[error("Failed to find a suitable Bluetooth adapter")]
     AdapterNotFound,
     
     #[error("Bluetooth operation failed: {0}")]
-    BtlePlugError(#[from] btleplug::Error),
+    BtlePlugError(String),
     
     #[error("Scanning is already in progress")]
     ScanInProgress,
     
-    #[error("Device communication error: {0}")]
-    DeviceError(String),
+    #[error("Scan has not been started")]
+    ScanNotStarted,
     
-    #[error("Scanning is not supported on this adapter")]
-    ScanningNotSupported,
+    #[error("Adapter is not initialized")]
+    AdapterNotInitialized,
     
-    #[error("Scan was cancelled")]
-    ScanCancelled,
-    
-    #[error("Scan cycle limit reached")]
-    ScanCycleLimit,
-    
-    #[error("Failed to initialize adapter: {0}")]
-    AdapterInitializationFailed(String),
-    
-    #[error("Adapter communication error: {0}")]
-    AdapterCommunicationError(String),
-    
-    #[error("Bluetooth is disabled or not available")]
-    BluetoothDisabled,
-    
-    #[error("Operation timed out after {0:?}")]
-    Timeout(std::time::Duration),
-    
-    #[error("Connection attempt failed: {0}")]
-    ConnectionFailed(String),
-    
-    #[error("Device disconnected unexpectedly")]
-    DeviceDisconnected,
-    
-    #[error("Operation not permitted: {0}")]
-    PermissionDenied(String),
-    
-    #[error("Device was not found or went out of range")]
+    #[error("Device not found")]
     DeviceNotFound,
     
-    #[error("Multiple connection attempts exceeded retry limit")]
-    RetryLimitExceeded,
+    #[error("Invalid data received")]
+    InvalidData,
     
-    #[error("System resource error: {0}")]
-    SystemResourceError(String),
+    #[error("Operation timed out")]
+    Timeout,
     
-    #[error("Connection was rejected by the device")]
-    ConnectionRejected,
-    
-    #[error("Device is not connected")]
-    NotConnected,
-    
-    #[error("Characteristic not found: {0}")]
-    CharacteristicNotFound(uuid::Uuid),
-    
-    #[error("Notifications are not supported by the characteristic: {0}")]
-    NotificationsNotSupported(uuid::Uuid),
+    #[error("{0}")]
+    Other(String),
 }
 
-/// Information about a discovered BLE device
+/// A discovered Bluetooth device
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiscoveredDevice {
     /// Device address
@@ -133,6 +95,12 @@ pub struct DiscoveredDevice {
     /// When the device was last seen
     #[serde(skip, default = "std::time::Instant::now")]
     pub last_seen: std::time::Instant,
+    /// Whether the device is connected
+    pub is_connected: bool,
+    /// Service data from the device
+    pub service_data: HashMap<Uuid, Vec<u8>>,
+    /// Services advertised by the device
+    pub services: Vec<Uuid>,
 }
 
 // Custom serialization for BDAddr
@@ -184,7 +152,7 @@ impl DiscoveredDevice {
         // Ensure the properties exist
         let properties = match properties {
             Some(props) => props,
-            None => return Err(BleError::DeviceError("No device properties available".to_string())),
+            None => return Err(BleError::BtlePlugError("No device properties available".to_string())),
         };
         
         // The manufacturer data is expected to be in properties if available
@@ -198,6 +166,9 @@ impl DiscoveredDevice {
             manufacturer_data: manufacturer_data.clone(),
             is_potential_airpods: false, // Not used in filter
             last_seen: std::time::Instant::now(),
+            is_connected: false,
+            service_data: HashMap::new(),
+            services: Vec::new(),
         });
         
         Ok(Self {
@@ -207,6 +178,9 @@ impl DiscoveredDevice {
             manufacturer_data,
             is_potential_airpods,
             last_seen: std::time::Instant::now(),
+            is_connected: false,
+            service_data: HashMap::new(),
+            services: Vec::new(),
         })
     }
 }
@@ -220,6 +194,9 @@ impl Default for DiscoveredDevice {
             manufacturer_data: HashMap::new(),
             is_potential_airpods: false,
             last_seen: Instant::now(),
+            is_connected: false,
+            service_data: HashMap::new(),
+            services: Vec::new(),
         }
     }
 }
@@ -259,6 +236,12 @@ impl Clone for BleScanner {
             event_broker: self.event_broker.clone(),
             scan_cycles_completed: self.scan_cycles_completed,
         }
+    }
+}
+
+impl Default for BleScanner {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -328,10 +311,10 @@ impl BleScanner {
     /// Initialize the scanner
     pub async fn initialize(&mut self) -> Result<(), BleError> {
         // Create a manager
-        let manager = Manager::new().await.map_err(BleError::BtlePlugError)?;
+        let manager = Manager::new().await.map_err(|e| BleError::BtlePlugError(e.to_string()))?;
         
         // Get the adapter list
-        let adapters = manager.adapters().await.map_err(BleError::BtlePlugError)?;
+        let adapters = manager.adapters().await.map_err(|e| BleError::BtlePlugError(e.to_string()))?;
         
         // Find the first adapter that can be used
         if let Some(adapter) = adapters.into_iter().next() {
@@ -719,7 +702,7 @@ impl BleScanner {
         let devices = self.devices.lock().await;
         devices
             .values()
-            .filter_map(|device| detect_airpods(device))
+            .filter_map(detect_airpods)
             .collect()
     }
     
@@ -801,7 +784,7 @@ impl BleScanner {
     /// Check if there are any AirPods matching the filter
     pub async fn has_airpods_matching(&self, filter: &crate::airpods::detector::AirPodsFilter) -> bool {
         let devices = self.get_devices().await;
-        devices.iter().any(|d| filter(d))
+        devices.iter().any(filter)
     }
     
     /// Filter devices using an AirPods filter
@@ -846,7 +829,7 @@ impl BleScanner {
         };
         
         // Get all peripherals
-        let peripherals = adapter.peripherals().await.map_err(BleError::BtlePlugError)?;
+        let peripherals = adapter.peripherals().await.map_err(|e| BleError::BtlePlugError(e.to_string()))?;
         
         // Filter by address
         let matching_devices = peripherals.into_iter()
@@ -946,128 +929,89 @@ pub fn parse_bdaddr(s: &str) -> Result<BDAddr, String> {
 }
 
 impl BleError {
-    /// Get the error category for general classification
-    pub fn category(&self) -> BleErrorCategory {
+    /// Get the error category for this error
+    pub fn error_category(&self) -> BleErrorCategory {
         match self {
-            Self::AdapterNotFound | 
-            Self::AdapterInitializationFailed(_) | 
-            Self::BluetoothDisabled => BleErrorCategory::AdapterIssue,
-            
-            Self::ScanInProgress | 
-            Self::ScanningNotSupported | 
-            Self::ScanCancelled | 
-            Self::ScanCycleLimit => BleErrorCategory::ScanningIssue,
-            
-            Self::DeviceError(_) | 
-            Self::DeviceDisconnected | 
-            Self::DeviceNotFound => BleErrorCategory::DeviceIssue,
-            
-            Self::ConnectionFailed(_) | 
-            Self::ConnectionRejected | 
-            Self::AdapterCommunicationError(_) |
-            Self::NotConnected => BleErrorCategory::ConnectionIssue,
-            
-            Self::Timeout(_) | 
-            Self::RetryLimitExceeded => BleErrorCategory::TimeoutIssue,
-            
-            Self::PermissionDenied(_) => BleErrorCategory::PermissionIssue,
-            
-            Self::SystemResourceError(_) => BleErrorCategory::SystemIssue,
-            
-            Self::CharacteristicNotFound(_) |
-            Self::NotificationsNotSupported(_) => BleErrorCategory::CapabilityIssue,
-            
-            Self::BtlePlugError(e) => match e {
-                btleplug::Error::PermissionDenied => BleErrorCategory::PermissionIssue,
-                btleplug::Error::NotConnected => BleErrorCategory::ConnectionIssue,
-                btleplug::Error::NotSupported(_) => BleErrorCategory::CapabilityIssue,
-                btleplug::Error::DeviceNotFound => BleErrorCategory::DeviceIssue,
-                _ => BleErrorCategory::Unknown,
+            Self::AdapterNotFound => BleErrorCategory::AdapterIssue,
+            Self::BtlePlugError(e) => {
+                // Check the error string to determine category
+                if e.contains("permission") || e.contains("Permission") {
+                    BleErrorCategory::PermissionIssue
+                } else if e.contains("not connected") || e.contains("Not connected") {
+                    BleErrorCategory::ConnectionIssue
+                } else if e.contains("not supported") || e.contains("Not supported") {
+                    BleErrorCategory::CapabilityIssue
+                } else if e.contains("not found") || e.contains("Not found") {
+                    BleErrorCategory::DeviceIssue
+                } else {
+                    BleErrorCategory::Unknown
+                }
             },
+            Self::ScanInProgress => BleErrorCategory::OperationIssue,
+            Self::ScanNotStarted => BleErrorCategory::OperationIssue,
+            Self::AdapterNotInitialized => BleErrorCategory::AdapterIssue,
+            Self::DeviceNotFound => BleErrorCategory::DeviceIssue,
+            Self::InvalidData => BleErrorCategory::DataIssue,
+            Self::Timeout => BleErrorCategory::TimeoutIssue,
+            Self::Other(_) => BleErrorCategory::Unknown,
         }
     }
     
     /// Check if the error is recoverable
     pub fn is_recoverable(&self) -> bool {
         match self {
-            // These are typically recoverable
-            Self::ScanCancelled |
-            Self::Timeout(_) |
-            Self::DeviceDisconnected |
-            Self::DeviceNotFound |
-            Self::ConnectionFailed(_) |
-            Self::RetryLimitExceeded => true,
-            
-            // These might be recoverable in some cases
-            Self::ScanInProgress |
-            Self::AdapterCommunicationError(_) |
-            Self::ConnectionRejected => true,
-            
-            // These are typically not recoverable without user intervention
-            Self::AdapterNotFound |
-            Self::BluetoothDisabled |
-            Self::AdapterInitializationFailed(_) |
-            Self::ScanningNotSupported |
-            Self::ScanCycleLimit |
-            Self::PermissionDenied(_) |
-            Self::SystemResourceError(_) |
-            Self::NotConnected |
-            Self::CharacteristicNotFound(_) |
-            Self::NotificationsNotSupported(_) => false,
-            
-            // For device errors, it depends on the specific error
-            Self::DeviceError(_) => false,
-            
-            // For btleplug errors, make a best guess
-            Self::BtlePlugError(e) => match e {
-                btleplug::Error::NotConnected |
-                btleplug::Error::DeviceNotFound => true,
-                _ => false,
+            Self::BtlePlugError(e) => {
+                // Check if the error is recoverable based on the error string
+                e.contains("not connected") || e.contains("Not connected") || 
+                e.contains("not found") || e.contains("Not found")
             },
+            Self::Timeout => true,
+            Self::ScanInProgress => true,
+            Self::ScanNotStarted => true,
+            Self::AdapterNotInitialized => true,
+            Self::DeviceNotFound => true,
+            _ => false,
         }
     }
     
-    /// Get a user-friendly error message
+    /// Get a user-friendly message for this error
     pub fn user_message(&self) -> String {
         match self {
             Self::AdapterNotFound => 
-                "No Bluetooth adapter was found on your system.".to_string(),
+                "No Bluetooth adapter was found on your system. Please check your Bluetooth hardware.".into(),
             
-            Self::BluetoothDisabled => 
-                "Bluetooth appears to be disabled. Please enable Bluetooth and try again.".to_string(),
+            Self::BtlePlugError(e) => {
+                if e.contains("permission") {
+                    "Permission denied when accessing Bluetooth. Try running with administrator/root privileges.".into()
+                } else if e.contains("not connected") {
+                    "Device is not connected. Please make sure your AirPods are nearby and in pairing mode.".into()
+                } else if e.contains("not supported") {
+                    "This Bluetooth operation is not supported by your adapter.".into()
+                } else {
+                    format!("Bluetooth error: {}", e)
+                }
+            },
             
-            Self::ScanningNotSupported => 
-                "Your Bluetooth adapter doesn't support scanning for devices.".to_string(),
+            Self::ScanInProgress => 
+                "A Bluetooth scan is already in progress.".into(),
             
-            Self::AdapterInitializationFailed(details) => 
-                format!("Failed to initialize the Bluetooth adapter: {}", details),
+            Self::ScanNotStarted => 
+                "Bluetooth scanning has not been started.".into(),
+            
+            Self::AdapterNotInitialized => 
+                "Bluetooth adapter has not been initialized.".into(),
             
             Self::DeviceNotFound => 
-                "The device was not found or went out of range.".to_string(),
+                "The requested Bluetooth device was not found. Make sure your AirPods are nearby and in pairing mode.".into(),
             
-            Self::DeviceDisconnected => 
-                "The device disconnected unexpectedly.".to_string(),
+            Self::InvalidData => 
+                "Invalid data was received from the Bluetooth device.".into(),
             
-            Self::PermissionDenied(details) => 
-                format!("Permission denied: {}. You may need to grant the application Bluetooth permissions.", details),
+            Self::Timeout => 
+                "The Bluetooth operation timed out. Please try again.".into(),
             
-            Self::ConnectionFailed(details) => 
-                format!("Failed to connect to the device: {}", details),
-            
-            Self::Timeout(duration) => 
-                format!("The operation timed out after {:?}.", duration),
-                
-            Self::NotConnected => 
-                "The device is not connected. Please connect first.".to_string(),
-                
-            Self::CharacteristicNotFound(uuid) => 
-                format!("Could not find characteristic with UUID: {}", uuid),
-                
-            Self::NotificationsNotSupported(uuid) => 
-                format!("The characteristic {} does not support notifications.", uuid),
-            
-            // For other errors, just use the standard error message
-            _ => self.to_string(),
+            Self::Other(msg) => 
+                format!("Bluetooth error: {}", msg),
         }
     }
 }
@@ -1093,6 +1037,16 @@ pub enum BleErrorCategory {
     CapabilityIssue,
     /// Unknown issues
     Unknown,
+    /// Operation issues
+    OperationIssue,
+    /// Data issues
+    DataIssue,
+}
+
+impl From<btleplug::Error> for BleError {
+    fn from(err: btleplug::Error) -> Self {
+        BleError::BtlePlugError(err.to_string())
+    }
 }
 
 #[cfg(test)]
@@ -1121,12 +1075,12 @@ mod tests {
         assert!(result.is_err());
     }
     
-    #[test]
-    fn test_scanner_new() {
+    #[tokio::test]
+    async fn test_scanner_new() {
         let scanner = BleScanner::new();
         assert!(!scanner.is_scanning());
         assert_eq!(scanner.get_scan_cycles(), 0);
-        assert!(scanner.get_devices().is_empty());
+        assert!(scanner.get_devices().await.is_empty());
     }
     
     #[test]
@@ -1136,17 +1090,18 @@ mod tests {
         
         assert_eq!(scanner.get_scan_cycles(), 0);
         assert!(!scanner.is_scanning());
+        // Note: Not testing get_devices().is_empty() here as it would require async
     }
     
-    #[test]
-    fn test_device_list_operations() {
+    #[tokio::test]
+    async fn test_device_list_operations() {
         let mut scanner = BleScanner::new();
         
         // Initially empty
-        assert!(scanner.get_devices().is_empty());
+        assert!(scanner.get_devices().await.is_empty());
         
         // Clear should work even when empty
-        scanner.clear_devices();
-        assert!(scanner.get_devices().is_empty());
+        scanner.clear_devices().await;
+        assert!(scanner.get_devices().await.is_empty());
     }
 } 

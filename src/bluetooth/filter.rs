@@ -3,6 +3,8 @@
 //! Provides filters for Bluetooth scanning to identify specific devices
 
 use std::collections::HashSet;
+use std::collections::HashMap;
+use std::time::Instant;
 use btleplug::api::BDAddr;
 
 use crate::bluetooth::DiscoveredDevice;
@@ -166,22 +168,31 @@ impl DeviceFilter for FunctionFilter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::str::FromStr;
+    use std::collections::HashMap;
+    use std::time::Instant;
+
+    use crate::bluetooth::scanner::parse_bdaddr;
     
     fn create_test_device(name: Option<&str>, addr: &str, rssi: Option<i16>) -> DiscoveredDevice {
         DiscoveredDevice {
-            address: BDAddr::from_str(addr).unwrap(),
-            name: name.map(String::from),
+            address: match parse_bdaddr(addr) {
+                Ok(addr) => addr,
+                Err(_) => BDAddr::default(),
+            },
+            name: name.map(|s| s.to_string()),
             rssi,
-            manufacturer_data: Default::default(),
+            manufacturer_data: HashMap::new(),
             is_potential_airpods: false,
-            last_seen: std::time::Instant::now(),
+            last_seen: Instant::now(),
+            is_connected: false,
+            service_data: HashMap::new(),
+            services: Vec::new(),
         }
     }
     
     #[test]
     fn test_name_filter() {
-        let filter = NameFilter::new(vec!["AirPods".to_string()]);
+        let filter = NameFilter::new(vec!["AirPods Pro".to_string()]);
         
         let devices = vec![
             create_test_device(Some("AirPods Pro"), "00:11:22:33:44:55", Some(-60)),

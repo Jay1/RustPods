@@ -190,6 +190,12 @@ pub struct EventBroker {
     event_receiver: Arc<Mutex<Option<Receiver<BleEvent>>>>,
 }
 
+impl Default for EventBroker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EventBroker {
     /// Create a new event broker
     pub fn new() -> Self {

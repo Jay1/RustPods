@@ -291,12 +291,15 @@ mod tests {
         }
         
         DiscoveredDevice {
-            address: BDAddr::default(),
+            address: BDAddr::from([10, 20, 30, 40, 50, 60]),
             name: name.map(String::from),
             rssi,
             manufacturer_data,
             is_potential_airpods: is_airpods,
             last_seen: std::time::Instant::now(),
+            is_connected: false,
+            service_data: HashMap::new(),
+            services: Vec::new(),
         }
     }
     

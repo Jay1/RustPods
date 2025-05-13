@@ -4,10 +4,10 @@
 
 use std::sync::Arc;
 use std::collections::HashMap;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 
 use crate::ui::Message;
-use crate::ui::state_manager::{StateManager, Action};
+use crate::ui::state_manager::StateManager;
 use crate::config::AppConfig;
 use crate::bluetooth::AirPodsBatteryStatus;
 use crate::airpods::{AirPodsBattery, ChargingStatus as AirPodsCharging};
@@ -23,6 +23,12 @@ pub struct MockWindowVisibilityManager {
     pub visible: bool,
     /// Last position
     pub position: Option<(f32, f32, f32, f32)>
+}
+
+impl Default for MockWindowVisibilityManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MockWindowVisibilityManager {
@@ -61,6 +67,12 @@ pub struct MockSystemTray {
     pub menu_items: Vec<String>,
     /// Called actions
     pub actions: Vec<String>
+}
+
+impl Default for MockSystemTray {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MockSystemTray {
@@ -148,6 +160,12 @@ pub struct TestForm {
     pub errors: HashMap<String, String>,
 }
 
+impl Default for TestForm {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TestForm {
     /// Create a new test form
     pub fn new() -> Self {
@@ -171,10 +189,10 @@ impl TestForm {
         if name == "required_field" && value.is_empty() {
             self.errors.insert(name.to_string(), "Field is required".to_string());
         } else if name == "number_field" {
-            if let Err(_) = value.parse::<i32>() {
+            if value.parse::<i32>().is_err() {
                 self.errors.insert(name.to_string(), "Must be a number".to_string());
             } else if let Ok(num) = value.parse::<i32>() {
-                if num < 0 || num > 100 {
+                if !(0..=100).contains(&num) {
                     self.errors.insert(name.to_string(), "Number must be between 0 and 100".to_string());
                 } else {
                     self.errors.remove(name);

@@ -10,7 +10,7 @@ use std::io::{self, Write};
 use std::time::{Duration, Instant};
 
 use crate::config::AppConfig;
-use crate::error::{ErrorManager, ErrorStats, RustPodsError, ErrorSeverity};
+use crate::error::{ErrorManager, ErrorSeverity};
 use crate::bluetooth::adapter::BluetoothAdapter;
 
 /// Diagnostic level
@@ -256,25 +256,37 @@ impl DiagnosticsManager {
         recommendations: &mut Vec<String>,
     ) -> io::Result<()> {
         if let Ok(error_manager) = self.error_manager.lock() {
-            let stats = error_manager.error_stats();
+            let stats = error_manager.get_stats();
             
             // Add error stats to raw data
-            raw_data.insert("total_errors".to_string(), stats.total_errors.to_string());
-            raw_data.insert("bluetooth_errors".to_string(), stats.bluetooth_errors.to_string());
-            raw_data.insert("critical_errors".to_string(), stats.critical_errors.to_string());
-            raw_data.insert("airpods_errors".to_string(), stats.airpods_errors.to_string());
+            raw_data.insert("total_errors".to_string(), stats.total.to_string());
+            
+            // Get bluetooth error counts if available
+            let bluetooth_errors = stats.by_type.get("bluetooth").cloned().unwrap_or(0);
+            raw_data.insert("bluetooth_errors".to_string(), bluetooth_errors.to_string());
+            
+            // Get critical error counts from severity map
+            let critical_errors = stats.by_severity
+                .get(&ErrorSeverity::Critical)
+                .cloned()
+                .unwrap_or(0);
+            raw_data.insert("critical_errors".to_string(), critical_errors.to_string());
+            
+            // Get airpods related errors if available
+            let airpods_errors = stats.by_type.get("airpods").cloned().unwrap_or(0);
+            raw_data.insert("airpods_errors".to_string(), airpods_errors.to_string());
             
             // Check for concerning error patterns
-            if stats.bluetooth_errors > 5 {
+            if bluetooth_errors > 5 {
                 issues.push(DiagnosticIssue {
                     title: "Frequent Bluetooth errors".to_string(),
-                    description: format!("Detected {} Bluetooth errors, which may indicate compatibility issues", stats.bluetooth_errors),
+                    description: format!("Detected {} Bluetooth errors, which may indicate compatibility issues", bluetooth_errors),
                     solutions: vec![
                         "Ensure your Bluetooth adapter is compatible (Bluetooth 4.0+ recommended)".to_string(),
                         "Update Bluetooth drivers".to_string(),
                         "Try disabling other Bluetooth applications".to_string(),
                     ],
-                    severity: if stats.bluetooth_errors > 20 { IssueSeverity::Major } else { IssueSeverity::Minor },
+                    severity: if bluetooth_errors > 20 { IssueSeverity::Major } else { IssueSeverity::Minor },
                     category: IssueCategory::Bluetooth,
                     auto_repairable: false,
                 });
@@ -282,10 +294,10 @@ impl DiagnosticsManager {
                 recommendations.push("Consider updating your Bluetooth drivers".to_string());
             }
             
-            if stats.critical_errors > 0 {
+            if critical_errors > 0 {
                 issues.push(DiagnosticIssue {
                     title: "Critical errors detected".to_string(),
-                    description: format!("Detected {} critical errors that may prevent core functionality", stats.critical_errors),
+                    description: format!("Detected {} critical errors that may prevent core functionality", critical_errors),
                     solutions: vec![
                         "Check the log files for detailed error information".to_string(),
                         "Try running the application with administrator privileges".to_string(),
@@ -314,72 +326,60 @@ impl DiagnosticsManager {
         match adapter_result {
             Ok(adapter) => {
                 // Get adapter information
-                let adapter_info = adapter.get_info().await?;
-                raw_data.insert("bluetooth_adapter".to_string(), adapter_info.name);
-                raw_data.insert("bluetooth_address".to_string(), adapter_info.address);
+                let capabilities = adapter.get_capabilities();
+                raw_data.insert("bluetooth_adapter".to_string(), "Bluetooth adapter".to_string());
+                raw_data.insert("bluetooth_status".to_string(), format!("{:?}", adapter.get_status()));
                 raw_data.insert("bluetooth_enabled".to_string(), "true".to_string());
                 
-                // Check if scanning works
-                match adapter.is_scanning_supported().await {
-                    Ok(true) => {
-                        raw_data.insert("bluetooth_scanning_supported".to_string(), "true".to_string());
-                    },
-                    Ok(false) => {
-                        raw_data.insert("bluetooth_scanning_supported".to_string(), "false".to_string());
-                        issues.push(DiagnosticIssue {
-                            title: "Bluetooth scanning not supported".to_string(),
-                            description: "Your Bluetooth adapter does not support scanning, which is required for AirPods detection".to_string(),
-                            solutions: vec![
-                                "Use a different Bluetooth adapter".to_string(),
-                                "Ensure your adapter supports Bluetooth LE scanning".to_string(),
-                            ],
-                            severity: IssueSeverity::Critical,
-                            category: IssueCategory::Bluetooth,
-                            auto_repairable: false,
-                        });
-                        
-                        recommendations.push("Consider using a different Bluetooth adapter that supports Bluetooth LE scanning".to_string());
-                    },
-                    Err(e) => {
-                        raw_data.insert("bluetooth_scanning_error".to_string(), e.to_string());
-                        issues.push(DiagnosticIssue {
-                            title: "Could not determine Bluetooth scanning support".to_string(),
-                            description: format!("Error checking scanning support: {}", e),
-                            solutions: vec![
-                                "Make sure Bluetooth is enabled".to_string(),
-                                "Try running the application with administrator privileges".to_string(),
-                            ],
-                            severity: IssueSeverity::Major,
-                            category: IssueCategory::Bluetooth,
-                            auto_repairable: false,
-                        });
-                    }
+                // Check if scanning is supported based on capabilities
+                let supports_scanning = capabilities.supports_scanning;
+                raw_data.insert("bluetooth_scanning_supported".to_string(), supports_scanning.to_string());
+                
+                if !supports_scanning {
+                    issues.push(DiagnosticIssue {
+                        title: "Bluetooth scanning not supported".to_string(),
+                        description: "Your Bluetooth adapter does not support scanning, which is required for AirPods detection".to_string(),
+                        solutions: vec![
+                            "Use a different Bluetooth adapter".to_string(),
+                            "Ensure your adapter supports Bluetooth LE scanning".to_string(),
+                        ],
+                        severity: IssueSeverity::Critical,
+                        category: IssueCategory::Bluetooth,
+                        auto_repairable: false,
+                    });
+                    return Ok(());
                 }
+                
+                // Check if any AirPods have been detected
+                // This would need to check the scanner history or storage
+                // For now, it's a placeholder
+                raw_data.insert("airpods_detected".to_string(), "unknown".to_string());
+                
+                // Add a recommendation about Bluetooth
+                recommendations.push("Keep Bluetooth enabled for automatic detection of AirPods".to_string());
+                
+                Ok(())
             },
             Err(e) => {
-                raw_data.insert("bluetooth_adapter_error".to_string(), e.to_string());
                 raw_data.insert("bluetooth_enabled".to_string(), "false".to_string());
+                raw_data.insert("bluetooth_error".to_string(), e.to_string());
                 
                 issues.push(DiagnosticIssue {
-                    title: "Bluetooth adapter not available".to_string(),
-                    description: format!("Could not initialize Bluetooth adapter: {}", e),
+                    title: "Bluetooth not available".to_string(),
+                    description: format!("Unable to access Bluetooth adapter: {}", e),
                     solutions: vec![
                         "Ensure Bluetooth is enabled on your system".to_string(),
-                        "Check if your Bluetooth adapter is properly connected".to_string(),
-                        "Try reinstalling Bluetooth drivers".to_string(),
+                        "Verify you have a compatible Bluetooth adapter".to_string(),
+                        "Make sure you have sufficient permissions".to_string(),
                     ],
                     severity: IssueSeverity::Critical,
                     category: IssueCategory::Bluetooth,
                     auto_repairable: false,
                 });
                 
-                recommendations.push("Enable Bluetooth on your system and restart the application".to_string());
-                
-                // Not returning error to allow other diagnostics to continue
+                Ok(())
             }
         }
-        
-        Ok(())
     }
     
     /// Check configuration

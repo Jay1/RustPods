@@ -147,6 +147,12 @@ pub struct FormValidator {
     errors: HashMap<String, String>,
 }
 
+impl Default for FormValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FormValidator {
     /// Create a new form validator
     pub fn new() -> Self {

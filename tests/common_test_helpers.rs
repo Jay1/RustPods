@@ -320,4 +320,5 @@ mod tests {
         
         assert_eq!(airpods.device_type, AirPodsType::AirPodsPro);
         assert_eq!(airpods.name, Some("AirPods Pro".to_string()));
+    }
 } 

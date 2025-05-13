@@ -9,6 +9,10 @@
 // Common utilities for Bluetooth tests
 pub mod common_utils;
 
+// Mock implementations for testing
+pub mod mocks;               // Mock implementations for Bluetooth components
+pub mod mock_tests;          // Tests demonstrating usage of Bluetooth mocks
+
 // Specific test categories
 pub mod adapter;             // Tests for Bluetooth adapter management
 pub mod battery_status;      // Tests for basic battery status functionality

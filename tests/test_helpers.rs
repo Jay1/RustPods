@@ -12,7 +12,9 @@ use rustpods::ui::Message;
 use rustpods::ui::state_manager::{StateManager, Action};
 use rustpods::config::{AppConfig, BluetoothConfig, UiConfig, SystemConfig};
 use rustpods::ui::theme::Theme;
-use rustpods::bluetooth::{AirPodsBatteryStatus, AirPodsBattery, AirPodsCharging};
+use rustpods::bluetooth::AirPodsBatteryStatus;
+use rustpods::airpods::AirPodsBattery;
+use rustpods::bluetooth::AirPodsCharging;
 
 /// Create a test AppConfig for testing
 pub fn create_test_config() -> AppConfig {
@@ -55,12 +57,13 @@ pub fn create_test_battery() -> AirPodsBatteryStatus {
             left: Some(75),
             right: Some(80),
             case: Some(90),
+            charging: AirPodsCharging {
+                left: false,
+                right: false,
+                case: true,
+            },
         },
-        charging: AirPodsCharging {
-            left: false,
-            right: false,
-            case: true,
-        },
+        last_updated: std::time::Instant::now(),
     }
 }
 
@@ -194,6 +197,42 @@ pub struct MockSystemTray {
     pub menu_items: Vec<String>,
     /// Called actions
     pub actions: Vec<String>,
+    /// Current tooltip text
+    pub tooltip: String,
+    /// Current icon type
+    pub icon_type: TrayIconType,
+    /// Current theme mode
+    pub theme_mode: ThemeMode,
+    /// Show percentage in tray
+    pub show_percentage: bool,
+    /// Low battery threshold
+    pub low_battery_threshold: u8,
+    /// Notifications shown
+    pub notifications: Vec<String>,
+}
+
+/// Mock tray icon types
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TrayIconType {
+    /// Disconnected icon
+    Disconnected,
+    /// Connected with battery level
+    BatteryLevel(u8),
+    /// Charging icon
+    Charging,
+    /// Low battery icon
+    LowBattery,
+}
+
+/// Mock theme modes
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThemeMode {
+    /// Light theme
+    Light,
+    /// Dark theme
+    Dark,
+    /// System theme
+    System,
 }
 
 impl MockSystemTray {
@@ -204,37 +243,225 @@ impl MockSystemTray {
             battery_status: None,
             menu_items: vec![
                 "Show".to_string(),
+                "Hide".to_string(),
+                "Start Scan".to_string(),
+                "Stop Scan".to_string(),
                 "Settings".to_string(),
                 "Exit".to_string(),
             ],
             actions: Vec::new(),
+            tooltip: "RustPods - Disconnected".to_string(),
+            icon_type: TrayIconType::Disconnected,
+            theme_mode: ThemeMode::Dark,
+            show_percentage: true,
+            low_battery_threshold: 20,
+            notifications: Vec::new(),
         }
     }
     
-    /// Update the battery status
-    pub fn handle_battery_update(&mut self, battery: AirPodsBatteryStatus) -> Result<(), String> {
-        self.battery_status = Some(battery);
+    /// Update with battery status
+    pub fn update_battery(&mut self, battery: AirPodsBatteryStatus) {
+        self.battery_status = Some(battery.clone());
         self.actions.push("update_battery".to_string());
+        
+        // Update tooltip
+        self.update_tooltip_with_battery(
+            battery.battery.left,
+            battery.battery.right,
+            battery.battery.case
+        );
+        
+        // Update icon
+        self.update_icon_with_battery(&battery);
+        
+        // Check for low battery
+        self.check_low_battery(&battery);
+    }
+    
+    /// Update connection status
+    pub fn update_connection(&mut self, connected: bool) {
+        self.is_connected = connected;
+        self.actions.push(format!("update_connection: {}", connected));
+        
+        if !connected {
+            self.icon_type = TrayIconType::Disconnected;
+            self.tooltip = "RustPods - Disconnected".to_string();
+        }
+    }
+    
+    /// Handle battery update
+    pub fn handle_battery_update(&mut self, battery: AirPodsBatteryStatus) -> Result<(), String> {
+        self.update_battery(battery);
         Ok(())
     }
     
     /// Connect to state manager
     pub fn connect_state_manager(&mut self, _state_manager: Arc<StateManager>) -> Result<(), String> {
-        self.is_connected = true;
         self.actions.push("connect_state_manager".to_string());
         Ok(())
     }
     
-    /// Process a click on a menu item
+    /// Process menu item click
     pub fn process_click(&mut self, menu_item: &str) -> Option<Message> {
         self.actions.push(format!("click: {}", menu_item));
         
         match menu_item {
-            "Show" => Some(Message::ToggleVisibility),
-            "Settings" => Some(Message::OpenSettings),
+            "Show" => Some(Message::ShowWindow),
+            "Hide" => Some(Message::HideWindow),
+            "Start Scan" => Some(Message::StartScan),
+            "Stop Scan" => Some(Message::StopScan),
+            "Settings" => Some(Message::ShowSettings),
             "Exit" => Some(Message::Exit),
             _ => None,
         }
+    }
+    
+    /// Process system tray actions and convert to state manager actions
+    pub fn process_system_tray_action(&mut self, action: &str, state_manager: &Arc<StateManager>) {
+        self.actions.push(format!("process_action: {}", action));
+        
+        match action {
+            "toggle_window" => {
+                state_manager.dispatch(Action::ToggleVisibility);
+            },
+            "show_window" => {
+                state_manager.dispatch(Action::ShowWindow);
+            },
+            "hide_window" => {
+                state_manager.dispatch(Action::HideWindow);
+            },
+            "start_scan" => {
+                state_manager.dispatch(Action::StartScanning);
+            },
+            "stop_scan" => {
+                state_manager.dispatch(Action::StopScanning);
+            },
+            "exit" => {
+                state_manager.dispatch(Action::Exit);
+            },
+            _ => {}
+        }
+    }
+    
+    /// Handle window state change triggered by another component
+    pub fn handle_window_state_change(&mut self, visible: bool) -> Option<Message> {
+        self.actions.push(format!("window_state_change: {}", visible));
+        
+        // Update menu items if needed
+        let show_hide_index = if visible { 1 } else { 0 };
+        if self.menu_items.len() > show_hide_index {
+            // Swap Show/Hide menu items based on visibility
+            if visible && self.menu_items[0] == "Show" {
+                self.menu_items[0] = "Hide".to_string();
+            } else if !visible && self.menu_items[0] == "Hide" {
+                self.menu_items[0] = "Show".to_string();
+            }
+        }
+        
+        None
+    }
+    
+    /// Update tooltip with battery info
+    pub fn update_tooltip_with_battery(&mut self, left: Option<u8>, right: Option<u8>, case: Option<u8>) {
+        let left_str = left.map_or("N/A".to_string(), |v| format!("{}%", v));
+        let right_str = right.map_or("N/A".to_string(), |v| format!("{}%", v));
+        let case_str = case.map_or("N/A".to_string(), |v| format!("{}%", v));
+        
+        self.tooltip = format!("RustPods - Connected\nLeft: {}\nRight: {}\nCase: {}", 
+                              left_str, right_str, case_str);
+        
+        self.actions.push("update_tooltip".to_string());
+    }
+    
+    /// Update icon based on battery status
+    pub fn update_icon_with_battery(&mut self, battery: &AirPodsBatteryStatus) {
+        // Determine whether any component is charging
+        let is_charging = battery.battery.charging.left || battery.battery.charging.right || battery.battery.charging.case;
+        
+        // Get minimum battery level for icon
+        let min_level = [battery.battery.left, battery.battery.right]
+            .iter()
+            .filter_map(|&level| level)
+            .min()
+            .unwrap_or(100);
+        
+        // Determine icon type
+        if is_charging {
+            self.icon_type = TrayIconType::Charging;
+        } else if min_level <= self.low_battery_threshold {
+            self.icon_type = TrayIconType::LowBattery;
+        } else {
+            self.icon_type = TrayIconType::BatteryLevel(min_level);
+        }
+        
+        // If showing percentage, update the tooltip prefix
+        if self.show_percentage {
+            let prefix = if is_charging {
+                format!("RustPods - {}% ⚡", min_level)
+            } else if min_level <= self.low_battery_threshold {
+                format!("RustPods - {}% ⚠️", min_level)
+            } else {
+                format!("RustPods - {}%", min_level)
+            };
+            
+            if let Some(first_line_end) = self.tooltip.find('\n') {
+                let rest = &self.tooltip[first_line_end..];
+                self.tooltip = format!("{}{}", prefix, rest);
+            }
+        }
+        
+        self.actions.push(format!("update_icon: {:?}", self.icon_type));
+    }
+    
+    /// Check for low battery and show notification if needed
+    pub fn check_low_battery(&mut self, battery: &AirPodsBatteryStatus) {
+        // Get the components with their battery levels
+        let components = [
+            ("Left AirPod", battery.battery.left),
+            ("Right AirPod", battery.battery.right),
+            ("Case", battery.battery.case),
+        ];
+        
+        // Check each component for low battery
+        for (name, level) in components.iter() {
+            if let Some(battery_level) = level {
+                if *battery_level <= self.low_battery_threshold {
+                    let notification = format!("Low Battery Warning: {} at {}%", name, battery_level);
+                    self.show_notification(&notification);
+                }
+            }
+        }
+    }
+    
+    /// Show a notification
+    pub fn show_notification(&mut self, message: &str) {
+        self.notifications.push(message.to_string());
+        self.actions.push(format!("notification: {}", message));
+    }
+    
+    /// Update theme mode
+    pub fn update_theme(&mut self, theme: ThemeMode) {
+        self.theme_mode = theme;
+        self.actions.push(format!("update_theme: {:?}", theme));
+    }
+    
+    /// Update config settings
+    pub fn update_config(&mut self, config: &AppConfig) {
+        // Update show percentage setting
+        self.show_percentage = config.ui.show_percentage_in_tray;
+        
+        // Update theme mode
+        match config.ui.theme {
+            rustpods::config::Theme::Light => self.theme_mode = ThemeMode::Light,
+            rustpods::config::Theme::Dark => self.theme_mode = ThemeMode::Dark,
+            rustpods::config::Theme::System => self.theme_mode = ThemeMode::System,
+            rustpods::config::Theme::CatppuccinMocha => self.theme_mode = ThemeMode::Dark,
+        }
+        
+        // Update low battery threshold
+        self.low_battery_threshold = config.ui.low_battery_threshold;
+        
+        self.actions.push("update_config".to_string());
     }
 }
 

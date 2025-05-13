@@ -1,0 +1,46 @@
+codecov:
+  require_ci_to_pass: yes
+  notify:
+    wait_for_ci: yes
+
+comment:
+  layout: "reach, diff, flags, files"
+  behavior: default
+  require_changes: false
+  require_base: no
+  require_head: yes
+  branches: null
+
+coverage:
+  precision: 2
+  round: down
+  range: "70...90"
+  status:
+    project:
+      default:
+        target: 75%
+        threshold: 1%
+      core:
+        target: 85%
+        paths:
+          - "src/bluetooth/**"
+          - "src/airpods/**"
+          - "src/config/**"
+          - "src/ui/state_manager.rs"
+      ui:
+        target: 70%
+        paths:
+          - "src/ui/**"
+          - "!src/ui/state_manager.rs"
+    patch:
+      default:
+        target: auto
+        threshold: 5%
+        base: auto
+        
+ignore:
+  - "assets/**/*"
+  - "docs/**/*"
+  - ".github/**/*"
+  - "tests/test_helpers.rs"
+  - "**/*.md" 

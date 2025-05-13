@@ -5,10 +5,9 @@ use std::time::Duration;
 use std::collections::VecDeque;
 use tokio::task::JoinHandle;
 use tokio::time::interval;
-use log;
 
 use crate::airpods::{AirPodsBattery, DetectedAirPods};
-use crate::bluetooth::{AirPodsBatteryStatus, BleError};
+use crate::bluetooth::AirPodsBatteryStatus;
 use crate::config::AppConfig;
 
 /// Size of the battery reading buffer for smoothing
@@ -201,6 +200,12 @@ pub struct BatteryMonitor {
     last_notification: std::collections::HashMap<String, chrono::DateTime<chrono::Utc>>,
 }
 
+impl Default for BatteryMonitor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BatteryMonitor {
     /// Create a new battery monitor with default options
     pub fn new() -> Self {
@@ -332,9 +337,9 @@ impl BatteryMonitor {
         let has_data = battery.left.is_some() || battery.right.is_some() || battery.case.is_some();
         
         // Check for unreasonable values (should be 0-100)
-        let valid_range = battery.left.map_or(true, |v| v <= 100) &&
-                          battery.right.map_or(true, |v| v <= 100) &&
-                          battery.case.map_or(true, |v| v <= 100);
+        let valid_range = battery.left.is_none_or(|v| v <= 100) &&
+                          battery.right.is_none_or(|v| v <= 100) &&
+                          battery.case.is_none_or(|v| v <= 100);
         
         // Check for impossible charging status
         let valid_charging = !battery.charging.left || battery.left.is_some();

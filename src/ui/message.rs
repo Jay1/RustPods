@@ -282,6 +282,9 @@ mod tests {
             manufacturer_data: HashMap::new(),
             is_potential_airpods: false,
             last_seen: Instant::now(),
+            is_connected: false,
+            service_data: HashMap::new(),
+            services: Vec::new(),
         };
         
         // Create messages with the device

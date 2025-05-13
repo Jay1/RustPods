@@ -1,0 +1,58 @@
+name: Code Coverage
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'assets/**/*.png'
+      - 'assets/**/*.jpg'
+      - 'assets/**/*.svg'
+  pull_request:
+    branches: [ main ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'assets/**/*.png'
+      - 'assets/**/*.jpg'
+      - 'assets/**/*.svg'
+  workflow_dispatch:  # Allow manual triggering
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  coverage:
+    name: Test Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Install cargo-tarpaulin
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-tarpaulin
+      
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+      
+      - name: Generate coverage report
+        run: |
+          cargo tarpaulin --verbose --workspace --timeout 120 --out Xml --output-dir ./coverage
+      
+      - name: Upload to codecov.io
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage/cobertura.xml
+          fail_ci_if_error: true
+      
+      - name: Archive code coverage results
+        uses: actions/upload-artifact@v3
+        with:
+          name: code-coverage-report
+          path: ./coverage
+          retention-days: 30 

@@ -1,25 +1,32 @@
 # RustPods Documentation
 
-Welcome to the RustPods documentation. This documentation is organized into different sections to help you find what you need.
+Welcome to the RustPods documentation. This guide will help you understand how to use and contribute to the RustPods project.
 
 ## User Guide
 
-- [Getting Started](user-guide/getting-started.md) - Installation and basic setup
-- [Using RustPods](user-guide/usage.md) - How to use the application
-- [Settings](user-guide/settings.md) - Configuring the application
+- [Getting Started](user-guide/getting-started.md)
+- [AirPods Compatibility](user-guide/airpods-compatibility.md)
+- [Troubleshooting](user-guide/troubleshooting.md)
 
-## Developer Guide
+## Development Guide
 
-- [Building from Source](development/building.md) - Instructions for building the project
-- [Project Structure](development/project-structure.md) - Overview of the codebase organization
-- [UI Components](development/ui-components.md) - UI component patterns and best practices
-- [Asset Management](development/assets.md) - How assets are managed and used
-- [Contributing](../CONTRIBUTING.md) - Guidelines for contributing to RustPods
+- [Project Structure](development/project-structure.md)
+- [Building from Source](development/building.md)
+- [Assets and Resources](development/assets.md)
+- [Test Coverage Guidelines](development/test-coverage.md)
+- [Manual Testing Guide](development/manual-testing-guide.md)
+
+## Contributing
+
+- [Contributing Guidelines](../CONTRIBUTING.md)
+- [Code Style](development/code-style.md)
+- [Pull Request Process](development/pull-request-process.md)
 
 ## Technical Documentation
 
-- [Bluetooth LE](development/bluetooth.md) - How Bluetooth Low Energy is used in RustPods
-- [AirPods Protocol](development/airpods-protocol.md) - Details about the AirPods communication protocol
+- [Bluetooth Module](development/bluetooth-module.md)
+- [AirPods Protocol](development/airpods-protocol.md)
+- [UI Framework](development/ui-framework.md)
 
 ## Additional Resources
 

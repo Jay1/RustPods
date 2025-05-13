@@ -59,12 +59,10 @@ impl RefreshButton {
             } else {
                 format!("↻ {}", label)
             }
+        } else if self.is_loading {
+            "⟳".to_string()
         } else {
-            if self.is_loading {
-                "⟳".to_string()
-            } else {
-                "↻".to_string()
-            }
+            "↻".to_string()
         };
         
         let btn = button(

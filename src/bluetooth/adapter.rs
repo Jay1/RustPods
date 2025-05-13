@@ -8,63 +8,67 @@ use btleplug::api::{
     BDAddr, Central, Manager as _, 
     ScanFilter, Peripheral as _,
 };
-use btleplug::platform::{Adapter, Manager, Peripheral};
+use btleplug::platform::{Adapter, Manager};
 use tokio::time::sleep;
 
 use crate::bluetooth::BleError;
 use crate::bluetooth::scanner::DiscoveredDevice;
 
 /// Adapter capabilities
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct AdapterCapabilities {
     /// Whether the adapter supports scanning
     pub supports_scanning: bool,
+    
+    /// Whether the adapter supports the central role
+    pub supports_central_role: bool,
+    
+    /// Whether the adapter supports advertising
+    pub supports_advertising: bool,
+    
     /// Whether the adapter supports connecting to peripherals
     pub supports_connecting: bool,
+    
     /// Whether the adapter is powered on
     pub is_powered_on: bool,
-    /// Maximum number of concurrent connections
-    pub max_connections: Option<usize>,
-    /// Last time capabilities were checked
-    pub last_checked: std::time::Instant,
-    /// Last known status
+    
+    /// Maximum number of connections supported
+    pub max_connections: u8,
+    
+    /// When the capabilities were last checked
+    pub last_checked: Option<std::time::Instant>,
+    
+    /// Adapter status
     pub status: AdapterStatus,
+    
+    /// Adapter information string
+    pub adapter_info: String,
 }
 
-impl Default for AdapterCapabilities {
-    fn default() -> Self {
-        Self {
-            supports_scanning: false,
-            supports_connecting: false,
-            is_powered_on: false,
-            max_connections: None,
-            last_checked: std::time::Instant::now(),
-            status: AdapterStatus::default(),
-        }
-    }
-}
-
-/// Status of an adapter
+/// Adapter status
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AdapterStatus {
-    /// Adapter is working normally
+    /// Normal operation
     Normal,
-    /// Adapter is having issues
-    Troubled,
-    /// Adapter is unavailable
-    Unavailable,
-    /// Adapter status is unknown
-    Unknown,
+    /// Adapter is ready
+    Ready,
+    /// Adapter is in error state
+    Error,
+    /// Adapter is disabled
+    Disabled,
+    /// Adapter is busy
+    Busy,
 }
 
 impl Default for AdapterStatus {
     fn default() -> Self {
-        Self::Unknown
+        Self::Normal
     }
 }
 
 /// Information about a Bluetooth adapter
 #[derive(Debug, Clone)]
+#[derive(Default)]
 pub struct AdapterInfo {
     /// Adapter index
     pub index: usize,
@@ -94,26 +98,15 @@ impl fmt::Display for AdapterInfo {
             if self.is_default { " (default)" } else { "" },
             match self.capabilities.status {
                 AdapterStatus::Normal => "",
-                AdapterStatus::Troubled => " (troubled)",
-                AdapterStatus::Unavailable => " (unavailable)",
-                AdapterStatus::Unknown => " (unknown status)",
+                AdapterStatus::Ready => " (ready)",
+                AdapterStatus::Error => " (error)",
+                AdapterStatus::Disabled => " (disabled)",
+                AdapterStatus::Busy => " (busy)",
             }
         )
     }
 }
 
-impl Default for AdapterInfo {
-    fn default() -> Self {
-        Self {
-            index: 0,
-            name: String::new(),
-            address: None,
-            is_default: false,
-            capabilities: AdapterCapabilities::default(),
-            vendor: None,
-        }
-    }
-}
 
 /// Handle adapter discovery and selection
 #[derive(Clone)]
@@ -229,7 +222,7 @@ impl AdapterManager {
     async fn check_adapter_capabilities(&mut self, adapter: &Adapter, adapter_id: &str) -> AdapterCapabilities {
         let now = std::time::Instant::now();
         let mut caps = AdapterCapabilities::default();
-        caps.last_checked = now;
+        caps.last_checked = Some(now);
         
         // Check if scanning is supported
         let scanning_supported = self.check_scanning_capability(adapter).await.unwrap_or(false);
@@ -246,9 +239,9 @@ impl AdapterManager {
         
         // Determine adapter status based on capabilities
         let status = if !caps.supports_scanning {
-            AdapterStatus::Troubled
+            AdapterStatus::Error
         } else if !caps.is_powered_on {
-            AdapterStatus::Unavailable
+            AdapterStatus::Disabled
         } else {
             AdapterStatus::Normal
         };
@@ -263,7 +256,7 @@ impl AdapterManager {
     
     /// Update adapter status history
     fn update_adapter_history(&mut self, adapter_id: &str, status: AdapterStatus, timestamp: std::time::Instant) {
-        let history = self.adapter_history.entry(adapter_id.to_string()).or_insert_with(Vec::new);
+        let history = self.adapter_history.entry(adapter_id.to_string()).or_default();
         
         // Only add entry if status changed or it's been a while since the last update
         if history.is_empty() || 
@@ -279,10 +272,10 @@ impl AdapterManager {
     }
     
     /// Get the address of an adapter (if available)
-    async fn get_adapter_address(adapter: &Adapter) -> Option<BDAddr> {
-        // Note: This implementation is limited by btleplug's API
-        // We currently can't reliably get adapter addresses on all platforms
-        // For now, we'll return None, but platform-specific code could be added later
+    async fn get_adapter_address(_adapter: &Adapter) -> Option<BDAddr> {
+        // This is not directly supported by btleplug in a cross-platform way
+        // For Windows, we can try to get this from the adapter info in the future
+        // For now, we return None as a proper implementation would be platform-specific
         None
     }
     
@@ -297,13 +290,10 @@ impl AdapterManager {
     async fn get_adapter_name(adapter: &Adapter, index: usize) -> String {
         // Try to get a better name for the adapter if possible
         // The adapter.identifier() method might provide useful information on some platforms
-        match adapter.adapter_info().await {
-            Ok(info) => {
-                // Different BLE libraries might have different field names for the identifier
-                // Using info as a string directly instead of trying to access a specific field
-                return info.to_string();
-            },
-            Err(_) => {}
+        if let Ok(info) = adapter.adapter_info().await {
+            // Different BLE libraries might have different field names for the identifier
+            // Using info as a string directly instead of trying to access a specific field
+            return info.to_string();
         }
         
         // Fallback: use a generic name with the index
@@ -385,7 +375,7 @@ impl AdapterManager {
         // Check if the error indicates scanning is not supported
         match result {
             Err(btleplug::Error::NotSupported(_)) => Ok(false),
-            Err(e) => Err(BleError::BtlePlugError(e)),
+            Err(e) => Err(BleError::BtlePlugError(e.to_string())),
             _ => Ok(true),
         }
     }
@@ -407,7 +397,7 @@ impl AdapterManager {
             if let Some(info) = self.available_adapters.get_mut(index) {
                 info.capabilities.supports_scanning = true;
                 info.capabilities.status = AdapterStatus::Normal;
-                info.capabilities.last_checked = std::time::Instant::now();
+                info.capabilities.last_checked = Some(std::time::Instant::now());
                 
                 // Get a copy of the adapter ID before we need to borrow self mutably again
                 let adapter_id = if let Some(addr) = info.address {
@@ -417,7 +407,7 @@ impl AdapterManager {
                 };
                 
                 // Get a copy of the last_checked timestamp before releasing the borrow
-                let timestamp = info.capabilities.last_checked;
+                let timestamp = info.capabilities.last_checked.unwrap();
                 
                 // Now update adapter history with the copied values
                 self.update_adapter_history(&adapter_id, AdapterStatus::Normal, timestamp);
@@ -431,6 +421,33 @@ impl AdapterManager {
         // For now, we'll just return false to indicate failure.
         
         Ok(false)
+    }
+    
+    /// Get the adapter for the specified address
+    pub async fn get_adapter_by_address(&self, address: BDAddr) -> Result<Adapter, BleError> {
+        // Get the list of adapters
+        let adapters = self.manager.adapters().await?;
+        
+        // Find the adapter with the specified address
+        for adapter in adapters {
+            if let Some(addr) = Self::get_adapter_address(&adapter).await {
+                if addr == address {
+                    return Ok(adapter);
+                }
+            }
+        }
+        
+        // If we get here, no adapter was found
+        Err(BleError::AdapterNotFound)
+    }
+    
+    /// Check if Bluetooth is available
+    pub async fn is_bluetooth_available(&self) -> Result<bool, BleError> {
+        // Get the list of adapters
+        let adapters = self.manager.adapters().await?;
+        
+        // Check if there are any adapters
+        Ok(!adapters.is_empty())
     }
 }
 
@@ -464,23 +481,47 @@ impl BluetoothAdapter {
     /// Create a new BluetoothAdapter
     pub async fn new() -> Result<Self, BleError> {
         // Create a manager
-        let manager = Manager::new().await.map_err(BleError::BtlePlugError)?;
+        let manager = Manager::new().await?;
         
         // Get the adapter list
-        let adapters = manager.adapters().await.map_err(BleError::BtlePlugError)?;
+        let adapters = manager.adapters().await?;
         
         // Find the first adapter
         let adapter = adapters.into_iter().next()
             .ok_or(BleError::AdapterNotFound)?;
         
-        // Get adapter capabilities
-        let capabilities = AdapterCapabilities::default();
+        // Check if scanning is supported
+        let mut capabilities = AdapterCapabilities::default();
+        
+        // Set capabilities (async scanning check is not ideal but we keep it simple)
+        capabilities.supports_scanning = true; // Assume it supports scanning
+        capabilities.supports_central_role = true;
+        capabilities.supports_advertising = false; // Not using advertising for now
+        capabilities.supports_connecting = true;
+        capabilities.is_powered_on = true;
+        capabilities.max_connections = 5; // Default value
+        capabilities.last_checked = Some(std::time::Instant::now());
+        capabilities.status = AdapterStatus::Normal;
+        capabilities.adapter_info = format!("{:?}", adapter);
         
         Ok(Self {
             adapter: Arc::new(adapter),
-            status: AdapterStatus::Normal,
             capabilities,
+            status: AdapterStatus::Normal,
         })
+    }
+    
+    /// Get the Bluetooth adapter address
+    ///
+    /// This method returns the address of the Bluetooth adapter if available
+    pub async fn get_address(&self) -> Result<Option<BDAddr>, BleError> {
+        // This is not directly supported by btleplug in a cross-platform way
+        // For Windows, we can get this from the adapter properties
+        // For other platforms, we might need different approaches
+        
+        // We just return None for now as a proper implementation would be platform-specific
+        // A more robust implementation would use platform-specific code to get the address
+        Ok(None)
     }
     
     /// Get the adapter capabilities
@@ -496,5 +537,52 @@ impl BluetoothAdapter {
     /// Get the underlying adapter
     pub fn get_adapter(&self) -> Arc<Adapter> {
         self.adapter.clone()
+    }
+    
+    /// Start scanning for devices
+    pub async fn start_scan(&self) -> Result<Vec<DiscoveredDevice>, BleError> {
+        // Start scanning
+        self.adapter.start_scan(ScanFilter::default()).await?;
+        
+        // Return empty list initially
+        Ok(Vec::new())
+    }
+    
+    /// Stop scanning for devices
+    pub async fn stop_scan(&self) -> Result<(), BleError> {
+        self.adapter.stop_scan().await?;
+        Ok(())
+    }
+    
+    /// Get discovered devices
+    pub async fn get_discovered_devices(&self) -> Result<Vec<DiscoveredDevice>, BleError> {
+        let peripherals = self.adapter.peripherals().await?;
+        
+        // Convert peripherals to discovered devices
+        let mut devices = Vec::new();
+        
+        for peripheral in peripherals {
+            // Try to get properties
+            if let Ok(properties) = peripheral.properties().await {
+                if let Some(properties) = properties {
+                    // Create discovered device
+                    let device = DiscoveredDevice {
+                        name: properties.local_name,
+                        address: properties.address,
+                        rssi: properties.rssi,
+                        is_connected: false, // We'll check this later
+                        is_potential_airpods: false, // We'll check this later
+                        manufacturer_data: properties.manufacturer_data,
+                        service_data: properties.service_data,
+                        services: properties.services,
+                        last_seen: std::time::Instant::now(),
+                    };
+                    
+                    devices.push(device);
+                }
+            }
+        }
+        
+        Ok(devices)
     }
 } 

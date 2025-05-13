@@ -8,7 +8,6 @@ use tokio::sync::mpsc;
 use std::time::{Duration, Instant};
 use tokio::task::JoinHandle;
 
-use crate::config::AppConfig;
 use crate::ui::Message;
 use crate::ui::state_manager::StateManager;
 use crate::state_persistence::StatePersistenceManager;
@@ -218,39 +217,37 @@ impl LifecycleManager {
                 
                 // Check for power events
                 unsafe {
-                    if GetMessageW(&mut msg, None, 0, 0).as_bool() {
-                        if msg.message == WM_POWERBROADCAST {
-                            match msg.wParam.0 as u32 {
-                                PBT_APMSUSPEND => {
-                                    *state.lock().unwrap() = LifecycleState::Sleep;
-                                    ui_sender.send(crate::ui::Message::SystemSleep).ok();
-                                    
-                                    // Save state before sleep
-                                    state_manager.dispatch(crate::ui::state_manager::Action::SystemSleep);
-                                    
-                                    // Save state before sleep
-                                    if let Some(mut persistence_manager) = persistence_manager.clone() {
-                                        if let Err(e) = persistence_manager.save_state() {
-                                            log::error!("Failed to save state before sleep: {}", e);
-                                        } else {
-                                            log::info!("Successfully saved state before sleep");
-                                        }
+                    if GetMessageW(&mut msg, None, 0, 0).as_bool() && msg.message == WM_POWERBROADCAST {
+                        match msg.wParam.0 as u32 {
+                            PBT_APMSUSPEND => {
+                                *state.lock().unwrap() = LifecycleState::Sleep;
+                                ui_sender.send(crate::ui::Message::SystemSleep).ok();
+                                
+                                // Save state before sleep
+                                state_manager.dispatch(crate::ui::state_manager::Action::SystemSleep);
+                                
+                                // Save state before sleep
+                                if let Some(mut persistence_manager) = persistence_manager.clone() {
+                                    if let Err(e) = persistence_manager.save_state() {
+                                        log::error!("Failed to save state before sleep: {}", e);
+                                    } else {
+                                        log::info!("Successfully saved state before sleep");
                                     }
-                                    
-                                    log::info!("System entering sleep mode");
                                 }
-                                PBT_APMRESUMESUSPEND | PBT_APMRESUMEAUTOMATIC => {
-                                    *state.lock().unwrap() = LifecycleState::Running;
-                                    ui_sender.send(crate::ui::Message::SystemWake).ok();
-                                    state_manager.dispatch(crate::ui::state_manager::Action::SystemWake);
-                                    
-                                    log::info!("System waking from sleep");
-                                }
-                                PBT_APMPOWERSTATUSCHANGE => {
-                                    log::debug!("Power status changed (e.g., battery level)");
-                                }
-                                _ => {}
+                                
+                                log::info!("System entering sleep mode");
                             }
+                            PBT_APMRESUMESUSPEND | PBT_APMRESUMEAUTOMATIC => {
+                                *state.lock().unwrap() = LifecycleState::Running;
+                                ui_sender.send(crate::ui::Message::SystemWake).ok();
+                                state_manager.dispatch(crate::ui::state_manager::Action::SystemWake);
+                                
+                                log::info!("System waking from sleep");
+                            }
+                            PBT_APMPOWERSTATUSCHANGE => {
+                                log::debug!("Power status changed (e.g., battery level)");
+                            }
+                            _ => {}
                         }
                     }
                 }

@@ -12,6 +12,8 @@ use crate::ui::{Message, SystemTray};
 use crate::error::RustPodsError;
 use crate::airpods::{DetectedAirPods, detect_airpods};
 use log; // Keep log module but remove specific imports
+use futures::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
 
 /// Main application struct
 pub struct App {
@@ -257,35 +259,48 @@ impl App {
     
     /// Start scanning for devices
     async fn start_scan(&mut self) -> Result<(), RustPodsError> {
-        // Start scanning with the configured scan profile
-        let scan_config = self.config.to_scan_config();
+        log::info!("Starting Bluetooth scan");
         
-        // Use the existing start_scanning method and pass options if needed
-        let mut events = self.scanner.start_scanning_with_config(scan_config).await?;
+        // Initialize scanner if not initialized
+        self.scanner.initialize().await?;
         
-        // Process events
+        // Start scanning
+        let ble_events = self.scanner.start_scanning().await?;
+        
+        // Spawn a task to handle BLE events
         let ui_tx = self.ui_tx.clone();
-        tokio::spawn(async move {
-            while let Some(event) = events.recv().await {
+        let current_airpods = self.current_airpods.clone();
+        let _battery_status = self.battery_status.clone();
+        let _config = self.config.clone();
+        
+        tokio::task::spawn(async move {
+            let mut event_stream = ReceiverStream::new(ble_events);
+            
+            while let Some(event) = event_stream.next().await {
                 match event {
                     BleEvent::DeviceDiscovered(device) => {
-                        // Forward to UI
-                        let _ = ui_tx.send(Message::DeviceDiscovered(device.clone()));
+                        // If it might be AirPods, try to detect it
+                        if device.is_potential_airpods {
+                            if let Some(airpods) = detect_airpods(&device) {
+                                log::info!("Detected AirPods: {:?}", airpods);
+                                
+                                // Send UI message about discovered AirPods
+                                let _ = ui_tx.send(Message::AirPodsConnected(airpods.clone()));
+                                
+                                // Update current AirPods
+                                if let Ok(mut current) = current_airpods.lock() {
+                                    *current = Some(airpods);
+                                }
+                            }
+                        }
+                    },
+                    BleEvent::Error(err) => {
+                        log::error!("Bluetooth error: {}", err);
+                        let _ = ui_tx.send(Message::Error(format!("Bluetooth error: {}", err)));
+                    },
+                    _ => {
+                        // Handle other events if needed
                     }
-                    BleEvent::AirPodsDetected(airpods) => {
-                        let _ = ui_tx.send(Message::AirPodsConnected(airpods));
-                    }
-                    BleEvent::Error(error) => {
-                        let _ = ui_tx.send(Message::Error(format!("Bluetooth error: {}", error)));
-                    }
-                    BleEvent::ScanCycleCompleted { devices_found } => {
-                        let _ = ui_tx.send(Message::ScanProgress(devices_found));
-                    }
-                    BleEvent::ScanningCompleted => {
-                        let _ = ui_tx.send(Message::ScanCompleted);
-                    }
-                    // Handle other event types as needed
-                    _ => { /* Ignore other events */ }
                 }
             }
         });
@@ -295,6 +310,7 @@ impl App {
     
     /// Stop scanning for devices
     async fn stop_scan(&mut self) -> Result<(), RustPodsError> {
+        log::info!("Stopping Bluetooth scan");
         self.scanner.stop_scanning().await?;
         Ok(())
     }
@@ -405,22 +421,35 @@ impl App {
     
     /// Attempt to reinitialize the Bluetooth adapter
     async fn reinitialize_bluetooth(&mut self) -> Result<(), RustPodsError> {
-        // First, ensure any existing scanning is stopped
-        if let Err(e) = self.scanner.stop_scanning().await {
-            log::warn!("Error while stopping scan during reinitialization: {}", e);
-            // Continue anyway since we're reinitializing
+        log::info!("Reinitializing Bluetooth");
+        
+        // Stop scanning if in progress
+        if self.scanner.is_scanning() {
+            let _ = self.scanner.stop_scanning().await;
         }
         
-        // Create a fresh scanner
+        // Create a new scanner
         self.scanner = BleScanner::new();
         
-        // Initialize the new scanner
+        // Initialize the scanner
         self.scanner.initialize().await?;
         
-        // Notify UI that Bluetooth has been reinitialized
-        let _ = self.ui_tx.send(Message::Status("Bluetooth adapter reinitialized".to_string()));
+        // Apply configuration
+        if let Some(scanner) = self.scanner.as_configurable() {
+            scanner.apply_config(&self.config);
+        }
         
+        log::info!("Bluetooth reinitialized successfully");
         Ok(())
+    }
+
+    pub fn update_ui(&mut self) {
+        // Get state
+        let _battery_status = self.battery_status.clone();
+        let _config = self.config.clone();
+        
+        // Update UI components
+        // ... existing code ...
     }
 }
 

@@ -13,11 +13,17 @@ pub mod logging;
 pub mod telemetry;
 pub mod diagnostics;
 
-use std::process;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use error::{ErrorManager, ErrorSeverity, RustPodsError};
+use log::info;
+use error::{ErrorManager, RustPodsError};
+use telemetry::TelemetryManager;
+use config::AppConfig;
+use ui::state_manager::StateManager;
+use ui::Message;
+use tokio::sync::mpsc;
+use crate::lifecycle_manager::LifecycleManager;
 
 enum AppCommand {
     Adapters,
@@ -32,123 +38,57 @@ enum AppCommand {
 }
 
 fn main() {
-    // Parse command-line arguments
-    let command = match parse_args() {
-        Ok(cmd) => cmd,
-        Err(err_msg) => {
-            // Basic logging initialization for error reporting
-            env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("error"))
-                .format_timestamp_millis()
-                .init();
-            
-            log::error!("Error parsing arguments: {}", err_msg);
-            eprintln!("Error: {}", err_msg);
-            print_usage();
-            process::exit(1);
-        }
-    };
+    // Initialize logging first
+    logging::init_logger(&AppConfig::default()).expect("Failed to setup logging");
+    
+    info!("RustPods v{} - Starting up application", env!("CARGO_PKG_VERSION"));
+    
+    // Create a Tokio runtime
+    let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
+    
+    // Run the main app code inside the runtime
+    rt.block_on(async {
+        main_async().await;
+    });
+}
 
-    // Initialize configuration
+async fn main_async() {
+    // Load or create a configuration file
     let config = match config::load_or_create_config() {
-        Ok(cfg) => {
-            Arc::new(cfg)
-        },
+        Ok(cfg) => cfg,
         Err(e) => {
-            // Basic logging initialization for error reporting
-            env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("error"))
-                .format_timestamp_millis()
-                .init();
-                
-            log::error!("Failed to load configuration: {}", e);
-            eprintln!("Failed to load configuration: {}", e);
-            process::exit(2);
+            eprintln!("Error loading configuration: {}", e);
+            AppConfig::default()
         }
     };
     
-    // Initialize enhanced logging system
-    if let Err(e) = logging::init_logger(&config) {
-        // Fall back to basic logging
-        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
-            .format_timestamp_millis()
-            .init();
-            
-        log::error!("Failed to initialize enhanced logging system: {}", e);
-        eprintln!("Failed to initialize enhanced logging system: {}", e);
-        // Continue with basic logging
-    }
+    // Create UI message channel
+    let (ui_sender, _ui_receiver) = mpsc::unbounded_channel::<Message>();
     
-    log::info!("RustPods v{} - Starting up application", env!("CARGO_PKG_VERSION"));
-    
+    // Create the state manager
+    let state_manager = Arc::new(StateManager::new(ui_sender.clone()));
+
     // Initialize error manager
-    let error_manager = Arc::new(Mutex::new(ErrorManager::new()));
+    let _error_manager = Arc::new(Mutex::new(ErrorManager::new()));
     
-    // Initialize telemetry if enabled
-    let telemetry_manager = telemetry::init_telemetry(&config);
+    // Initialize telemetry manager
+    let _telemetry_manager = Arc::new(Mutex::new(TelemetryManager::new(&config)));
     
-    // Handle special commands that don't need a tokio runtime
-    match command {
-        AppCommand::Help => {
-            print_usage();
-            return;
-        },
-        AppCommand::UI => {
-            log::info!("Launching UI mode");
-            if let Err(e) = ui::run_ui() {
-                log::error!("Error launching UI: {}", e);
-                eprintln!("Error launching UI: {}", e);
-                process::exit(6);
-            }
-            return;
-        },
-        AppCommand::StateUI => {
-            log::info!("Launching state-based UI mode with lifecycle management");
-            if let Err(e) = ui::run_state_ui() {
-                log::error!("Error launching state-based UI: {}", e);
-                
-                // Record error in telemetry if enabled
-                if let Ok(mut tm) = telemetry_manager.lock() {
-                    let ui_error = RustPodsError::ui(
-                        format!("Failed to start UI: {}", e),
-                        ErrorSeverity::Critical
-                    );
-                    tm.record_error(&ui_error);
-                }
-                
-                eprintln!("Error launching state-based UI: {}", e);
-                process::exit(6);
-            }
-            return;
-        },
-        AppCommand::Diagnostic => {
-            println!("Running system diagnostics...");
-            if let Err(e) = run_diagnostics(Arc::clone(&config), Arc::clone(&error_manager), Arc::clone(&telemetry_manager)).await {
-                eprintln!("Error running diagnostics: {}", e);
-                process::exit(7); // Error code 7 for diagnostic issues
-            }
-        },
-        _ => {
-            // For other commands, use tokio runtime
-            let runtime = tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .build()
-                .expect("Failed to create tokio runtime");
-                
-            let result = runtime.block_on(async {
-                execute_command(command, Arc::clone(&config), Arc::clone(&error_manager), Arc::clone(&telemetry_manager)).await
-            });
-            
-            if let Err(err_code) = result {
-                log::error!("Command failed with error code: {}", err_code);
-                process::exit(err_code);
-            }
-        }
+    // Create lifecycle manager
+    let mut lifecycle_manager = LifecycleManager::new(
+        Arc::clone(&state_manager),
+        ui_sender,
+    );
+    
+    // Start the life cycle manager
+    if let Err(e) = lifecycle_manager.start() {
+        eprintln!("Failed to start lifecycle manager: {}", e);
     }
     
-    // Wait for logs to be flushed
-    std::thread::sleep(Duration::from_millis(100));
-    
-    // Log application exit
-    log::info!("RustPods - Application exiting normally");
+    // Keep the application running
+    loop {
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
 }
 
 fn parse_args() -> Result<AppCommand, String> {
@@ -176,36 +116,36 @@ fn parse_args() -> Result<AppCommand, String> {
 
 async fn execute_command(
     command: AppCommand, 
-    config: Arc<config::AppConfig>,
+    config: Arc<Mutex<AppConfig>>,
     error_manager: Arc<Mutex<ErrorManager>>,
-    telemetry_manager: Arc<Mutex<telemetry::TelemetryManager>>,
+    _telemetry_manager: Arc<Mutex<telemetry::TelemetryManager>>,
 ) -> Result<(), i32> {
     match command {
         AppCommand::Adapters => {
             println!("Discovering Bluetooth adapters...");
             if let Err(e) = bluetooth::discover_adapters().await {
-                handle_command_error(e, "discovering Bluetooth adapters", &error_manager, &telemetry_manager);
+                handle_command_error(e, "discovering Bluetooth adapters", &error_manager);
                 return Err(2); // Error code 2 for Bluetooth adapter issues
             }
         },
         AppCommand::Scan => {
             println!("Running Bluetooth scan...");
             if let Err(e) = bluetooth::scan_with_adapter().await {
-                handle_command_error(e, "scanning for devices", &error_manager, &telemetry_manager);
+                handle_command_error(e, "scanning for devices", &error_manager);
                 return Err(3); // Error code 3 for scanning issues
             }
         },
         AppCommand::Interval => {
             println!("Running interval-based scanning...");
             if let Err(e) = bluetooth::interval_scanning().await {
-                handle_command_error(e, "interval scanning", &error_manager, &telemetry_manager);
+                handle_command_error(e, "interval scanning", &error_manager);
                 return Err(4); // Error code 4 for interval scanning issues
             }
         },
         AppCommand::AirPods => {
             println!("Running AirPods filtering demo...");
             if let Err(e) = bluetooth::airpods_filtering().await {
-                handle_command_error(e, "AirPods filtering", &error_manager, &telemetry_manager);
+                handle_command_error(e, "AirPods filtering", &error_manager);
                 return Err(5); // Error code 5 for AirPods filtering issues
             }
         },
@@ -215,7 +155,7 @@ async fn execute_command(
         },
         AppCommand::Diagnostic => {
             println!("Running system diagnostics...");
-            if let Err(e) = run_diagnostics(Arc::clone(&config), Arc::clone(&error_manager), Arc::clone(&telemetry_manager)).await {
+            if let Err(e) = run_diagnostics(Arc::clone(&config), Arc::clone(&error_manager)).await {
                 eprintln!("Error running diagnostics: {}", e);
                 return Err(7); // Error code 7 for diagnostic issues
             }
@@ -231,9 +171,8 @@ async fn execute_command(
 
 // Helper function to run system diagnostics
 async fn run_diagnostics(
-    config: Arc<config::AppConfig>,
+    config: Arc<Mutex<AppConfig>>,
     error_manager: Arc<Mutex<ErrorManager>>,
-    telemetry_manager: Arc<Mutex<telemetry::TelemetryManager>>,
 ) -> Result<(), String> {
     // Create diagnostics manager
     let mut diagnostics = diagnostics::DiagnosticsManager::new(config, error_manager);
@@ -288,34 +227,22 @@ async fn run_diagnostics(
 }
 
 // Helper function to handle command errors consistently
-fn handle_command_error(
-    error: impl std::error::Error,
+fn handle_command_error<E>(
+    error: E,
     operation: &str,
     error_manager: &Arc<Mutex<ErrorManager>>,
-    telemetry_manager: &Arc<Mutex<telemetry::TelemetryManager>>,
-) {
-    eprintln!("Error during {}: {}", operation, error);
+) where
+    E: std::fmt::Display,
+{
+    log::error!("Error while {}: {}", operation, error);
+    eprintln!("Error while {}: {}", operation, error);
     
-    // Convert error to RustPodsError if needed
-    let rustpods_error = match error.downcast_ref::<RustPodsError>() {
-        Some(e) => e.clone(),
-        None => RustPodsError::system(
-            format!("Error during {}: {}", operation, error),
-            ErrorSeverity::Error,
-        ),
-    };
+    // Create a RustPodsError from the error string
+    let rustpods_error = RustPodsError::System(format!("Error during {}: {}", operation, error));
     
-    // Log the error properly
-    rustpods_error.log();
-    
-    // Record in telemetry
-    if let Ok(mut tm) = telemetry_manager.lock() {
-        tm.record_error(&rustpods_error);
-    }
-    
-    // Store in error manager
+    // Record in error manager
     if let Ok(mut em) = error_manager.lock() {
-        em.add_to_history(rustpods_error);
+        em.record_error(&rustpods_error);
     }
 }
 

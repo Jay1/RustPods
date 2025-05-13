@@ -140,17 +140,23 @@ impl TelemetryManager {
         
         // Update local error stats
         match error {
-            RustPodsError::Bluetooth { .. } => self.error_stats.bluetooth_errors += 1,
-            RustPodsError::BluetoothApi(_) => self.error_stats.bluetooth_errors += 1,
-            RustPodsError::AirPods { .. } => self.error_stats.airpods_errors += 1,
-            RustPodsError::Ui { .. } => self.error_stats.ui_errors += 1,
-            RustPodsError::Config { .. } => self.error_stats.config_errors += 1,
-            RustPodsError::Application { .. } => self.error_stats.app_errors += 1,
-            RustPodsError::DeviceNotFound { .. } => self.error_stats.device_errors += 1,
-            RustPodsError::BatteryMonitor { .. } => self.error_stats.battery_errors += 1,
-            RustPodsError::System { .. } => self.error_stats.system_errors += 1,
-            RustPodsError::StatePersistence { .. } => self.error_stats.persistence_errors += 1,
-            RustPodsError::Lifecycle { .. } => self.error_stats.lifecycle_errors += 1,
+            RustPodsError::Bluetooth(_) => self.error_stats.bluetooth_errors += 1,
+            RustPodsError::BluetoothApiError(_) => self.error_stats.bluetooth_errors += 1,
+            RustPodsError::AirPods(_) => self.error_stats.airpods_errors += 1,
+            RustPodsError::Ui(_) => self.error_stats.ui_errors += 1,
+            RustPodsError::Config(_) => self.error_stats.config_errors += 1,
+            RustPodsError::ConfigError(_) => self.error_stats.config_errors += 1,
+            RustPodsError::UiError => self.error_stats.ui_errors += 1,
+            RustPodsError::Application(_) => self.error_stats.app_errors += 1,
+            RustPodsError::DeviceNotFound => self.error_stats.device_errors += 1,
+            RustPodsError::Device(_) => self.error_stats.device_errors += 1,
+            RustPodsError::BatteryMonitor(_) => self.error_stats.battery_errors += 1,
+            RustPodsError::BatteryMonitorError(_) => self.error_stats.battery_errors += 1,
+            RustPodsError::System(_) => self.error_stats.system_errors += 1,
+            RustPodsError::StatePersistence(_) => self.error_stats.persistence_errors += 1,
+            RustPodsError::Lifecycle(_) => self.error_stats.lifecycle_errors += 1,
+            RustPodsError::State(_) => self.error_stats.app_errors += 1,
+            RustPodsError::General(_) => self.error_stats.app_errors += 1,
         }
         
         match error.severity() {
@@ -158,6 +164,8 @@ impl TelemetryManager {
             ErrorSeverity::Error => self.error_stats.error_level_errors += 1,
             ErrorSeverity::Recoverable => self.error_stats.recoverable_errors += 1,
             ErrorSeverity::Warning => self.error_stats.warnings += 1,
+            ErrorSeverity::Major => self.error_stats.critical_errors += 1,
+            ErrorSeverity::Minor => self.error_stats.warnings += 1,
         }
         
         self.error_stats.total_errors += 1;

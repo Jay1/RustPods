@@ -259,18 +259,21 @@ impl StateManager {
                 let mut device_state = self.device_state.lock().unwrap();
                 
                 // Check if this is a new device or an update
-                if device_state.devices.contains_key(&device.address.to_string()) {
-                    // Existing device, update it
-                    device_state.devices.insert(device.address.to_string(), device.clone());
-                    
-                    // Notify UI
-                    self.notify_ui(Message::DeviceUpdated(device));
-                } else {
-                    // New device
-                    device_state.devices.insert(device.address.to_string(), device.clone());
-                    
-                    // Notify UI
-                    self.notify_ui(Message::DeviceDiscovered(device));
+                match device_state.devices.entry(device.address.to_string()) {
+                    std::collections::hash_map::Entry::Occupied(mut e) => {
+                        // Existing device, update it
+                        e.insert(device.clone());
+                        
+                        // Notify UI
+                        self.notify_ui(Message::DeviceUpdated(device));
+                    }
+                    std::collections::hash_map::Entry::Vacant(e) => {
+                        // New device
+                        e.insert(device.clone());
+                        
+                        // Notify UI
+                        self.notify_ui(Message::DeviceDiscovered(device));
+                    }
                 }
             },
             Action::RemoveDevice(address) => {
@@ -419,7 +422,7 @@ impl StateManager {
             },
             Action::SystemWake => {
                 // Handle system wake event
-                let mut device_state = self.device_state.lock().unwrap();
+                let device_state = self.device_state.lock().unwrap();
                 
                 // Attempt to reconnect if we were previously connected
                 if device_state.connection_state == ConnectionState::Reconnecting {

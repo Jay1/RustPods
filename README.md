@@ -17,6 +17,12 @@
   </a>
   <img src="https://img.shields.io/badge/platform-windows-blue" alt="Platform: Windows">
   <img src="https://img.shields.io/badge/Powered%20by-Rust-orange" alt="Powered by: Rust">
+  <a href="https://codecov.io/gh/Jay1/RustPods">
+    <img src="https://codecov.io/gh/Jay1/RustPods/branch/main/graph/badge.svg" alt="Code Coverage">
+  </a>
+  <a href="https://coderabbit.ai">
+    <img src="https://img.shields.io/coderabbit/prs/github/Jay1/RustPods?utm_source=oss&utm_medium=github&utm_campaign=Jay1%2FRustPods&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews" alt="CodeRabbit Pull Request Reviews">
+  </a>
 </p>
 
 ---

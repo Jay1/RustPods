@@ -6,13 +6,12 @@ use tokio::sync::mpsc;
 use log::{debug, error, info, warn};
 use std::time::Duration;
 
-use crate::bluetooth::adapter::{BluetoothAdapter, BleAdapterEvent};
+use crate::bluetooth::adapter::BluetoothAdapter;
 use crate::bluetooth::scanner::{BleScanner, BleScannerConfig, DiscoveredDevice};
 use crate::bluetooth::events::BleEvent;
 use crate::airpods::detector::AirPodsDetector;
 use crate::ui::Message;
 use crate::ui::state_manager::{StateManager, Action, ConnectionState};
-use crate::config::AppConfig;
 use crate::lifecycle_manager::LifecycleManager;
 use crate::state_persistence::StatePersistenceManager;
 
@@ -504,14 +503,14 @@ impl AppStateController {
         if self.state_manager.get_device_state().devices.contains_key(&device_address) {
             self.select_device(device_address).await?;
             info!("Successfully restored previous connection");
-            return Ok(());
+            Ok(())
         } else {
             // Set connection state to reconnecting and try again later
             let action = Action::SetConnectionState(ConnectionState::Reconnecting);
             self.state_manager.dispatch(action);
             
             warn!("Device not found during reconnection, setting state to reconnecting");
-            return Err("Device not found, will try to reconnect later".to_string());
+            Err("Device not found, will try to reconnect later".to_string())
         }
     }
     

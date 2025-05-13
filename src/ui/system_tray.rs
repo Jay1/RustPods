@@ -1,16 +1,12 @@
 use std::sync::mpsc;
 use tray_item::TrayItem;
 use std::io;
-use thiserror::Error;
 
 use crate::ui::Message;
 use crate::config::{AppConfig, Theme as ConfigTheme};
-use crate::ui::theme::{Theme as UiTheme, BLUE, GREEN, RED, TEXT};
-use crate::ui::state_manager::{StateManager, Action};
+use crate::ui::state_manager::StateManager;
 use crate::bluetooth::AirPodsBatteryStatus;
 use std::sync::Arc;
-use std::sync::Mutex;
-use std::path::Path;
 
 
 
@@ -161,7 +157,7 @@ impl SystemTray {
         
         // Add main actions group
         Self::add_menu_group(&mut tray, &tx, &main_actions)
-            .map_err(|e| SystemTrayError::MenuItem(e))?;
+            .map_err(SystemTrayError::MenuItem)?;
         
         // Add separator
         tray.add_menu_item("-", || {})
@@ -169,7 +165,7 @@ impl SystemTray {
         
         // Add scan group
         Self::add_menu_group(&mut tray, &tx, &scan_actions)
-            .map_err(|e| SystemTrayError::MenuItem(e))?;
+            .map_err(SystemTrayError::MenuItem)?;
         
         // Add separator
         tray.add_menu_item("-", || {})
@@ -177,7 +173,7 @@ impl SystemTray {
         
         // Add settings group
         Self::add_menu_group(&mut tray, &tx, &settings_actions)
-            .map_err(|e| SystemTrayError::MenuItem(e))?;
+            .map_err(SystemTrayError::MenuItem)?;
         
         // Add separator
         tray.add_menu_item("-", || {})
@@ -210,7 +206,7 @@ impl SystemTray {
         
         // Add exit group
         Self::add_menu_group(&mut tray, &tx, &exit_actions)
-            .map_err(|e| SystemTrayError::MenuItem(e))?;
+            .map_err(SystemTrayError::MenuItem)?;
         
         let mut startup_registered = false;
         
@@ -276,7 +272,7 @@ impl SystemTray {
     pub fn set_startup_enabled(&mut self, enabled: bool) -> Result<(), SystemTrayError> {
         // Get the path to the executable
         let exe_path = std::env::current_exe()
-            .map_err(|e| SystemTrayError::WindowsError(e))?;
+            .map_err(SystemTrayError::WindowsError)?;
         
         // Convert path to string
         let exe_path_str = exe_path.to_string_lossy().to_string();
@@ -442,8 +438,8 @@ impl SystemTray {
             // Check for low battery and show warning if needed
             if self.config.ui.show_low_battery_warning {
                 let threshold = self.config.ui.low_battery_threshold;
-                let left_low = left.map_or(false, |v| v <= threshold);
-                let right_low = right.map_or(false, |v| v <= threshold);
+                let left_low = left.is_some_and(|v| v <= threshold);
+                let right_low = right.is_some_and(|v| v <= threshold);
                 
                 if left_low || right_low {
                     // In a real implementation, we'd show a notification

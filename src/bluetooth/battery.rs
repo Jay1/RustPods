@@ -66,8 +66,8 @@ pub async fn extract_battery_status(peripheral: &Peripheral) -> AirPodsBatterySt
 pub async fn extract_battery_data(peripheral: &Peripheral) -> Result<AirPodsBattery, BleError> {
     let properties = match peripheral.properties().await {
         Ok(Some(props)) => props,
-        Ok(None) => return Err(BleError::DeviceError("No device properties found".to_string())),
-        Err(e) => return Err(BleError::BtlePlugError(e)),
+        Ok(None) => return Err(BleError::Other("No device properties found".to_string())),
+        Err(e) => return Err(BleError::from(e)),
     };
     
     // Check if manufacturer data exists and if it contains Apple data
@@ -75,13 +75,13 @@ pub async fn extract_battery_data(peripheral: &Peripheral) -> Result<AirPodsBatt
     
     let apple_data = match properties.manufacturer_data.get(&APPLE_COMPANY_ID) {
         Some(data) => data,
-        None => return Err(BleError::DeviceError("No Apple manufacturer data found".to_string())),
+        None => return Err(BleError::Other("No Apple manufacturer data found".to_string())),
     };
     
     // Parse the AirPods data to extract battery information
     match parse_airpods_data(apple_data) {
         Some(battery) => Ok(battery),
-        None => Err(BleError::DeviceError("Failed to parse AirPods battery data".to_string())),
+        None => Err(BleError::Other("Failed to parse AirPods battery data".to_string())),
     }
 }
 

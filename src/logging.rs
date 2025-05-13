@@ -5,11 +5,11 @@
 
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::SystemTime;
 
-use chrono::{DateTime, Local};
+use chrono::Local;
 use log::{Level, LevelFilter, Metadata, Record};
 
 use crate::config::AppConfig;
@@ -235,7 +235,7 @@ impl RustPodsLogger {
                 .filter_map(|entry| {
                     if let Ok(entry) = entry {
                         let path = entry.path();
-                        if path.is_file() && path.extension().map_or(false, |ext| ext == "log") {
+                        if path.is_file() && path.extension().is_some_and(|ext| ext == "log") {
                             return Some(path);
                         }
                     }

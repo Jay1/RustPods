@@ -1,1 +1,337 @@
-//! Error handling system for RustPods//!//! This module provides a comprehensive error handling system with categorized errors//! by subsystem, automatic recovery mechanisms, and detailed error information.use std::fmt;use std::error::Error;use std::sync::Arc;use thiserror::Error;use crate::bluetooth::BleError;use crate::config::ConfigError;/// Severity level of an error#[derive(Debug, Clone, Copy, PartialEq, Eq)]pub enum ErrorSeverity {    /// Critical errors that prevent core functionality from working    Critical,    /// Errors that impact functionality but the app can continue working    Error,    /// Issues that can be recovered from automatically    Recoverable,    /// Warnings about potential issues or degraded functionality    Warning,}/// Recovery action for an error#[derive(Debug, Clone)]pub enum RecoveryAction {    /// No automatic recovery possible    None,    /// Retry the operation (with optional limit and delay)    Retry {        /// Maximum number of retries        max_attempts: usize,        /// Delay between retries in milliseconds        delay_ms: u64,    },    /// Use a fallback mechanism    Fallback {        /// Description of the fallback mechanism        description: String,    },    /// Restart a component    RestartComponent {        /// Name of the component to restart        component: String,    },    /// Custom recovery procedure    Custom {        /// Description of the custom recovery        description: String,        /// Custom recovery function        action: Option<Arc<dyn Fn() -> Result<(), RustPodsError> + Send + Sync>>,    },}/// Common error context information#[derive(Debug, Clone)]pub struct ErrorContext {    /// Component where the error occurred    pub component: String,    /// Operation being performed when error occurred    pub operation: String,    /// Time when the error occurred    pub timestamp: chrono::DateTime<chrono::Utc>,    /// Additional information about the error    pub details: Option<String>,}impl Default for ErrorContext {    fn default() -> Self {        Self {            component: "unknown".to_string(),            operation: "unknown".to_string(),            timestamp: chrono::Utc::now(),            details: None,        }    }}/// Main error type for the application#[derive(Debug, Error)]pub enum RustPodsError {    /// Bluetooth subsystem errors    #[error("Bluetooth error: {message}")]    Bluetooth {        /// Error message        message: String,        /// Underlying error if available        #[source]        source: Option<Box<dyn Error + Send + Sync>>,        /// Error severity        severity: ErrorSeverity,        /// Recovery action        recovery: RecoveryAction,        /// Error context        context: ErrorContext,    },    /// Bluetooth API errors (from btleplug)    #[error("Bluetooth API error: {0}")]    BluetoothApi(#[from] BleError),    /// AirPods-specific errors    #[error("AirPods error: {message}")]    AirPods {        /// Error message        message: String,        /// Error code for AirPods-specific errors        code: Option<u32>,        /// Error severity        severity: ErrorSeverity,        /// Recovery action        recovery: RecoveryAction,        /// Error context        context: ErrorContext,    },    /// UI errors    #[error("UI error: {message}")]    Ui {        /// Error message        message: String,        /// Error severity        severity: ErrorSeverity,        /// Recovery action        recovery: RecoveryAction,        /// Error context        context: ErrorContext,    },    /// Configuration errors    #[error("Configuration error: {message}")]    Config {        /// Error message        message: String,        /// Error severity        severity: ErrorSeverity,        /// Recovery action        recovery: RecoveryAction,        /// Error context        context: ErrorContext,    },    /// General application errors    #[error("Application error: {message}")]    Application {        /// Error message        message: String,        /// Error severity        severity: ErrorSeverity,        /// Recovery action        recovery: RecoveryAction,        /// Error context        context: ErrorContext,    },    /// Device not found errors    #[error("Device not found: {message}")]    DeviceNotFound {        /// Error message        message: String,        /// Device identifier that was not found        device_id: Option<String>,        /// Error severity        severity: ErrorSeverity,        /// Recovery action        recovery: RecoveryAction,        /// Error context        context: ErrorContext,    },    /// Battery monitoring errors    #[error("Battery monitoring error: {message}")]    BatteryMonitor {        /// Error message        message: String,        /// Error severity        severity: ErrorSeverity,        /// Recovery action        recovery: RecoveryAction,        /// Error context        context: ErrorContext,    },        /// System integration errors    #[error("System integration error: {message}")]    System {        /// Error message        message: String,        /// Error severity        severity: ErrorSeverity,        /// Recovery action        recovery: RecoveryAction,        /// Error context        context: ErrorContext,    },        /// State persistence errors    #[error("State persistence error: {message}")]    StatePersistence {        /// Error message        message: String,        /// Error severity        severity: ErrorSeverity,        /// Recovery action        recovery: RecoveryAction,        /// Error context        context: ErrorContext,    },    /// Lifecycle management errors    #[error("Lifecycle error: {message}")]    Lifecycle {        /// Error message        message: String,        /// Error severity        severity: ErrorSeverity,        /// Recovery action        recovery: RecoveryAction,        /// Error context        context: ErrorContext,    },}impl RustPodsError {    /// Get the severity level of the error    pub fn severity(&self) -> ErrorSeverity {        match self {            Self::Bluetooth { severity, .. } => *severity,            Self::BluetoothApi(_) => ErrorSeverity::Error,            Self::AirPods { severity, .. } => *severity,            Self::Ui { severity, .. } => *severity,            Self::Config { severity, .. } => *severity,            Self::Application { severity, .. } => *severity,            Self::DeviceNotFound { severity, .. } => *severity,            Self::BatteryMonitor { severity, .. } => *severity,            Self::System { severity, .. } => *severity,            Self::StatePersistence { severity, .. } => *severity,            Self::Lifecycle { severity, .. } => *severity,        }    }    /// Get the recovery action for the error    pub fn recovery_action(&self) -> Option<&RecoveryAction> {        match self {            Self::Bluetooth { recovery, .. } => Some(recovery),            Self::BluetoothApi(_) => None,            Self::AirPods { recovery, .. } => Some(recovery),            Self::Ui { recovery, .. } => Some(recovery),            Self::Config { recovery, .. } => Some(recovery),            Self::Application { recovery, .. } => Some(recovery),            Self::DeviceNotFound { recovery, .. } => Some(recovery),            Self::BatteryMonitor { recovery, .. } => Some(recovery),            Self::System { recovery, .. } => Some(recovery),            Self::StatePersistence { recovery, .. } => Some(recovery),            Self::Lifecycle { recovery, .. } => Some(recovery),        }    }        /// Get the error context    pub fn context(&self) -> Option<&ErrorContext> {        match self {            Self::Bluetooth { context, .. } => Some(context),            Self::BluetoothApi(_) => None,            Self::AirPods { context, .. } => Some(context),            Self::Ui { context, .. } => Some(context),            Self::Config { context, .. } => Some(context),            Self::Application { context, .. } => Some(context),            Self::DeviceNotFound { context, .. } => Some(context),            Self::BatteryMonitor { context, .. } => Some(context),            Self::System { context, .. } => Some(context),            Self::StatePersistence { context, .. } => Some(context),             Self::Lifecycle { context, .. } => Some(context),        }    }        /// Attempt to recover from the error    pub async fn try_recover(&self) -> Result<bool, RustPodsError> {        match self.recovery_action() {            Some(RecoveryAction::None) => Ok(false),            Some(RecoveryAction::Retry { max_attempts, delay_ms }) => {                // Auto-retry logic would go here                log::info!("Attempting recovery via retry (max: {}, delay: {}ms)", max_attempts, delay_ms);                Ok(true) // Simplified for now            },            Some(RecoveryAction::Fallback { description }) => {                log::info!("Using fallback recovery: {}", description);                Ok(true) // Simplified for now            },            Some(RecoveryAction::RestartComponent { component }) => {                log::info!("Attempting to restart component: {}", component);                // Component restart logic would be implemented                Ok(true) // Simplified for now            },            Some(RecoveryAction::Custom { description, action }) => {                log::info!("Attempting custom recovery: {}", description);                if let Some(act) = action {                    act().map(|_| true)                } else {                    Ok(false)                }            },            None => Ok(false),        }    }        /// Log the error with appropriate level based on severity    pub fn log(&self) {        match self.severity() {            ErrorSeverity::Critical => log::error!("CRITICAL: {}", self),            ErrorSeverity::Error => log::error!("{}", self),            ErrorSeverity::Recoverable => log::warn!("RECOVERABLE: {}", self),            ErrorSeverity::Warning => log::warn!("{}", self),        }                // Log additional context information if available        if let Some(ctx) = self.context() {            log::debug!("Error context - Component: {}, Operation: {}, Time: {}",                 ctx.component, ctx.operation, ctx.timestamp);            if let Some(details) = &ctx.details {                log::debug!("Error details: {}", details);            }        }                // Log source error if available        if let Self::Bluetooth { source: Some(source), .. } = self {            log::debug!("Caused by: {}", source);        }    }        /// Create a new Bluetooth error    pub fn bluetooth(message: impl Into<String>, severity: ErrorSeverity) -> Self {        Self::Bluetooth {            message: message.into(),            source: None,            severity,            recovery: RecoveryAction::None,            context: ErrorContext::default(),        }    }        /// Create a new AirPods error    pub fn airpods(message: impl Into<String>, severity: ErrorSeverity) -> Self {        Self::AirPods {            message: message.into(),            code: None,            severity,            recovery: RecoveryAction::None,            context: ErrorContext::default(),        }    }        /// Create a new UI error    pub fn ui(message: impl Into<String>, severity: ErrorSeverity) -> Self {        Self::Ui {            message: message.into(),            severity,            recovery: RecoveryAction::None,            context: ErrorContext::default(),        }    }        /// Create a new Config error    pub fn config(message: impl Into<String>, severity: ErrorSeverity) -> Self {        Self::Config {            message: message.into(),            severity,            recovery: RecoveryAction::None,            context: ErrorContext::default(),        }    }        /// Create a new System error    pub fn system(message: impl Into<String>, severity: ErrorSeverity) -> Self {        Self::System {            message: message.into(),            severity,            recovery: RecoveryAction::None,            context: ErrorContext::default(),        }    }}// Implement conversions from other error typesimpl From<ConfigError> for RustPodsError {    fn from(err: ConfigError) -> Self {        let severity = match &err {            ConfigError::IoError(_) => ErrorSeverity::Warning,            ConfigError::SerializationError(_) => ErrorSeverity::Warning,            ConfigError::LockError => ErrorSeverity::Error,            ConfigError::InvalidConfig(_) => ErrorSeverity::Warning,            ConfigError::ValidationFailed(_, _) => ErrorSeverity::Warning,        };                let context = ErrorContext {            component: "configuration".to_string(),            operation: "config_operation".to_string(),            timestamp: chrono::Utc::now(),            details: None,        };                Self::Config {            message: err.to_string(),            severity,            recovery: RecoveryAction::Fallback {                 description: "Using default configuration".to_string()             },            context,        }    }}impl From<std::io::Error> for RustPodsError {    fn from(err: std::io::Error) -> Self {        let severity = match err.kind() {            std::io::ErrorKind::NotFound => ErrorSeverity::Warning,            std::io::ErrorKind::PermissionDenied => ErrorSeverity::Error,            _ => ErrorSeverity::Error,        };                Self::System {            message: format!("I/O error: {}", err),            severity,            recovery: RecoveryAction::None,            context: ErrorContext {                component: "filesystem".to_string(),                operation: "io_operation".to_string(),                timestamp: chrono::Utc::now(),                details: Some(format!("Error kind: {:?}", err.kind())),            },        }    }}// Helper types for error handling/// Result type alias using RustPodsErrorpub type Result<T> = std::result::Result<T, RustPodsError>;/// Error manager for handling errors and recovery#[derive(Default)]pub struct ErrorManager {    /// Last error that occurred    last_error: Option<RustPodsError>,    /// Error history for diagnostics    error_history: Vec<(chrono::DateTime<chrono::Utc>, RustPodsError)>,    /// Maximum number of errors to keep in history    max_history: usize,}impl ErrorManager {    /// Create a new error manager    pub fn new() -> Self {        Self {            last_error: None,            error_history: Vec::new(),            max_history: 50,        }    }        /// Handle an error, logging it and attempting recovery    pub async fn handle_error(&mut self, error: RustPodsError) -> bool {        // Log the error        error.log();                // Store in error history        self.add_to_history(error.clone());                // Attempt recovery        match error.try_recover().await {            Ok(true) => {                log::info!("Successfully recovered from error: {}", error);                true            },            Ok(false) => {                log::warn!("No recovery possible for error: {}", error);                false            },            Err(e) => {                log::error!("Recovery attempt failed with error: {}", e);                false            }        }    }        /// Add an error to the history    fn add_to_history(&mut self, error: RustPodsError) {        self.last_error = Some(error.clone());        self.error_history.push((chrono::Utc::now(), error));                // Trim history if needed        if self.error_history.len() > self.max_history {            self.error_history.remove(0);        }    }        /// Get the last error    pub fn last_error(&self) -> Option<&RustPodsError> {        self.last_error.as_ref()    }        /// Get error history    pub fn error_history(&self) -> &[(chrono::DateTime<chrono::Utc>, RustPodsError)] {        &self.error_history    }        /// Clear error history    pub fn clear_history(&mut self) {        self.error_history.clear();    }        /// Get error statistics    pub fn error_stats(&self) -> ErrorStats {        let mut stats = ErrorStats::default();                for (_, error) in &self.error_history {            match error {                RustPodsError::Bluetooth { .. } => stats.bluetooth_errors += 1,                RustPodsError::BluetoothApi(_) => stats.bluetooth_errors += 1,                RustPodsError::AirPods { .. } => stats.airpods_errors += 1,                RustPodsError::Ui { .. } => stats.ui_errors += 1,                RustPodsError::Config { .. } => stats.config_errors += 1,                RustPodsError::Application { .. } => stats.app_errors += 1,                RustPodsError::DeviceNotFound { .. } => stats.device_errors += 1,                RustPodsError::BatteryMonitor { .. } => stats.battery_errors += 1,                RustPodsError::System { .. } => stats.system_errors += 1,                RustPodsError::StatePersistence { .. } => stats.persistence_errors += 1,                RustPodsError::Lifecycle { .. } => stats.lifecycle_errors += 1,            }                        match error.severity() {                ErrorSeverity::Critical => stats.critical_errors += 1,                ErrorSeverity::Error => stats.error_level_errors += 1,                ErrorSeverity::Recoverable => stats.recoverable_errors += 1,                ErrorSeverity::Warning => stats.warnings += 1,            }        }                stats    }}/// Error statistics for diagnostic purposes#[derive(Debug, Default, Clone)]pub struct ErrorStats {    /// Total number of errors    pub total_errors: u32,    /// Number of Bluetooth-related errors    pub bluetooth_errors: u32,    /// Number of AirPods-related errors    pub airpods_errors: u32,    /// Number of UI-related errors    pub ui_errors: u32,    /// Number of configuration errors    pub config_errors: u32,    /// Number of general application errors    pub app_errors: u32,    /// Number of device-related errors    pub device_errors: u32,    /// Number of battery monitoring errors    pub battery_errors: u32,    /// Number of system integration errors    pub system_errors: u32,    /// Number of state persistence errors    pub persistence_errors: u32,    /// Number of lifecycle errors    pub lifecycle_errors: u32,    /// Number of critical errors    pub critical_errors: u32,    /// Number of regular errors    pub error_level_errors: u32,    /// Number of recoverable errors    pub recoverable_errors: u32,    /// Number of warnings    pub warnings: u32,} 
+//! Error management for the RustPods application
+
+use std::collections::HashMap;
+use chrono::{DateTime, Utc};
+use thiserror::Error;
+use crate::bluetooth::BleError;
+
+/// Maximum number of errors to keep in history
+const MAX_ERROR_HISTORY: usize = 100;
+
+/// Error severity levels
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ErrorSeverity {
+    /// Critical errors that prevent core functionality
+    Critical,
+    /// Major errors that significantly impact functionality
+    Major,
+    /// Minor errors with limited impact
+    Minor,
+    /// Warnings that don't impact functionality
+    Warning,
+    /// General error level
+    Error,
+    /// Recoverable errors
+    Recoverable,
+}
+
+/// Main error type for the application
+#[derive(Debug, Clone, Error)]
+pub enum RustPodsError {
+    /// Bluetooth related errors
+    #[error("Bluetooth error: {0}")]
+    Bluetooth(String),
+    
+    /// Configuration related errors
+    #[error("Configuration error: {0}")]
+    Config(String),
+    
+    /// UI related errors
+    #[error("UI error: {0}")]
+    Ui(String),
+    
+    /// System related errors
+    #[error("System error: {0}")]
+    System(String),
+    
+    /// State management errors
+    #[error("State error: {0}")]
+    State(String),
+    
+    /// Device related errors
+    #[error("Device error: {0}")]
+    Device(String),
+    
+    /// General errors
+    #[error("{0}")]
+    General(String),
+
+    /// Configuration error
+    #[error("Configuration error: {0}")]
+    ConfigError(String),
+    
+    /// UI error without message
+    #[error("UI error occurred")]
+    UiError,
+    
+    /// Bluetooth API error
+    #[error("Bluetooth API error: {0}")]
+    BluetoothApiError(BleError),
+    
+    /// Device not found error
+    #[error("Device not found")]
+    DeviceNotFound,
+    
+    /// Application error
+    #[error("Application error: {0}")]
+    Application(String),
+    
+    /// AirPods specific error
+    #[error("AirPods error: {0}")]
+    AirPods(String),
+    
+    /// Battery monitor error
+    #[error("Battery monitoring error: {0}")]
+    BatteryMonitor(String),
+    
+    /// Battery monitor error
+    #[error("Battery monitoring error: {0}")]
+    BatteryMonitorError(String),
+    
+    /// State persistence error
+    #[error("State persistence error: {0}")]
+    StatePersistence(String),
+    
+    /// Lifecycle management error
+    #[error("Lifecycle error: {0}")]
+    Lifecycle(String),
+}
+
+/// Recovery action to take for an error
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RecoveryAction {
+    /// No recovery action is needed
+    None,
+    /// Retry the operation
+    Retry,
+    /// Restart the application component
+    Restart,
+    /// Reset the configuration
+    ResetConfig,
+    /// Notify the user
+    NotifyUser,
+}
+
+/// Error statistics
+#[derive(Debug, Clone, Default)]
+pub struct ErrorStats {
+    /// Total number of errors
+    pub total: usize,
+    /// Errors by severity
+    pub by_severity: HashMap<ErrorSeverity, usize>,
+    /// Errors by type
+    pub by_type: HashMap<String, usize>,
+    /// First error timestamp
+    pub first_error: Option<DateTime<Utc>>,
+    /// Last error timestamp
+    pub last_error: Option<DateTime<Utc>>,
+    /// Total errors count
+    pub total_errors: usize,
+    /// Bluetooth specific errors
+    pub bluetooth_errors: usize,
+    /// AirPods specific errors
+    pub airpods_errors: usize,
+    /// UI related errors
+    pub ui_errors: usize,
+    /// Configuration errors
+    pub config_errors: usize,
+    /// Application errors
+    pub app_errors: usize,
+    /// Device errors
+    pub device_errors: usize,
+    /// Battery errors
+    pub battery_errors: usize,
+    /// System errors
+    pub system_errors: usize,
+    /// Persistence errors
+    pub persistence_errors: usize,
+    /// Lifecycle errors
+    pub lifecycle_errors: usize,
+    /// Critical errors
+    pub critical_errors: usize,
+    /// Error level errors
+    pub error_level_errors: usize,
+    /// Recoverable errors
+    pub recoverable_errors: usize,
+    /// Warnings
+    pub warnings: usize,
+}
+
+/// Error record for the history
+#[derive(Debug, Clone)]
+struct ErrorRecord {
+    /// The error that occurred
+    error: RustPodsError,
+    /// Severity of the error
+    severity: ErrorSeverity,
+    /// Timestamp when the error occurred
+    timestamp: DateTime<Utc>,
+    /// Component where the error occurred
+    component: String,
+    /// Recovery action to take
+    recovery_action: RecoveryAction,
+}
+
+/// Error manager for tracking and reporting errors
+pub struct ErrorManager {
+    /// Error history
+    history: Vec<RustPodsError>,
+    /// Error statistics
+    stats: ErrorStats,
+}
+
+impl ErrorManager {
+    /// Create a new ErrorManager
+    pub fn new() -> Self {
+        Self {
+            history: Vec::new(),
+            stats: ErrorStats::default(),
+        }
+    }
+    
+    /// Add an error to the history
+    pub fn add_to_history(&mut self, error: RustPodsError) {
+        // Update statistics
+        self.stats.total += 1;
+        
+        // Update by severity
+        let count = self.stats.by_severity
+            .entry(error.severity())
+            .or_insert(0);
+        *count += 1;
+        
+        // Update by type
+        let error_type = match &error {
+            RustPodsError::Bluetooth(_) => "bluetooth",
+            RustPodsError::BluetoothApiError(_) => "bluetooth",
+            RustPodsError::Config(_) => "config",
+            RustPodsError::ConfigError(_) => "config",
+            RustPodsError::Ui(_) => "ui",
+            RustPodsError::UiError => "ui",
+            RustPodsError::System(_) => "system",
+            RustPodsError::State(_) => "state",
+            RustPodsError::Device(_) => "device",
+            RustPodsError::DeviceNotFound => "device",
+            RustPodsError::General(_) => "general",
+            RustPodsError::Application(_) => "application",
+            RustPodsError::AirPods(_) => "airpods",
+            RustPodsError::BatteryMonitor(_) => "battery",
+            RustPodsError::BatteryMonitorError(_) => "battery",
+            RustPodsError::StatePersistence(_) => "state",
+            RustPodsError::Lifecycle(_) => "lifecycle",
+        };
+        
+        let count = self.stats.by_type.entry(error_type.to_string()).or_insert(0);
+        *count += 1;
+        
+        // Update timestamps
+        if self.stats.first_error.is_none() {
+            self.stats.first_error = Some(Utc::now());
+        }
+        self.stats.last_error = Some(Utc::now());
+        
+        // Add to history (limiting size to prevent memory bloat)
+        const MAX_HISTORY_SIZE: usize = 100;
+        if self.history.len() >= MAX_HISTORY_SIZE {
+            self.history.remove(0); // Remove oldest error
+        }
+        self.history.push(error);
+    }
+    
+    /// Record an error
+    pub fn record_error(&mut self, error: &RustPodsError) {
+        self.add_to_history(error.clone());
+    }
+    
+    /// Get error history
+    pub fn get_error_history(&self) -> &Vec<RustPodsError> {
+        &self.history
+    }
+    
+    /// Get error statistics
+    pub fn get_stats(&self) -> ErrorStats {
+        self.stats.clone()
+    }
+    
+    /// Clear error history
+    pub fn clear_history(&mut self) {
+        self.history.clear();
+    }
+    
+    /// Reset statistics
+    pub fn reset_stats(&mut self) {
+        self.stats = ErrorStats::default();
+    }
+}
+
+impl Default for ErrorManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RustPodsError {
+    /// Get the severity level of the error
+    pub fn severity(&self) -> ErrorSeverity {
+        match self {
+            RustPodsError::Bluetooth(_) => ErrorSeverity::Major,
+            RustPodsError::Config(_) => ErrorSeverity::Minor,
+            RustPodsError::Ui(_) => ErrorSeverity::Minor,
+            RustPodsError::System(_) => ErrorSeverity::Critical,
+            RustPodsError::State(_) => ErrorSeverity::Major,
+            RustPodsError::Device(_) => ErrorSeverity::Major,
+            RustPodsError::General(_) => ErrorSeverity::Minor,
+            RustPodsError::ConfigError(_) => ErrorSeverity::Minor,
+            RustPodsError::UiError => ErrorSeverity::Minor,
+            RustPodsError::BluetoothApiError(_) => ErrorSeverity::Major,
+            RustPodsError::DeviceNotFound => ErrorSeverity::Minor,
+            RustPodsError::Application(_) => ErrorSeverity::Major,
+            RustPodsError::AirPods(_) => ErrorSeverity::Minor,
+            RustPodsError::BatteryMonitor(_) => ErrorSeverity::Minor,
+            RustPodsError::BatteryMonitorError(_) => ErrorSeverity::Minor,
+            RustPodsError::StatePersistence(_) => ErrorSeverity::Major,
+            RustPodsError::Lifecycle(_) => ErrorSeverity::Critical,
+        }
+    }
+    
+    /// Create a UI error
+    pub fn ui(message: impl Into<String>, severity: ErrorSeverity) -> Self {
+        RustPodsError::Ui(message.into())
+    }
+    
+    /// Create a system error
+    pub fn system(message: impl Into<String>, severity: ErrorSeverity) -> Self {
+        RustPodsError::System(message.into())
+    }
+    
+    /// Create an application error
+    pub fn application(message: impl Into<String>) -> Self {
+        RustPodsError::Application(message.into())
+    }
+}
+
+// Add From implementation for BleError
+impl From<BleError> for RustPodsError {
+    fn from(error: BleError) -> Self {
+        match error {
+            BleError::AdapterNotFound => 
+                RustPodsError::Bluetooth("Bluetooth adapter not found".to_string()),
+            BleError::ScanInProgress => 
+                RustPodsError::Bluetooth("Bluetooth scan already in progress".to_string()),
+            BleError::ScanNotStarted => 
+                RustPodsError::Bluetooth("Bluetooth scan not started".to_string()),
+            BleError::AdapterNotInitialized => 
+                RustPodsError::Bluetooth("Bluetooth adapter not initialized".to_string()),
+            BleError::DeviceNotFound => 
+                RustPodsError::DeviceNotFound,
+            BleError::InvalidData => 
+                RustPodsError::Bluetooth("Invalid Bluetooth data received".to_string()),
+            BleError::Timeout => 
+                RustPodsError::Bluetooth("Bluetooth operation timed out".to_string()),
+            BleError::BtlePlugError(msg) => 
+                RustPodsError::Bluetooth(format!("Bluetooth API error: {}", msg)),
+            BleError::Other(msg) => 
+                RustPodsError::Bluetooth(msg),
+        }
+    }
+} 

@@ -8,7 +8,7 @@
 //! - Startup visibility options
 
 use iced::{Point, Rectangle, window, Command};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::ui::Message;
@@ -39,11 +39,11 @@ impl From<Rectangle> for WindowPosition {
     }
 }
 
-impl Into<Rectangle> for WindowPosition {
-    fn into(self) -> Rectangle {
+impl From<WindowPosition> for Rectangle {
+    fn from(val: WindowPosition) -> Self {
         Rectangle::new(
-            Point::new(self.x, self.y),
-            iced::Size::new(self.width, self.height),
+            Point::new(val.x, val.y),
+            iced::Size::new(val.width, val.height),
         )
     }
 }

@@ -7,8 +7,8 @@ use crate::ui::UiComponent;
 use crate::ui::components::settings_view::SettingsView;
 
 use iced::{
-    widget::{button, column, container, row, scrollable, text, Column, Container, Rule, rule, space},
-    Element, Length, Padding, Alignment, Background, Color
+    widget::{button, column, container, row, scrollable, text},
+    Element, Length, Alignment, Color
 };
 
 /// Represents the settings window of the application

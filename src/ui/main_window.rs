@@ -2,17 +2,16 @@
 //! 
 //! Implements the main UI window component with device list and battery status display.
 
-use std::sync::Arc;
 use iced::{
-    widget::{button, column, container, row, text, tooltip, scrollable, vertical_space},
-    Element, Length, Command, alignment, Alignment
+    widget::{button, column, container, row, text, scrollable},
+    Element, Length, Command, Alignment
 };
 use iced::alignment::Horizontal;
 
 use crate::bluetooth::DiscoveredDevice;
-use crate::airpods::{AirPodsType, DetectedAirPods, AirPodsBattery};
-use crate::ui::components::{battery_display_row, battery_icon_display, battery_with_label};
-use crate::ui::components::{ConnectionStatusWrapper, RealTimeBatteryDisplay};
+use crate::airpods::{DetectedAirPods, AirPodsBattery};
+use crate::ui::components::{battery_display_row, battery_with_label};
+use crate::ui::components::ConnectionStatusWrapper;
 use crate::ui::Message;
 use crate::ui::theme::Theme;
 use crate::config::AppConfig;
@@ -38,6 +37,12 @@ pub struct MainWindow {
     
     /// Whether advanced display mode is enabled
     pub advanced_display_mode: bool,
+}
+
+impl Default for MainWindow {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MainWindow {
@@ -78,7 +83,7 @@ impl MainWindow {
     
     /// Toggle advanced display mode and return a command
     pub fn toggle_display_mode(&mut self) -> Command<Message> {
-        self.toggle_advanced_display();
+        let _ = self.toggle_advanced_display();
         Command::none()
     }
     
@@ -327,8 +332,7 @@ impl MainWindow {
     
     /// Render a device item in the list
     fn render_device_item(&self, device: &DiscoveredDevice) -> Element<Message, iced::Renderer<Theme>> {
-        let device_name = device.name.as_ref()
-            .map(|s| s.clone())
+        let device_name = device.name.clone()
             .unwrap_or_else(|| "Unknown Device".to_string());
         let address = device.address.to_string();
         

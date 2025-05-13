@@ -27,13 +27,13 @@ pub mod settings_ui_tests;
 // is compiled as a separate test binary by default, even when there's a mod.rs file.
 // The mod.rs file imports allow us to share utilities and helpers across test binaries. 
 
-//! RustPods Test Suite
-//! This file organizes all test modules
+/// RustPods Test Suite
+/// This file organizes all test modules
 
-// Include common test helpers
-mod test_helpers;
+#[path = "test_helpers.rs"]
+pub mod test_helpers;
 
-// Test modules
+// Other test modules
 mod form_validation_tests;
 mod window_visibility_tests;
 mod system_tray_tests;

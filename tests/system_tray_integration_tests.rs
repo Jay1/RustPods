@@ -4,11 +4,11 @@
 use std::sync::Arc;
 
 use rustpods::ui::test_helpers::{
-    MockSystemTray, create_test_battery, create_test_state_manager, create_test_config
+    MockSystemTray, ThemeMode, TrayIconType, create_test_battery, create_test_state_manager, create_test_config
 };
 use rustpods::ui::Message;
-use rustpods::config::AppConfig;
-use rustpods::bluetooth::AirPodsBatteryStatus;
+use rustpods::config::{AppConfig, Theme as ConfigTheme};
+use rustpods::bluetooth::{AirPodsBatteryStatus, AirPodsBattery, AirPodsCharging};
 
 /// Test system tray update with battery status
 #[test]
@@ -30,6 +30,11 @@ fn test_system_tray_battery_update() {
     
     // Verify the action was recorded
     assert!(tray.actions.contains(&"update_battery".to_string()));
+    
+    // Verify the tooltip was updated
+    assert!(tray.tooltip.contains("Left: 75%"));
+    assert!(tray.tooltip.contains("Right: 80%"));
+    assert!(tray.tooltip.contains("Case: 90%"));
 }
 
 /// Test system tray menu item clicks
@@ -42,6 +47,21 @@ fn test_system_tray_menu_clicks() {
     let message = tray.process_click("Show");
     assert!(message.is_some());
     assert!(matches!(message.unwrap(), Message::ShowWindow));
+    
+    // Test the "Hide" menu item
+    let message = tray.process_click("Hide");
+    assert!(message.is_some());
+    assert!(matches!(message.unwrap(), Message::HideWindow));
+    
+    // Test the "Start Scan" menu item
+    let message = tray.process_click("Start Scan");
+    assert!(message.is_some());
+    assert!(matches!(message.unwrap(), Message::StartScan));
+    
+    // Test the "Stop Scan" menu item
+    let message = tray.process_click("Stop Scan");
+    assert!(message.is_some());
+    assert!(matches!(message.unwrap(), Message::StopScan));
     
     // Test the "Settings" menu item
     let message = tray.process_click("Settings");
@@ -58,11 +78,14 @@ fn test_system_tray_menu_clicks() {
     assert!(message.is_none());
     
     // Verify actions were recorded
-    assert_eq!(tray.actions.len(), 4);
+    assert_eq!(tray.actions.len(), 7);
     assert_eq!(tray.actions[0], "click: Show");
-    assert_eq!(tray.actions[1], "click: Settings");
-    assert_eq!(tray.actions[2], "click: Exit");
-    assert_eq!(tray.actions[3], "click: Unknown");
+    assert_eq!(tray.actions[1], "click: Hide");
+    assert_eq!(tray.actions[2], "click: Start Scan");
+    assert_eq!(tray.actions[3], "click: Stop Scan");
+    assert_eq!(tray.actions[4], "click: Settings");
+    assert_eq!(tray.actions[5], "click: Exit");
+    assert_eq!(tray.actions[6], "click: Unknown");
 }
 
 /// Test system tray connection status updates
@@ -73,6 +96,7 @@ fn test_system_tray_connection_update() {
     
     // Verify initial state
     assert!(!tray.is_connected);
+    assert_eq!(tray.icon_type, TrayIconType::Disconnected);
     
     // Update connection status to true
     tray.update_connection(true);
@@ -81,9 +105,256 @@ fn test_system_tray_connection_update() {
     // Update connection status to false
     tray.update_connection(false);
     assert!(!tray.is_connected);
+    assert_eq!(tray.icon_type, TrayIconType::Disconnected);
     
     // Verify actions were recorded
     assert_eq!(tray.actions.len(), 2);
     assert_eq!(tray.actions[0], "update_connection: true");
     assert_eq!(tray.actions[1], "update_connection: false");
+}
+
+/// Test system tray icon updates based on battery level
+#[test]
+fn test_system_tray_icon_updates() {
+    // Create test components
+    let mut tray = MockSystemTray::new();
+    
+    // Test normal battery levels
+    let normal_battery = AirPodsBatteryStatus {
+        battery: AirPodsBattery {
+            left: Some(75),
+            right: Some(80),
+            case: Some(90),
+        },
+        charging: AirPodsCharging {
+            left: false,
+            right: false,
+            case: false,
+        },
+    };
+    
+    tray.update_battery(normal_battery.clone());
+    assert_eq!(tray.icon_type, TrayIconType::BatteryLevel(75));
+    
+    // Test low battery levels
+    let low_battery = AirPodsBatteryStatus {
+        battery: AirPodsBattery {
+            left: Some(15),
+            right: Some(25),
+            case: Some(50),
+        },
+        charging: AirPodsCharging {
+            left: false,
+            right: false,
+            case: false,
+        },
+    };
+    
+    tray.update_battery(low_battery.clone());
+    assert_eq!(tray.icon_type, TrayIconType::LowBattery);
+    
+    // Test charging state
+    let charging_battery = AirPodsBatteryStatus {
+        battery: AirPodsBattery {
+            left: Some(45),
+            right: Some(50),
+            case: Some(70),
+        },
+        charging: AirPodsCharging {
+            left: true,
+            right: false,
+            case: true,
+        },
+    };
+    
+    tray.update_battery(charging_battery.clone());
+    assert_eq!(tray.icon_type, TrayIconType::Charging);
+    
+    // Verify that updates are recorded
+    assert!(tray.actions.contains(&"update_icon: BatteryLevel(75)".to_string()));
+    assert!(tray.actions.contains(&"update_icon: LowBattery".to_string()));
+    assert!(tray.actions.contains(&"update_icon: Charging".to_string()));
+}
+
+/// Test low battery notifications
+#[test]
+fn test_low_battery_notifications() {
+    // Create test components
+    let mut tray = MockSystemTray::new();
+    tray.low_battery_threshold = 20;
+    
+    // Test normal battery levels (no notifications)
+    let normal_battery = AirPodsBatteryStatus {
+        battery: AirPodsBattery {
+            left: Some(75),
+            right: Some(80),
+            case: Some(90),
+        },
+        charging: AirPodsCharging {
+            left: false,
+            right: false,
+            case: false,
+        },
+    };
+    
+    tray.update_battery(normal_battery.clone());
+    assert_eq!(tray.notifications.len(), 0);
+    
+    // Test low battery levels (should trigger notifications)
+    let low_battery = AirPodsBatteryStatus {
+        battery: AirPodsBattery {
+            left: Some(15),
+            right: Some(18),
+            case: Some(50),
+        },
+        charging: AirPodsCharging {
+            left: false,
+            right: false,
+            case: false,
+        },
+    };
+    
+    tray.update_battery(low_battery.clone());
+    assert_eq!(tray.notifications.len(), 2);
+    assert!(tray.notifications[0].contains("Left AirPod at 15%"));
+    assert!(tray.notifications[1].contains("Right AirPod at 18%"));
+    
+    // Test very low battery
+    let very_low_battery = AirPodsBatteryStatus {
+        battery: AirPodsBattery {
+            left: Some(5),
+            right: Some(7),
+            case: Some(10),
+        },
+        charging: AirPodsCharging {
+            left: false,
+            right: false,
+            case: false,
+        },
+    };
+    
+    tray.update_battery(very_low_battery.clone());
+    assert_eq!(tray.notifications.len(), 5);
+    assert!(tray.notifications[2].contains("Left AirPod at 5%"));
+    assert!(tray.notifications[3].contains("Right AirPod at 7%"));
+    assert!(tray.notifications[4].contains("Case at 10%"));
+}
+
+/// Test tooltip format with battery information
+#[test]
+fn test_tooltip_format() {
+    // Create test components
+    let mut tray = MockSystemTray::new();
+    
+    // Test normal battery update
+    let battery = AirPodsBatteryStatus {
+        battery: AirPodsBattery {
+            left: Some(75),
+            right: Some(80),
+            case: Some(90),
+        },
+        charging: AirPodsCharging {
+            left: false,
+            right: false,
+            case: false,
+        },
+    };
+    
+    tray.update_battery(battery.clone());
+    assert!(tray.tooltip.contains("RustPods"));
+    assert!(tray.tooltip.contains("75%"));
+    assert!(tray.tooltip.contains("Left: 75%"));
+    assert!(tray.tooltip.contains("Right: 80%"));
+    assert!(tray.tooltip.contains("Case: 90%"));
+    
+    // Test partial information
+    let partial_battery = AirPodsBatteryStatus {
+        battery: AirPodsBattery {
+            left: Some(65),
+            right: None,
+            case: Some(85),
+        },
+        charging: AirPodsCharging {
+            left: false,
+            right: false,
+            case: false,
+        },
+    };
+    
+    tray.update_battery(partial_battery.clone());
+    assert!(tray.tooltip.contains("Left: 65%"));
+    assert!(tray.tooltip.contains("Right: N/A"));
+    assert!(tray.tooltip.contains("Case: 85%"));
+}
+
+/// Test theme changes affecting tray appearance
+#[test]
+fn test_theme_changes() {
+    // Create test components
+    let mut tray = MockSystemTray::new();
+    
+    // Default theme
+    assert_eq!(tray.theme_mode, ThemeMode::Dark);
+    
+    // Update to light theme
+    tray.update_theme(ThemeMode::Light);
+    assert_eq!(tray.theme_mode, ThemeMode::Light);
+    
+    // Update to system theme
+    tray.update_theme(ThemeMode::System);
+    assert_eq!(tray.theme_mode, ThemeMode::System);
+    
+    // Verify action records
+    assert!(tray.actions.contains(&"update_theme: Light".to_string()));
+    assert!(tray.actions.contains(&"update_theme: System".to_string()));
+    
+    // Test config-based theme updates
+    let mut config = create_test_config();
+    
+    // Update config theme
+    config.ui.theme = ConfigTheme::Light;
+    tray.update_config(&config);
+    assert_eq!(tray.theme_mode, ThemeMode::Light);
+    
+    config.ui.theme = ConfigTheme::Dark;
+    tray.update_config(&config);
+    assert_eq!(tray.theme_mode, ThemeMode::Dark);
+    
+    config.ui.theme = ConfigTheme::System;
+    tray.update_config(&config);
+    assert_eq!(tray.theme_mode, ThemeMode::System);
+}
+
+/// Test show percentage in tray setting
+#[test]
+fn test_percentage_in_tray() {
+    // Create test components
+    let mut tray = MockSystemTray::new();
+    
+    // Update with battery
+    let battery = AirPodsBatteryStatus {
+        battery: AirPodsBattery {
+            left: Some(65),
+            right: Some(70),
+            case: Some(80),
+        },
+        charging: AirPodsCharging {
+            left: false,
+            right: false,
+            case: false,
+        },
+    };
+    
+    // Default show percentage is true
+    tray.update_battery(battery.clone());
+    assert!(tray.tooltip.contains("RustPods - 65%"));
+    
+    // Turn off show percentage
+    let mut config = create_test_config();
+    config.ui.show_percentage_in_tray = false;
+    tray.update_config(&config);
+    
+    // Update with same battery
+    tray.update_battery(battery);
+    assert!(!tray.tooltip.contains("65%\nLeft"));
 } 

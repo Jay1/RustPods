@@ -1,21 +1,17 @@
 //! UI application using the improved state management architecture
 
-use iced::widget::{text, Column};
-use iced::{Settings, Subscription, Application, Element, Command};
+use iced::{Subscription, Application, Element, Command};
 use iced::window;
 use tokio::sync::mpsc;
 use std::{thread, sync::Arc, time::Duration};
 use std::sync::Mutex;
 
 use crate::ui::{Message, UiComponent, MainWindow, SettingsWindow};
-use crate::ui::components::RealTimeBatteryDisplay;
 use crate::ui::system_tray_controller::SystemTrayController;
-use crate::ui::state_manager::{StateManager, Action, DeviceState, UiState};
+use crate::ui::state_manager::StateManager;
 use crate::ui::window_visibility::{WindowVisibilityManager, WindowPosition};
 use crate::ui::theme::Theme;
-use crate::config::AppConfig;
 // Import the AppController from the appropriate path
-use crate::app_controller::AppController;
 
 /// State-based application implementation with improved state management
 pub struct StateApp {
@@ -49,7 +45,7 @@ impl Application for StateApp {
         let state_manager = flags;
         
         // Get current state
-        let device_state = state_manager.get_device_state();
+        let _device_state = state_manager.get_device_state();
         let ui_state = state_manager.get_ui_state();
         let config = state_manager.get_config();
         
@@ -123,7 +119,7 @@ impl Application for StateApp {
             Message::Exit => {
                 // Cleanup and exit
                 if let Some(controller) = &mut self.system_tray_controller {
-                    controller.stop();
+                    let _ = controller.stop();
                 }
                 
                 // Save settings before exit
@@ -148,12 +144,12 @@ impl Application for StateApp {
             // Initialize system tray controller if it doesn't exist
             Message::InitializeSystemTray(tx) => {
                 // Create the system tray controller with the state manager
-                let config = self.state_manager.get_config();
+                let _config = self.state_manager.get_config();
                 
                 // Create controller and start it
                 match SystemTrayController::new(
                     tx,
-                    config.clone(),
+                    _config.clone(),
                     Arc::clone(&self.state_manager)
                 ) {
                     Ok(mut controller) => {
@@ -243,7 +239,7 @@ impl Application for StateApp {
 /// Run the state-based UI application
 pub fn run_state_ui() -> Result<(), iced::Error> {
     // Initialize logging if not already initialized
-    if let Err(_) = env_logger::try_init() {
+    if env_logger::try_init().is_err() {
         // Logging already initialized
     }
     
@@ -259,7 +255,7 @@ pub fn run_state_ui() -> Result<(), iced::Error> {
     // Create lifecycle manager with appropriate auto-save interval based on config
     let config = state_manager.get_config();
     let auto_save_interval = match config.system.auto_save_interval {
-        Some(seconds) if seconds >= 60 => Duration::from_secs(seconds as u64),
+        Some(seconds) if seconds >= 60 => Duration::from_secs(seconds),
         _ => Duration::from_secs(300), // Default 5 minutes
     };
     
@@ -279,9 +275,7 @@ pub fn run_state_ui() -> Result<(), iced::Error> {
         }
     }
     
-    // Create a separate thread for the AppStateController
-    let state_manager_clone = Arc::clone(&state_manager);
-    let controller_thread = thread::spawn(move || {
+        // Create a separate thread for the AppStateController    let _state_manager_clone = Arc::clone(&state_manager);    let controller_thread = thread::spawn(move || {
         // Create a tokio runtime for the controller
         let runtime = match tokio::runtime::Runtime::new() {
             Ok(rt) => rt,
@@ -353,7 +347,7 @@ pub fn run_state_ui() -> Result<(), iced::Error> {
     
     // Join controller thread (will only happen if UI has exited)
     if controller_thread.is_finished() {
-        if let Err(e) = controller_thread.join() {
+        if let Err(_e) = controller_thread.join() {
             log::error!("Failed to join controller thread: thread panicked");
         }
     } else {

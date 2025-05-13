@@ -89,9 +89,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let nearby_airpods = scanner_clone.get_filtered_airpods(&airpods_nearby_filter(-70));
                     
                     // Custom filter: AirPods 3 with strong signal
-                    let custom_filter = AirPodsFilter::new()
+                    let custom_filter = rustpods::airpods::AirPodsFilterOptions::new()
                         .with_models(vec![AirPodsType::AirPods3])
-                        .with_min_rssi(-70);
+                        .with_min_rssi(-70)
+                        .create_filter_function();
                     
                     let custom_filtered = scanner_clone.get_filtered_airpods(&custom_filter);
                     

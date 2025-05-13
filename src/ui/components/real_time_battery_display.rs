@@ -3,10 +3,9 @@
 //! This component displays battery information with animations, color coding, and charging indicators.
 
 use iced::alignment;
-use iced::widget::{column, container, progress_bar, row, text, Space};
+use iced::widget::{column, container, progress_bar, row, text};
 use iced::{Color, Element, Length};
-use iced::theme;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use crate::ui::{Message, UiComponent};
 use crate::ui::theme::Theme;
@@ -246,8 +245,8 @@ impl RealTimeBatteryDisplay {
                              status.battery.charging.right || 
                              status.battery.charging.case;
                              
-            let is_low_battery = status.battery.left.map_or(false, |l| l <= 20) ||
-                                status.battery.right.map_or(false, |r| r <= 20);
+            let is_low_battery = status.battery.left.is_some_and(|l| l <= 20) ||
+                                status.battery.right.is_some_and(|r| r <= 20);
             
             let (status_text, _color) = if is_charging {
                 ("Charging", Color::from_rgb(0.2, 0.6, 0.8))
@@ -268,7 +267,7 @@ impl RealTimeBatteryDisplay {
             let update_text = if self.show_time_since_update {
                 self.get_time_since_update()
                     .map(|time| format!(" • Updated {}", time))
-                    .unwrap_or_else(String::new)
+                    .unwrap_or_default()
             } else {
                 String::new()
             };

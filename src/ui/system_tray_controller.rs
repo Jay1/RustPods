@@ -42,7 +42,7 @@ impl SystemTrayController {
         };
         
         // Connect state manager
-        let mut system_tray_ref = Arc::new(Mutex::new(system_tray));
+        let system_tray_ref = Arc::new(Mutex::new(system_tray));
         if let Ok(mut guard) = system_tray_ref.lock() {
             if let Err(e) = guard.connect_state_manager(Arc::clone(&state_manager)) {
                 return Err(format!("Failed to connect state manager: {}", e));
