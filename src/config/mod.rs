@@ -235,6 +235,48 @@ fn default_config_path() -> PathBuf {
     }
 }
 
+/// Load or create a configuration file
+pub fn load_or_create_config() -> Result<AppConfig, ConfigError> {
+    let config_path = default_config_path();
+    
+    // Ensure the parent directory exists before attempting any operations
+    if let Some(parent) = config_path.parent() {
+        if !parent.exists() {
+            info!("Creating config directory: {}", parent.display());
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                error!("Failed to create config directory: {}", e);
+                // Continue with default config, but in the current directory
+                return Ok(AppConfig::default());
+            }
+        }
+    }
+    
+    let manager = ConfigManager::new(&config_path, true);
+    
+    // Attempt to load the config file
+    if let Err(e) = manager.load() {
+        // If the error is because the file doesn't exist, that's ok
+        // We'll use defaults and save them below
+        if !config_path.exists() {
+            info!("Config file not found. Creating default configuration.");
+        } else {
+            // If there was another error loading the file, log it
+            error!("Error loading config file: {}", e);
+        }
+    }
+    
+    // Get the current configuration (either loaded or default)
+    let config = manager.get_config();
+    
+    // Save the config to ensure the file exists
+    if let Err(e) = manager.save() {
+        error!("Failed to save configuration: {}", e);
+        // We continue even if saving fails
+    }
+    
+    Ok(config)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

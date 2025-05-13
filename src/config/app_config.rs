@@ -187,6 +187,7 @@ pub struct BatteryConfig {
 /// UI theme
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum Theme {
     /// Light theme
     Light,
@@ -194,6 +195,7 @@ pub enum Theme {
     Dark,
     /// System theme (follows OS settings)
     #[serde(rename = "system")]
+    #[default]
     System,
 }
 
@@ -207,21 +209,18 @@ impl std::fmt::Display for Theme {
     }
 }
 
-impl Default for Theme {
-    fn default() -> Self {
-        Theme::System
-    }
-}
 
 /// Log level
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum LogLevel {
     /// Error level - only errors are logged
     Error,
     /// Warning level - warnings and errors are logged
     Warn,
     /// Info level - informational messages, warnings, and errors are logged
+    #[default]
     Info,
     /// Debug level - debug information and all above are logged
     Debug,
@@ -345,11 +344,6 @@ impl Default for BatteryConfig {
     }
 }
 
-impl Default for LogLevel {
-    fn default() -> Self {
-        LogLevel::Info
-    }
-}
 
 impl AppConfig {
     /// Convert to scan config for the bluetooth scanner
@@ -464,11 +458,14 @@ impl AppConfig {
         if let Some(parent) = path.parent() {
             if !parent.exists() {
                 log::debug!("Creating config directory: {:?}", parent);
-                fs::create_dir_all(parent)
-                    .map_err(|e| {
-                        log::error!("Failed to create config directory: {}", e);
-                        ConfigError::IoError(e)
-                    })?;
+                if let Err(e) = fs::create_dir_all(parent) {
+                    log::error!("Failed to create config directory: {}", e);
+                    
+                    // Fall back to current directory
+                    let fallback_path = std::path::PathBuf::from("settings.json");
+                    log::warn!("Falling back to current directory: {:?}", fallback_path);
+                    return self.save_to_path(fallback_path);
+                }
             }
         }
         
@@ -555,7 +552,7 @@ impl BluetoothConfig {
         
         // If min_rssi is set, it should be in a reasonable range (-100 to 0)
         if let Some(rssi) = self.min_rssi {
-            if rssi < -100 || rssi > 0 {
+            if !(-100..=0).contains(&rssi) {
                 return Err(ConfigError::ValidationFailed(
                     "min_rssi".to_string(),
                     format!("RSSI must be between -100 and 0, got {}", rssi)
@@ -596,7 +593,7 @@ impl UiConfig {
         
         // Auto-hide timeout should be reasonable if set
         if let Some(timeout) = self.auto_hide_timeout {
-            if timeout < 5 || timeout > 3600 {
+            if !(5..=3600).contains(&timeout) {
                 return Err(ConfigError::ValidationFailed(
                     "auto_hide_timeout".to_string(),
                     format!("Auto-hide timeout must be between 5 and 3600 seconds, got {}", timeout)
@@ -674,9 +671,20 @@ pub enum ConfigError {
 
 /// Get the default settings path
 fn default_settings_path() -> PathBuf {
-    dirs_next::config_dir()
-        .map(|config_dir| config_dir.join("rustpods").join("settings.json"))
-        .unwrap_or_else(|| PathBuf::from("settings.json")) // Fallback to current directory
+    let path = dirs_next::config_dir()
+        .map(|config_dir| {
+            let path = config_dir.join("rustpods").join("settings.json");
+            // Try to ensure the directory exists but don't fail if it doesn't
+            if let Some(parent) = path.parent() {
+                if !parent.exists() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+            }
+            path
+        })
+        .unwrap_or_else(|| PathBuf::from("settings.json")); // Fallback to current directory
+    
+    path
 }
 
 #[cfg(test)]
