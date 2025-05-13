@@ -36,7 +36,9 @@ So, I built this: an open-source application crafted with Rust 🦀, designed to
 
 ## 📥 Installation
 
-1. Download the latest release from the [Releases](https://github.com/yourusername/rustpods/releases) page
+> **Note:** Official releases are coming soon! The repository is currently in active development.
+
+1. Download the latest release from the [Releases](https://github.com/Jay1/RustPods/releases) page (coming soon)
 2. Extract the ZIP file to any location
 3. Run `RustPods.exe` - no installation required!
 
@@ -95,7 +97,7 @@ Visit our [documentation](docs/index.md) for detailed guides:
 
 ```sh
 # Clone the repository
-git clone https://github.com/yourusername/RustPods.git
+git clone https://github.com/Jay1/RustPods.git
 cd RustPods
 
 # Build the project
