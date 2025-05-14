@@ -61,32 +61,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             device.rssi);
                     }
                     
-                    // Use the cloned scanner here
-                    let _all_airpods = scanner_clone.get_filtered_airpods(&airpods_all_models_filter());
+                    // Use the cloned scanner here - properly await
+                    let _all_airpods = scanner_clone.get_filtered_airpods(&airpods_all_models_filter()).await;
                 }
                 BleEvent::AirPodsDetected(airpods) => {
                     println!("AirPods detected: {:?} ({:?})", 
                         airpods.name.unwrap_or_else(|| "Unknown".to_string()), 
                         airpods.device_type);
                     
-                    // Print battery info
-                    if let Some(left) = airpods.battery.left {
-                        println!("  Left battery: {}%", left);
-                    }
-                    if let Some(right) = airpods.battery.right {
-                        println!("  Right battery: {}%", right);
-                    }
-                    if let Some(case) = airpods.battery.case {
-                        println!("  Case battery: {}%", case);
+                    // Print battery info if available
+                    if let Some(battery) = &airpods.battery {
+                        if let Some(left) = battery.left {
+                            println!("  Left battery: {}%", left);
+                        }
+                        if let Some(right) = battery.right {
+                            println!("  Right battery: {}%", right);
+                        }
+                        if let Some(case) = battery.case {
+                            println!("  Case battery: {}%", case);
+                        }
                     }
                 }
                 BleEvent::ScanCycleCompleted { devices_found } => {
                     println!("\nScan cycle completed, {} devices found", devices_found);
                     
-                    // Get filtered devices
-                    let _all_airpods = scanner_clone.get_filtered_airpods(&airpods_all_models_filter());
-                    let pro_airpods = scanner_clone.get_filtered_airpods(&airpods_pro_filter());
-                    let nearby_airpods = scanner_clone.get_filtered_airpods(&airpods_nearby_filter(-70));
+                    // Get filtered devices - properly await each call
+                    let _all_airpods = scanner_clone.get_filtered_airpods(&airpods_all_models_filter()).await;
+                    let pro_airpods = scanner_clone.get_filtered_airpods(&airpods_pro_filter()).await;
+                    let nearby_airpods = scanner_clone.get_filtered_airpods(&airpods_nearby_filter(-70)).await;
                     
                     // Custom filter: AirPods 3 with strong signal
                     let custom_filter = rustpods::airpods::AirPodsFilterOptions::new()
@@ -94,7 +96,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .with_min_rssi(-70)
                         .create_filter_function();
                     
-                    let custom_filtered = scanner_clone.get_filtered_airpods(&custom_filter);
+                    let custom_filtered = scanner_clone.get_filtered_airpods(&custom_filter).await;
                     
                     // Display filter results
                     println!("  All AirPods: {} devices", _all_airpods.len());

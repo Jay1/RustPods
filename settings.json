@@ -1,0 +1,38 @@
+{
+  "bluetooth": {
+    "auto_scan_on_startup": true,
+    "scan_duration": 5,
+    "scan_interval": 30,
+    "min_rssi": -70,
+    "battery_refresh_interval": 10,
+    "auto_reconnect": true,
+    "reconnect_attempts": 3,
+    "adaptive_polling": true
+  },
+  "ui": {
+    "show_notifications": true,
+    "start_minimized": true,
+    "theme": "system",
+    "show_percentage_in_tray": true,
+    "show_low_battery_warning": true,
+    "low_battery_threshold": 20,
+    "remember_window_position": true,
+    "minimize_to_tray_on_close": true,
+    "minimize_on_blur": false,
+    "auto_hide_timeout": null
+  },
+  "system": {
+    "launch_at_startup": false,
+    "log_level": "info",
+    "enable_telemetry": false,
+    "auto_save_interval": 300,
+    "enable_crash_recovery": true
+  },
+  "battery": {
+    "low_threshold": 20,
+    "smoothing_enabled": true,
+    "change_threshold": 5,
+    "notify_low": true,
+    "notify_charged": true
+  }
+}

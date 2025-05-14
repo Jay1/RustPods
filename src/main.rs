@@ -12,12 +12,14 @@ pub mod state_persistence;
 pub mod logging;
 pub mod telemetry;
 pub mod diagnostics;
+pub mod assets;
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use std::path::PathBuf;
 
-use log::info;
-use error::{ErrorManager, RustPodsError};
+use log::{info, error};
+use error::{ErrorManager, RustPodsError, ErrorContext};
 use telemetry::TelemetryManager;
 use config::AppConfig;
 use ui::state_manager::StateManager;
@@ -38,13 +40,43 @@ enum AppCommand {
 }
 
 fn main() {
-    // Initialize logging first
-    logging::init_logger(&AppConfig::default()).expect("Failed to setup logging");
+    // Load or create a configuration file first to get logging settings
+    let config = match config::load_or_create_config() {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            eprintln!("Error loading configuration: {}", e);
+            AppConfig::default()
+        }
+    };
+    
+    // Initialize structured logging with config settings
+    let log_dir = dirs::data_local_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("RustPods")
+        .join("logs");
+    
+    let log_file = log_dir.join(format!("rustpods_{}.log", 
+        chrono::Local::now().format("%Y%m%d_%H%M%S")));
+    
+    if let Err(e) = logging::configure_logging(config.system.log_level, Some(log_file), true) {
+        eprintln!("Failed to setup logging: {}", e);
+    }
+    
+    // Create error context for application startup
+    let ctx = ErrorContext::new("Main", "startup")
+        .with_metadata("version", env!("CARGO_PKG_VERSION"));
     
     info!("RustPods v{} - Starting up application", env!("CARGO_PKG_VERSION"));
     
     // Create a Tokio runtime
-    let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
+    let rt = match tokio::runtime::Runtime::new() {
+        Ok(runtime) => runtime,
+        Err(e) => {
+            let ctx = ctx.with_metadata("error", e.to_string());
+            error!("Failed to create Tokio runtime: {}", e);
+            std::process::exit(1);
+        }
+    };
     
     // Run the main app code inside the runtime
     rt.block_on(async {
@@ -53,11 +85,20 @@ fn main() {
 }
 
 async fn main_async() {
+    // Create error context for async initialization
+    let ctx = ErrorContext::new("Main", "main_async")
+        .with_metadata("runtime", "tokio");
+    
     // Load or create a configuration file
     let config = match config::load_or_create_config() {
-        Ok(cfg) => cfg,
+        Ok(cfg) => {
+            info!("Configuration loaded successfully");
+            cfg
+        },
         Err(e) => {
-            eprintln!("Error loading configuration: {}", e);
+            let ctx = ctx.clone().with_metadata("error", e.to_string());
+            logging::log_error(&e, &ctx);
+            error!("Error loading configuration: {}", e);
             AppConfig::default()
         }
     };
@@ -67,28 +108,48 @@ async fn main_async() {
     
     // Create the state manager
     let state_manager = Arc::new(StateManager::new(ui_sender.clone()));
-
-    // Initialize error manager
-    let _error_manager = Arc::new(Mutex::new(ErrorManager::new()));
     
-    // Initialize telemetry manager
-    let _telemetry_manager = Arc::new(Mutex::new(TelemetryManager::new(&config)));
+    // Create error manager
+    let error_manager = Arc::new(Mutex::new(ErrorManager::new()));
+    
+    // Create telemetry manager
+    let telemetry_manager = Arc::new(Mutex::new(TelemetryManager::new(&config)));
+    
+    // Configure logger with settings from config
+    init_logging_from_config(&config);
+    
+    // Create performance logger
+    let perf_logger = logging::PerformanceLogger::new("Main", "application_runtime");
     
     // Create lifecycle manager
-    let mut lifecycle_manager = LifecycleManager::new(
-        Arc::clone(&state_manager),
-        ui_sender,
-    );
+    let lifecycle_manager = {
+        // Clone ctx for this lifecycle manager initialization block
+        let ctx = ctx.clone().with_metadata("component", "lifecycle_manager");
+        let mut manager = LifecycleManager::new(
+            state_manager.clone(),
+            ui_sender.clone()
+        );
+
+        // Start manager tasks
+        if let Err(e) = manager.start() {
+            logging::log_error(&e, &ctx);
+            error!("Failed to start lifecycle manager: {}", e);
+            panic!("Critical error: {}", e);
+        }
+        
+        manager
+    };
     
-    // Start the life cycle manager
-    if let Err(e) = lifecycle_manager.start() {
-        eprintln!("Failed to start lifecycle manager: {}", e);
-    }
+    // Start performance monitoring
+    let perf_logger = logging::PerformanceLogger::new("Main", "application_runtime");
     
     // Keep the application running
     loop {
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
+    
+    // This code is unreachable but shows we would log performance metrics
+    // perf_logger.finish();
 }
 
 fn parse_args() -> Result<AppCommand, String> {
@@ -175,7 +236,12 @@ async fn run_diagnostics(
     error_manager: Arc<Mutex<ErrorManager>>,
 ) -> Result<(), String> {
     // Create diagnostics manager
-    let mut diagnostics = diagnostics::DiagnosticsManager::new(config, error_manager);
+    let config_ref = match config.lock() {
+        Ok(guard) => Arc::new(guard.clone()),
+        Err(_) => return Err("Failed to lock config mutex".to_string()),
+    };
+    
+    let mut diagnostics = diagnostics::DiagnosticsManager::new(config_ref, error_manager);
     
     // Set to complete diagnostic level
     diagnostics.set_level(diagnostics::DiagnosticLevel::Complete);
@@ -232,18 +298,46 @@ fn handle_command_error<E>(
     operation: &str,
     error_manager: &Arc<Mutex<ErrorManager>>,
 ) where
-    E: std::fmt::Display,
+    E: std::fmt::Display + std::fmt::Debug,
 {
-    log::error!("Error while {}: {}", operation, error);
-    eprintln!("Error while {}: {}", operation, error);
+    // Create error context
+    let ctx = ErrorContext::new("CommandExecution", operation)
+        .with_metadata("operation", operation.to_string());
     
-    // Create a RustPodsError from the error string
-    let rustpods_error = RustPodsError::System(format!("Error during {}: {}", operation, error));
+    // Log the error with context
+    logging::log_error(&error, &ctx);
     
-    // Record in error manager
-    if let Ok(mut em) = error_manager.lock() {
-        em.record_error(&rustpods_error);
+    // Log to console as well
+    error!("Error while {}: {:?}", operation, error);
+    
+    // Register the error with the error manager
+    if let Ok(mut manager) = error_manager.lock() {
+        manager.register_error(RustPodsError::System(format!(
+            "Command execution error while {}: {}", 
+            operation, 
+            error
+        )));
+    } else {
+        // If we can't lock the error manager, just log the error
+        error!("Failed to lock error manager to register error: {:?}", error);
     }
+    
+    // Suggest recovery action based on the operation
+    let recovery_action = match operation {
+        "discovering Bluetooth adapters" => 
+            "Check if Bluetooth is enabled on your system and you have administrator privileges",
+        "scanning for devices" => 
+            "Ensure Bluetooth is enabled and try restarting the Bluetooth service",
+        "interval scanning" => 
+            "Check if there are any Bluetooth devices in range and try again",
+        "AirPods filtering" => 
+            "Make sure your AirPods are in pairing mode and try again",
+        _ => 
+            "Try running the command again or check system logs for more details",
+    };
+    
+    logging::log_error_with_recovery(&error, &ctx, recovery_action);
+    println!("Suggested action: {}", recovery_action);
 }
 
 fn print_usage() {
@@ -259,4 +353,28 @@ fn print_usage() {
     println!("  rustpods stateui        - Launch the UI application with new state management");
     println!("  rustpods diagnostic     - Run system diagnostics");
     println!("  rustpods help           - Show this help message");
+}
+
+/// Initialize logging from the application configuration
+fn init_logging_from_config(config: &AppConfig) {
+    let log_path = if config.system.log_to_file {
+        let mut path = PathBuf::from(&config.system.log_directory);
+        if !path.exists() {
+            match std::fs::create_dir_all(&path) {
+                Ok(_) => {},
+                Err(e) => {
+                    eprintln!("Failed to create log directory: {}", e);
+                    path = std::env::temp_dir();
+                }
+            }
+        }
+        path.push("rustpods.log");
+        Some(path)
+    } else {
+        None
+    };
+    
+    if let Err(e) = logging::configure_logging(config.system.log_level, log_path, true) {
+        eprintln!("Failed to configure logging: {}", e);
+    }
 }

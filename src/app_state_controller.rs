@@ -121,11 +121,14 @@ impl AppStateController {
         
         // Create scanner config
         let scanner_config = BleScannerConfig {
-            scan_interval: config.scan_interval,
+            scan_duration: config.scan_duration,
+            interval_between_scans: config.scan_interval,
             filter_known_devices: false, // Default value - not in config
             update_rssi_only: false, // Default value
             update_interval: config.scan_interval, // Use scan_interval as update_interval
             scan_timeout: None, // No timeout
+            max_retries: 3, // Default value
+            retry_delay: std::time::Duration::from_millis(500), // Default value
         };
         
         // Create and start scanner

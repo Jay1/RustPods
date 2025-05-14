@@ -17,10 +17,11 @@ use tokio::time::timeout;
 use rustpods::ui::state_manager::{StateManager, Action, ConnectionState, DeviceState, UiState};
 use rustpods::ui::Message;
 use rustpods::bluetooth::{AirPodsBatteryStatus, DiscoveredDevice};
-use rustpods::airpods::{AirPodsBattery, AirPodsCharging};
+use rustpods::airpods::{AirPodsBattery, ChargingStatus};
 use rustpods::config::{AppConfig, ConfigManager};
 use btleplug::api::BDAddr;
 use std::str::FromStr;
+use chrono;
 
 // SECTION: Helper Functions and Test Setup
 
@@ -53,13 +54,13 @@ fn create_test_battery(left: Option<u8>, right: Option<u8>, case: Option<u8>) ->
             left,
             right,
             case,
-            charging: AirPodsCharging {
+            charging: ChargingStatus {
                 left: false,
                 right: false,
                 case: true,
             },
         },
-        last_updated: std::time::Instant::now(),
+        last_updated: chrono::Utc::now(),
     }
 }
 
@@ -140,8 +141,8 @@ async fn test_state_flow_between_components() {
     // Verify that expected messages were sent
     assert!(messages.contains(&Message::ShowWindow));
     assert!(messages.contains(&Message::StartScan));
-    assert!(messages.contains(&Message::ShowSettings));
-    assert!(messages.iter().any(|msg| matches!(msg, Message::UpdateDeviceList(_))));
+    assert!(messages.contains(&Message::OpenSettings));
+    assert!(messages.iter().any(|msg| matches!(msg, Message::DeviceDiscovered(_) | Message::DeviceUpdated(_))));
     
     // Verify that state was also updated correctly
     let device_state = state_manager.get_device_state();
@@ -173,7 +174,7 @@ async fn test_cross_component_communication() {
     let messages = collector.collect_messages(500).await;
     
     // Verify that the correct messages were sent to update other components
-    assert!(messages.iter().any(|msg| matches!(msg, Message::UpdateBatteryStatus(_))));
+    assert!(messages.iter().any(|msg| matches!(msg, Message::BatteryStatusUpdated(_))));
     assert!(messages.contains(&Message::ToggleVisibility));
     
     // Verify that battery status is correctly stored in state
@@ -212,7 +213,7 @@ async fn test_animation_transitions() {
     // Collect messages and verify animation updates were sent
     let messages = collector.collect_messages(300).await;
     let animation_updates = messages.iter()
-        .filter(|msg| matches!(msg, Message::UpdateAnimationProgress(_)))
+        .filter(|msg| matches!(msg, Message::AnimationProgress(_)))
         .count();
     
     // Should have received animation progress messages
@@ -389,7 +390,7 @@ async fn test_rapid_state_updates() {
         
         // Update animation progress
         let progress = i as f32 / 10.0;
-        state_manager.dispatch(Action::UpdateAnimationProgress(progress));
+        state_manager.dispatch(Action::AnimationProgress(progress));
         
         // Minimal delay to simulate rapid updates
         tokio::time::sleep(Duration::from_millis(10)).await;

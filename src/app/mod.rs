@@ -88,10 +88,9 @@ impl App {
     
     /// Apply configuration to components
     fn apply_config(&mut self) {
-        // Configure scanner
-        if let Some(scanner) = self.scanner.as_configurable() {
-            scanner.apply_config(&self.config);
-        }
+        // Configure scanner - as_configurable returns a reference directly
+        let scanner = self.scanner.as_configurable();
+        scanner.apply_config(&self.config);
         
         // Configure other components as needed
     }
@@ -202,25 +201,15 @@ impl App {
                 }
             }
             Message::DeviceDiscovered(device) if device.is_potential_airpods => {
-                // Try to detect AirPods from the discovered device
-                if let Some(airpods) = detect_airpods(&device) {
-                    // Update current AirPods device
-                    *self.current_airpods.lock().unwrap() = Some(airpods.clone());
-                    
-                    // Start battery monitoring
-                    match self.start_battery_monitoring_for_device(&airpods).await {
-                        Ok(_) => {
-                            // Successfully started battery monitoring
-                            let _ = self.ui_tx.send(Message::AirPodsConnected(airpods));
-                        }
-                        Err(e) => {
-                            log::error!("Failed to start battery monitoring: {}", e);
-                            let _ = self.ui_tx.send(Message::Error(format!("Failed to start battery monitoring: {}", e)));
-                            
-                            // Try to reconnect to the device
-                            self.schedule_device_reconnect(&airpods);
-                        }
+                // If this is a potential AirPods device
+                // Extract AirPods specific details if available
+                if let Ok(Some(airpods)) = detect_airpods(&device) {
+                    // Store the detected airpods in our state
+                    if let Ok(mut current) = self.current_airpods.lock() {
+                        *current = Some(airpods.clone());
                     }
+                    // Notify UI about the detected device
+                    let _ = self.ui_tx.send(Message::AirPodsConnected(airpods));
                 }
             }
             Message::BatteryStatusUpdated(status) => {
@@ -281,7 +270,7 @@ impl App {
                     BleEvent::DeviceDiscovered(device) => {
                         // If it might be AirPods, try to detect it
                         if device.is_potential_airpods {
-                            if let Some(airpods) = detect_airpods(&device) {
+                            if let Ok(Some(airpods)) = detect_airpods(&device) {
                                 log::info!("Detected AirPods: {:?}", airpods);
                                 
                                 // Send UI message about discovered AirPods
@@ -434,10 +423,9 @@ impl App {
         // Initialize the scanner
         self.scanner.initialize().await?;
         
-        // Apply configuration
-        if let Some(scanner) = self.scanner.as_configurable() {
-            scanner.apply_config(&self.config);
-        }
+        // Apply configuration - direct access to the configurable
+        let scanner = self.scanner.as_configurable();
+        scanner.apply_config(&self.config);
         
         log::info!("Bluetooth reinitialized successfully");
         Ok(())

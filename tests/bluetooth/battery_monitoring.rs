@@ -3,14 +3,24 @@
 
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
 
-use btleplug::api::Peripheral as _;
+use btleplug::api::{Peripheral as _, ValueNotification};
 use chrono::Utc;
 use mockall::predicate::*;
 use mockall::mock;
+use futures::Stream;
+use tokio::sync::RwLock;
 
-use rustpods::airpods::{AirPodsBattery, ChargingStatus, APPLE_COMPANY_ID};
+use rustpods::airpods::{AirPodsBattery, AirPodsChargingState, APPLE_COMPANY_ID};
 use rustpods::bluetooth::AirPodsBatteryStatus;
+
+/// BatteryMonitorControl trait to match what we expect from the real implementation
+pub trait BatteryMonitorControl {
+    fn is_running(&self) -> bool;
+    fn stop(&mut self);
+    fn last_updated(&self) -> Instant;
+}
 
 // Create a mock for Peripheral to test without real hardware
 mock! {
@@ -45,7 +55,7 @@ mock! {
         async fn subscribe(&self, characteristic: &btleplug::api::Characteristic) -> Result<(), btleplug::Error>;
         async fn unsubscribe(&self, characteristic: &btleplug::api::Characteristic) -> Result<(), btleplug::Error>;
         async fn notifications(&self) -> Result<
-            std::pin::Pin<Box<dyn futures::Stream<Item = btleplug::api::ValueNotification> + Send>>,
+            std::pin::Pin<Box<dyn Stream<Item = ValueNotification> + Send>>,
             btleplug::Error,
         >;
     }
@@ -73,16 +83,30 @@ async fn mock_extract_battery_status(mock_peripheral: &MockPeripheral) -> AirPod
             let case_percent = data[2];
             let charging_byte = data[3];
             
+            // Determine charging state
+            let charging_state = if (charging_byte & 0x03) == 0x03 {
+                // Both earbuds charging
+                Some(AirPodsChargingState::BothBudsCharging)
+            } else if (charging_byte & 0x01) != 0 {
+                // Left earbud charging
+                Some(AirPodsChargingState::LeftCharging)
+            } else if (charging_byte & 0x02) != 0 {
+                // Right earbud charging
+                Some(AirPodsChargingState::RightCharging)
+            } else if (charging_byte & 0x04) != 0 {
+                // Case charging
+                Some(AirPodsChargingState::CaseCharging)
+            } else {
+                // Not charging
+                Some(AirPodsChargingState::NotCharging)
+            };
+            
             // Create a battery status with these values
             let battery = AirPodsBattery {
                 left: if left_percent <= 100 { Some(left_percent) } else { None },
                 right: if right_percent <= 100 { Some(right_percent) } else { None },
                 case: if case_percent <= 100 { Some(case_percent) } else { None },
-                charging: ChargingStatus {
-                    left: (charging_byte & 0x01) != 0,
-                    right: (charging_byte & 0x02) != 0,
-                    case: (charging_byte & 0x04) != 0,
-                },
+                charging: charging_state,
             };
             
             return AirPodsBatteryStatus::new(battery);
@@ -143,7 +167,7 @@ async fn mock_start_battery_monitoring_with_options(
     struct MockBatteryMonitor {
         is_running: bool,
     }
-    
+
     // Implement control interface
     impl BatteryMonitorControl for MockBatteryMonitor {
         fn is_running(&self) -> bool {
@@ -154,8 +178,8 @@ async fn mock_start_battery_monitoring_with_options(
             self.is_running = false;
         }
         
-        fn last_updated(&self) -> chrono::DateTime<chrono::Utc> {
-            chrono::Utc::now()
+        fn last_updated(&self) -> Instant {
+            Instant::now()
         }
     }
     
@@ -173,13 +197,6 @@ fn create_mock_device(mock_peripheral: MockPeripheral) -> &'static MockPeriphera
     Box::leak(Box::new(mock_peripheral))
 }
 
-/// BatteryMonitorControl trait to match what we expect from the real implementation
-trait BatteryMonitorControl {
-    fn is_running(&self) -> bool;
-    fn stop(&mut self);
-    fn last_updated(&self) -> chrono::DateTime<chrono::Utc>;
-}
-
 // Test helper to create AirPods battery data
 fn create_airpods_battery(left: Option<u8>, right: Option<u8>, case: Option<u8>, 
     left_charging: bool, right_charging: bool, case_charging: bool) -> AirPodsBattery {
@@ -187,10 +204,16 @@ fn create_airpods_battery(left: Option<u8>, right: Option<u8>, case: Option<u8>,
         left,
         right,
         case,
-        charging: ChargingStatus {
-            left: left_charging,
-            right: right_charging,
-            case: case_charging,
+        charging: if left_charging && right_charging {
+            Some(AirPodsChargingState::BothBudsCharging)
+        } else if left_charging {
+            Some(AirPodsChargingState::LeftCharging)
+        } else if right_charging {
+            Some(AirPodsChargingState::RightCharging)
+        } else if case_charging {
+            Some(AirPodsChargingState::CaseCharging)
+        } else {
+            Some(AirPodsChargingState::NotCharging)
         },
     }
 }
@@ -247,9 +270,12 @@ async fn test_extract_battery_status() {
     assert_eq!(status.battery.left, Some(8));  // Expect 8% for left, not 80%
     assert_eq!(status.battery.right, Some(7)); // Expect 7% for right, not 70%
     assert_eq!(status.battery.case, Some(9));  // Expect 9% for case, not 90%
-    assert!(!status.battery.charging.left);
-    assert!(!status.battery.charging.right);
-    assert!(!status.battery.charging.case);
+    
+    // Verify charging state is NotCharging since charging_mask was 0
+    match status.battery.charging {
+        Some(AirPodsChargingState::NotCharging) => {},
+        _ => panic!("Expected NotCharging state, got {:?}", status.battery.charging),
+    }
 }
 
 #[tokio::test]
@@ -275,25 +301,26 @@ async fn test_extract_battery_status_error_handling() {
 #[tokio::test]
 async fn test_battery_status_is_stale() {
     // Create a status with timestamp 1 minute in the past
-    let old_timestamp = Utc::now() - chrono::Duration::seconds(60);
+    let old_timestamp = Instant::now() - Duration::from_secs(60);
     let status = AirPodsBatteryStatus {
         battery: create_airpods_battery(Some(80), Some(70), Some(90), false, false, false),
         last_updated: old_timestamp,
     };
     
     // Test stale detection
-    assert!(status.is_stale(chrono::Duration::seconds(30)), 
+    assert!(status.is_stale(Duration::from_secs(30)), 
             "Status should be stale after 30 seconds");
-    assert!(!status.is_stale(chrono::Duration::seconds(120)), 
+    assert!(!status.is_stale(Duration::from_secs(120)), 
             "Status should not be stale within 120 seconds");
     
     // Create a fresh status
-    let fresh_status = AirPodsBatteryStatus::new(
-        create_airpods_battery(Some(80), Some(70), Some(90), false, false, false)
-    );
+    let fresh_status = AirPodsBatteryStatus {
+        battery: create_airpods_battery(Some(80), Some(70), Some(90), false, false, false),
+        last_updated: Instant::now(),
+    };
     
-    // Test stale detection on fresh status
-    assert!(!fresh_status.is_stale(chrono::Duration::seconds(5)), 
+    // Test freshness
+    assert!(!fresh_status.is_stale(Duration::from_secs(30)), 
             "Fresh status should not be stale");
 }
 

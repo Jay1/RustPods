@@ -1,19 +1,23 @@
-//! UI application using the improved state management architecture
-
-use iced::{Subscription, Application, Element, Command};
-use iced::window;
-use tokio::sync::mpsc;
-use std::{thread, sync::Arc, time::Duration};
+use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
 use std::sync::Mutex;
 
-use crate::ui::{Message, UiComponent, MainWindow, SettingsWindow};
-use crate::ui::system_tray_controller::SystemTrayController;
-use crate::ui::state_manager::StateManager;
-use crate::ui::window_visibility::{WindowVisibilityManager, WindowPosition};
-use crate::ui::theme::Theme;
-// Import the AppController from the appropriate path
+use iced::{Command, Element, Subscription, Application, window};
+use tokio::sync::mpsc;
+use tokio_stream::StreamExt;
 
-/// State-based application implementation with improved state management
+use crate::ui::SystemTrayController;
+use crate::ui::{MainWindow, SettingsWindow};
+use crate::ui::message::Message;
+use crate::ui::state::{self, AppState};
+use crate::ui::state_manager::StateManager;
+use crate::ui::WindowPosition;
+use crate::ui::theme::Theme;
+use crate::ui::window_visibility::WindowVisibilityManager;
+use crate::ui::UiComponent;
+
+/// State-managed application UI
 pub struct StateApp {
     /// State manager
     state_manager: Arc<StateManager>,
@@ -40,7 +44,7 @@ impl Application for StateApp {
     type Theme = Theme;
     type Executor = iced::executor::Default;
     type Flags = Arc<StateManager>;
-
+    
     fn new(flags: Self::Flags) -> (Self, Command<Message>) {
         let state_manager = flags;
         
@@ -60,102 +64,101 @@ impl Application for StateApp {
         // Create initial command
         let start_command = if !ui_state.visible {
             // Start hidden if UI state is not visible
-            window::change_mode(window::Mode::Hidden)
+            window::minimize(true)
         } else {
             Command::none()
         };
         
-        // Create a system tray controller
-        let system_tray_controller = None; // Will be initialized in update
+        // Create app state
+        let app = Self {
+            state_manager,
+            main_window,
+            settings_window,
+            visibility_manager,
+            bounds: iced::Rectangle::new(
+                iced::Point::new(0.0, 0.0),
+                iced::Size::new(800.0, 600.0),
+            ),
+            system_tray_controller: None,
+        };
         
-        (
-            Self {
-                state_manager,
-                main_window,
-                settings_window,
-                visibility_manager,
-                bounds: iced::Rectangle::default(),
-                system_tray_controller,
-            },
-            start_command
-        )
+        (app, start_command)
     }
     
     fn title(&self) -> String {
-        let config = self.state_manager.get_config();
+        let mut title = String::from("RustPods");
         
-        // Show battery percentage in title if available
+        // Add device information if connected
         let device_state = self.state_manager.get_device_state();
-        if let Some(battery) = device_state.battery_status.as_ref() {
-            let left = battery.battery.left.map(|v| v.to_string()).unwrap_or_else(|| "?".to_string());
-            let right = battery.battery.right.map(|v| v.to_string()).unwrap_or_else(|| "?".to_string());
-            let case = battery.battery.case.map(|v| v.to_string()).unwrap_or_else(|| "?".to_string());
-            
-            format!("RustPods - L: {}% R: {}% Case: {}%", left, right, case)
-        } else {
-            String::from("RustPods - AirPods Battery Monitor")
+        if let Some(address) = &device_state.selected_device {
+            if let Some(device) = device_state.devices.get(address) {
+                title.push_str(" - ");
+                title.push_str(device.name.as_deref().unwrap_or("Unknown Device"));
+            }
         }
+        
+        title
     }
-
+    
     fn theme(&self) -> Self::Theme {
-        // Use the theme from config
-        let config = self.state_manager.get_config();
-        match config.ui.theme {
-            crate::config::Theme::Light => Theme::Light,
-            crate::config::Theme::Dark => Theme::Dark,
-            crate::config::Theme::System => Theme::System,
-        }
+        Theme::default()
     }
-
+    
     fn update(&mut self, message: Message) -> Command<Message> {
         // Reference to current bounds for visibility operations
         let bounds = self.bounds;
         
         match message {
-            Message::ToggleVisibility => {
-                // Use the visibility manager to toggle
-                self.visibility_manager.toggle(bounds)
+            // React to window events for visibility management
+            Message::RawEvent(iced::Event::Window(window::Event::Moved { x, y })) => {
+                // Update window position in state
+                let _ = self.visibility_manager.set_position(WindowPosition {
+                    x: x as f32,
+                    y: y as f32,
+                    width: bounds.width,
+                    height: bounds.height,
+                });
+                Command::none()
             },
+            // Update window bounds in state
+            Message::RawEvent(iced::Event::Window(window::Event::Resized { width, height })) => {
+                // Update bounds
+                self.bounds = iced::Rectangle::new(
+                    iced::Point::new(self.bounds.x, self.bounds.y),
+                    iced::Size::new(width as f32, height as f32),
+                );
+                
+                // Update window position in visibility manager
+                let _ = self.visibility_manager.set_position(WindowPosition {
+                    x: self.bounds.x,
+                    y: self.bounds.y,
+                    width: width as f32,
+                    height: height as f32,
+                });
+                Command::none()
+            },
+            // Exit the application
             Message::Exit => {
                 // Cleanup and exit
                 if let Some(controller) = &mut self.system_tray_controller {
                     let _ = controller.stop();
                 }
-                
-                // Save settings before exit
-                let config = self.state_manager.get_config();
-                if let Err(e) = config.save() {
-                    log::error!("Failed to save settings on exit: {}", e);
-                }
-                
-                window::close()
+                iced::window::close()
             },
-            Message::WindowMove(position) => {
-                // Create a WindowPosition and update the visibility manager
-                let window_pos = WindowPosition {
-                    x: position.x,
-                    y: position.y,
-                    width: self.bounds.width,
-                    height: self.bounds.height,
-                };
-                
-                self.visibility_manager.set_position(window_pos)
-            },
-            // Initialize system tray controller if it doesn't exist
-            Message::InitializeSystemTray(tx) => {
-                // Create the system tray controller with the state manager
-                let _config = self.state_manager.get_config();
-                
-                // Create controller and start it
-                match SystemTrayController::new(
-                    tx,
-                    _config.clone(),
+            // Initialize system tray
+            Message::InitializeSystemTray(sender) => {
+                // Create system tray with proper settings
+                let result = SystemTrayController::new(
+                    sender,
+                    self.state_manager.get_config().clone(),
                     Arc::clone(&self.state_manager)
-                ) {
+                );
+                
+                match result {
                     Ok(mut controller) => {
-                        // Start the controller
+                        // Try to start the controller
                         if let Err(e) = controller.start() {
-                            log::error!("Failed to start system tray controller: {}", e);
+                            log::error!("Failed to start system tray: {}", e);
                         } else {
                             // Store the controller if successful
                             self.system_tray_controller = Some(controller);
@@ -204,12 +207,10 @@ impl Application for StateApp {
     }
     
     fn view(&self) -> Element<'_, Message, iced::Renderer<Theme>> {
-        if !self.visibility_manager.is_visible() {
-            // Return an empty container when not visible
-            iced::widget::container::Container::new(
-                iced::widget::text("")
-            ).into()
-        } else if self.state_manager.get_ui_state().show_settings {
+        // Use the UI state to determine which view to show
+        let ui_state = self.state_manager.get_ui_state();
+        
+        if ui_state.show_settings {
             // Show settings window
             self.settings_window.view()
         } else {
@@ -219,14 +220,21 @@ impl Application for StateApp {
     }
     
     fn subscription(&self) -> Subscription<Message> {
-        // Combine subscriptions
-        iced::Subscription::batch(vec![
-            // Window events subscription
+        // Combine subscriptions from different sources
+        Subscription::batch([
+            // Window events subscription for handling visibility
             iced::subscription::events().map(Message::RawEvent),
             
-            // Regular tick for updates
-            iced::time::every(Duration::from_secs(1))
-                .map(|_| Message::Tick),
+            // Add window resize subscription for responsive design
+            iced::window::frames()
+                .map(|_| Message::WindowUpdate),
+            
+            // Add animation subscription for smooth transitions
+            iced::time::every(std::time::Duration::from_millis(16))
+                .map(|_| Message::AnimationTick),
+            
+            // Add any other subscriptions from components
+            // ...
         ])
     }
 }
@@ -286,47 +294,61 @@ pub fn run_state_ui() -> Result<(), iced::Error> {
         let mut controller = crate::app_state_controller::AppStateController::new(sender_clone);
         
         log::info!("Starting app state controller");
-        // Use the runtime to run the controller
-        runtime.block_on(async {
-            if let Err(e) = controller.initialize().await {
-                log::error!("Failed to initialize app state controller: {}", e);
-                return;
-            }
+        // Use the runtime to run the async start method
+        if let Err(e) = runtime.block_on(controller.start()) {
+            log::error!("Failed to start app state controller: {}", e);
+        }
+        
+        // Keep the thread alive while the application is running
+        loop {
+            // Sleep to avoid high CPU usage
+            thread::sleep(Duration::from_millis(100));
             
-            if let Err(e) = controller.start().await {
-                log::error!("Failed to start app state controller: {}", e);
+            // Check if we should exit the thread
+            // In a real implementation, we would use a proper shutdown signal
+            if thread::panicking() {
+                break;
             }
-            
-            // Keep the controller running until shutdown
-            loop {
-                tokio::time::sleep(Duration::from_secs(1)).await;
-                // TODO: Add proper shutdown detection
-            }
-        });
+        }
     });
     
-    // Run the Iced application with the state manager
-    let result = StateApp::run(iced::Settings {
-        id: Some("rustpods".to_string()),
-        window: iced::window::Settings {
-            size: (800, 600),
-            position: iced::window::Position::Default,
-            min_size: Some((400, 300)),
-            max_size: None,
-            visible: true,
-            resizable: true,
-            decorations: true,
-            transparent: false,
-            icon: None,
-            level: iced::window::Level::Normal,
-            platform_specific: Default::default(),
-        },
-        flags: state_manager,
-        default_font: iced::Font::DEFAULT,
-        default_text_size: 16.0,
-        antialiasing: true,
-        exit_on_close_request: true,
-    });
+    // Register Ctrl+C handler for graceful shutdown
+    let state_manager_for_ctrlc = Arc::clone(&state_manager);
+    let lifecycle_manager_for_ctrlc = Arc::new(Mutex::new(lifecycle_manager));
+    
+    ctrlc::set_handler(move || {
+        log::info!("Received Ctrl+C, initiating graceful shutdown");
+        
+        // Trigger shutdown actions
+        state_manager_for_ctrlc.dispatch(crate::ui::state_manager::Action::Shutdown);
+        
+        // Shutdown lifecycle manager
+        if let Ok(mut manager) = lifecycle_manager_for_ctrlc.lock() {
+            if let Err(e) = manager.shutdown() {
+                log::error!("Error during lifecycle manager shutdown: {}", e);
+            } else {
+                log::info!("Lifecycle manager shutdown completed");
+            }
+        } else {
+            log::error!("Failed to acquire lock on lifecycle manager for shutdown");
+        }
+        
+        // Allow some time for cleanup before forcing exit
+        thread::sleep(Duration::from_millis(500));
+        std::process::exit(0);
+    }).expect("Failed to set Ctrl+C handler");
+    
+    // Run the application using the standard iced settings
+    let flags = state_manager;
+    let settings = iced::Settings::with_flags(flags);
+    let result = crate::ui::state::AppState::run(settings);
+    
+    // Handle any errors during UI execution
+    if let Err(ref e) = result {
+        log::error!("Error during UI execution: {}", e);
+    }
+    
+    log::info!("UI has exited, performing cleanup");
     
     // Join controller thread (will only happen if UI has exited)
     if controller_thread.is_finished() {

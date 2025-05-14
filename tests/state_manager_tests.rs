@@ -3,11 +3,14 @@
 
 use std::sync::Arc;
 use std::time::Duration;
+use chrono::Utc;
+use std::convert::TryInto;
 
+use tokio::sync::mpsc::{UnboundedSender, UnboundedReceiver};
 use rustpods::ui::state_manager::{StateManager, Action, DeviceState, UiState};
 use rustpods::bluetooth::DiscoveredDevice;
 use rustpods::bluetooth::AirPodsBatteryStatus;
-use rustpods::bluetooth::{AirPodsBattery, AirPodsCharging};
+use rustpods::airpods::{AirPodsBattery, AirPodsChargingState};
 use rustpods::ui::Message;
 use rustpods::config::AppConfig;
 
@@ -21,15 +24,12 @@ fn create_test_state_manager() -> Arc<StateManager> {
 fn create_test_battery() -> AirPodsBatteryStatus {
     AirPodsBatteryStatus {
         battery: AirPodsBattery {
-            left: Some(75),
+            left: Some(70),
             right: Some(80),
             case: Some(90),
+            charging: Some(AirPodsChargingState::CaseCharging),
         },
-        charging: AirPodsCharging {
-            left: false,
-            right: false,
-            case: true,
-        }
+        last_updated: std::time::Instant::now(),
     }
 }
 
@@ -46,6 +46,10 @@ fn create_test_device(address: &str, name: &str) -> DiscoveredDevice {
         manufacturer_data: std::collections::HashMap::new(),
         is_potential_airpods: true,
         last_seen: std::time::Instant::now(),
+        is_connected: false,
+        service_data: std::collections::HashMap::new(),
+        services: Vec::new(),
+        tx_power_level: None,
     }
 }
 
@@ -72,13 +76,8 @@ fn test_state_manager_device_updates() {
     let state_manager = create_test_state_manager();
     
     // Create a test device
-    let device = DiscoveredDevice {
-        id: "test_id".to_string(),
-        name: Some("Test Device".to_string()),
-        address: "00:11:22:33:44:55".to_string(),
-        rssi: -50,
-        is_airpods: true,
-    };
+    let device = create_test_device("00:11:22:33:44:55", "Test Device");
+    let device_id = device.address.to_string();
     
     // Update the device state
     state_manager.dispatch(Action::UpdateDevice(device.clone()));
@@ -88,20 +87,20 @@ fn test_state_manager_device_updates() {
     
     // Check that the device was added
     assert_eq!(device_state.devices.len(), 1);
-    assert!(device_state.devices.contains_key(&device.id));
+    assert!(device_state.devices.contains_key(&device_id));
     
     // Select the device
-    state_manager.dispatch(Action::SelectDevice(device.id.clone()));
+    state_manager.dispatch(Action::SelectDevice(device_id.clone()));
     
     // Get updated device state
     let device_state = state_manager.get_device_state();
     
     // Check that the device was selected
     assert!(device_state.selected_device.is_some());
-    assert_eq!(device_state.selected_device.unwrap(), device.id);
+    assert_eq!(device_state.selected_device.unwrap(), device_id);
     
     // Remove the device
-    state_manager.dispatch(Action::RemoveDevice(device.id.clone()));
+    state_manager.dispatch(Action::RemoveDevice(device_id));
     
     // Get updated device state
     let device_state = state_manager.get_device_state();
@@ -171,7 +170,7 @@ fn test_state_manager_config_updates() {
     let updated_config = state_manager.get_config();
     
     // Check that the config was updated
-    assert_eq!(updated_config.bluetooth.auto_scan, config.bluetooth.auto_scan);
+    assert_eq!(updated_config.bluetooth.auto_scan_on_startup, config.bluetooth.auto_scan_on_startup);
 }
 
 #[test]

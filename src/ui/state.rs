@@ -648,6 +648,7 @@ mod tests {
             is_connected: false,
             service_data: HashMap::new(),
             services: Vec::new(),
+            tx_power_level: None,
         };
         
         state.update_device(device.clone());
@@ -682,6 +683,7 @@ mod tests {
             is_connected: false,
             service_data: HashMap::new(),
             services: Vec::new(),
+            tx_power_level: None,
         };
         
         state.update_device(device);
@@ -717,6 +719,7 @@ mod tests {
             is_connected: false,
             service_data: HashMap::new(),
             services: Vec::new(),
+            tx_power_level: None,
         };
         
         state.update_device(device.clone());

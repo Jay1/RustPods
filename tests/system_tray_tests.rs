@@ -9,9 +9,9 @@ use rustpods::ui::state_manager::StateManager;
 use rustpods::ui::Message;
 use rustpods::config::AppConfig;
 use rustpods::bluetooth::AirPodsBatteryStatus;
-use rustpods::bluetooth::{AirPodsBattery, AirPodsCharging};
+use rustpods::airpods::{AirPodsBattery, AirPodsChargingState};
 use rustpods::ui::state_manager::Action;
-use crate::test_helpers::{create_test_config, create_test_battery, create_test_state_manager, MockSystemTray};
+use rustpods::ui::test_helpers::{create_test_config, create_test_battery, create_test_state_manager, MockSystemTray};
 
 /// Test the type composition and error types of SystemTray
 #[test]

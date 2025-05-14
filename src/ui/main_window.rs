@@ -9,6 +9,7 @@ use iced::{
 use iced::alignment::Horizontal;
 
 use crate::bluetooth::DiscoveredDevice;
+use crate::bluetooth::AirPodsBatteryStatus;
 use crate::airpods::{DetectedAirPods, AirPodsBattery};
 use crate::ui::components::{battery_display_row, battery_with_label};
 use crate::ui::components::ConnectionStatusWrapper;
@@ -129,9 +130,9 @@ impl MainWindow {
     }
     
     /// Update battery status
-    pub fn update_battery(&mut self, battery: AirPodsBattery) -> Command<Message> {
+    pub fn update_battery(&mut self, battery_status: AirPodsBatteryStatus) -> Command<Message> {
         if let Some(device) = &mut self.selected_device {
-            device.battery = battery;
+            device.battery = Some(battery_status.battery);
         }
         Command::none()
     }
@@ -213,71 +214,86 @@ impl MainWindow {
         let device_type = text(format!("Type: {:?}", device.device_type))
             .size(16);
             
-        // Battery status rows
-        let left_pod = battery_display_row(
-            "Left", 
-            device.battery.left, 
-            device.battery.charging.left,
-            self.animation_progress
-        );
+        // Battery status rows - handle Option<AirPodsBattery> properly
+        let mut rows = vec![];
         
-        let right_pod = battery_display_row(
-            "Right", 
-            device.battery.right, 
-            device.battery.charging.right,
-            self.animation_progress
-        );
+        rows.push(device_name.into());
+        rows.push(device_type.into());
         
-        let case = battery_display_row(
-            "Case", 
-            device.battery.case, 
-            device.battery.charging.case,
-            self.animation_progress
-        );
-        
-        // Battery icons if in advanced mode
-        let battery_icons = if self.advanced_display_mode {
-            row![
-                battery_with_label("L", device.battery.left, device.battery.charging.left, 60.0, self.animation_progress),
-                battery_with_label("R", device.battery.right, device.battery.charging.right, 60.0, self.animation_progress),
-                battery_with_label("C", device.battery.case, device.battery.charging.case, 60.0, self.animation_progress),
-            ]
-            .spacing(20)
-            .padding(10)
+        // Add battery information if available
+        if let Some(battery) = &device.battery {
+            // Left earbud
+            if let Some(left) = battery.left {
+                let left_charging = battery.charging.as_ref()
+                    .and_then(|c| c.is_left_charging().then_some(true))
+                    .unwrap_or(false);
+                    
+                let left_status = format!(
+                    "Left Earbud: {}% {}", 
+                    left,
+                    if left_charging { "(Charging)" } else { "" }
+                );
+                rows.push(text(left_status).size(16).into());
+            }
+            
+            // Right earbud
+            if let Some(right) = battery.right {
+                let right_charging = battery.charging.as_ref()
+                    .and_then(|c| c.is_right_charging().then_some(true))
+                    .unwrap_or(false);
+                    
+                let right_status = format!(
+                    "Right Earbud: {}% {}", 
+                    right,
+                    if right_charging { "(Charging)" } else { "" }
+                );
+                rows.push(text(right_status).size(16).into());
+            }
+            
+            // Case
+            if let Some(case) = battery.case {
+                let case_charging = battery.charging.as_ref()
+                    .and_then(|c| c.is_case_charging().then_some(true))
+                    .unwrap_or(false);
+                    
+                let case_status = format!(
+                    "Case: {}% {}", 
+                    case,
+                    if case_charging { "(Charging)" } else { "" }
+                );
+                rows.push(text(case_status).size(16).into());
+            }
         } else {
-            row![]
-        };
+            // No battery information available
+            rows.push(text("Battery information not available").size(16).into());
+        }
         
-        // Disconnect button
-        let disconnect_button = button(text("Disconnect"))
-            .on_press(Message::DeviceDisconnected);
+        // Add address at the bottom
+        rows.push(text(format!("Address: {}", device.address)).size(12).into());
         
-        // Toggle display mode button
-        let toggle_mode_button = button(
-            text(if self.advanced_display_mode { "Simple View" } else { "Advanced View" })
+        // Disconnect button at the bottom
+        let disconnect_button = button(
+            text("Disconnect")
+                .horizontal_alignment(iced::alignment::Horizontal::Center)
+                .size(16),
         )
-        .on_press(Message::ToggleDisplayMode);
+        .padding(10)
+        .width(Length::Fixed(120.0))
+        .on_press(Message::DeviceDisconnected);
         
-        // Combine all elements
-        column![
-            device_name,
-            device_type,
-            iced::widget::Space::new(Length::Fill, Length::Fixed(20.0)),
-            left_pod,
-            right_pod,
-            case,
-            iced::widget::Space::new(Length::Fill, Length::Fixed(20.0)),
-            battery_icons,
-            iced::widget::Space::new(Length::Fill, Length::Fixed(20.0)),
-            row![
-                disconnect_button,
-                iced::widget::Space::new(Length::Fill, Length::Fixed(10.0)),
-                toggle_mode_button,
-            ],
-        ]
-        .padding(20)
-        .spacing(10)
+        rows.push(disconnect_button.into());
+        
+        // Create column with all the rows
+        container(
+            column(rows)
+                .spacing(10)
+                .align_items(Alignment::Center)
+        )
         .width(Length::Fill)
+        .height(Length::Fill)
+        .align_x(iced::alignment::Horizontal::Center)
+        .align_y(iced::alignment::Vertical::Center)
+        .padding(20)
         .into()
     }
     

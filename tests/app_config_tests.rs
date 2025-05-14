@@ -45,7 +45,7 @@ fn test_to_scan_config() {
     // Validate scan config
     assert_eq!(scan_config.scan_duration, config.bluetooth.scan_duration);
     assert_eq!(scan_config.interval_between_scans, config.bluetooth.scan_interval);
-    assert!(scan_config.active_scanning);
+    assert!(scan_config.continuous);
     assert_eq!(scan_config.min_rssi, config.bluetooth.min_rssi);
 }
 

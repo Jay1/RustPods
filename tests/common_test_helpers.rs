@@ -11,11 +11,11 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 // Add imports for RustPods types
-use rustpods::airpods::{DetectedAirPods, AirPodsType, AirPodsBattery};
+use rustpods::airpods::{DetectedAirPods, AirPodsType, AirPodsBattery, ChargingStatus, AirPodsChargingState};
 use rustpods::bluetooth::{DiscoveredDevice, BleEvent};
-use rustpods::config::{AppConfig, BluetoothConfig, UiConfig, SystemConfig};
+use rustpods::config::{AppConfig, BluetoothConfig, UiConfig, SystemConfig, LogLevel, Theme};
+use rustpods::config::app_config::BatteryConfig;
 use rustpods::ui::state::AppState;
-use rustpods::ui::theme::Theme;
 use btleplug::api::BDAddr;
 
 /// Helper to convert tokio receiver to stream for testing
@@ -123,25 +123,41 @@ pub fn create_test_config() -> AppConfig {
     AppConfig {
         bluetooth: BluetoothConfig {
             auto_scan_on_startup: true,
-            scan_duration: 5,
-            scan_interval: 30,
+            scan_duration: std::time::Duration::from_secs(5),
+            scan_interval: std::time::Duration::from_secs(30),
             battery_refresh_interval: 60,
-            min_rssi: -80,
+            min_rssi: Some(-80),
             auto_reconnect: true,
             reconnect_attempts: 3,
+            adaptive_polling: true,
         },
         ui: UiConfig {
             show_notifications: true,
             start_minimized: false,
-            theme: "CatppuccinMocha".to_string(),
+            theme: Theme::System,
             show_percentage_in_tray: true,
             show_low_battery_warning: true,
             low_battery_threshold: 20,
+            remember_window_position: true,
+            last_window_position: None,
+            minimize_to_tray_on_close: true,
+            minimize_on_blur: false,
+            auto_hide_timeout: None,
         },
         system: SystemConfig {
             launch_at_startup: true,
-            log_level: "info".to_string(),
+            log_level: LogLevel::Info,
             enable_telemetry: false,
+            auto_save_interval: None,
+            enable_crash_recovery: true,
+        },
+        settings_path: std::path::PathBuf::new(),
+        battery: BatteryConfig {
+            low_threshold: 20,
+            smoothing_enabled: true,
+            change_threshold: 5,
+            notify_low: true,
+            notify_charged: true,
         },
     }
 }
@@ -150,7 +166,7 @@ pub fn create_test_config() -> AppConfig {
 pub fn create_test_app_state() -> AppState {
     let mut state = AppState::default();
     state.visible = true;
-    state.config = Arc::new(create_test_config());
+    state.config = create_test_config();
     state
 }
 
@@ -177,14 +193,15 @@ pub fn create_test_airpods(device_type: AirPodsType, address: Option<&str>) -> D
         address: addr,
         name: Some(name.to_string()),
         device_type,
-        battery: AirPodsBattery {
+        battery: Some(AirPodsBattery {
             left: Some(70),
             right: Some(70),
             case: None,
-            charging: false,
-        },
+            charging: Some(AirPodsChargingState::NotCharging),
+        }),
         rssi: Some(-60),
-        raw_data: vec![0x01, 0x02, 0x03],
+        last_seen: std::time::Instant::now(),
+        is_connected: false,
     }
 }
 
@@ -205,7 +222,12 @@ pub fn create_test_device_with_data(
         name: name.map(String::from),
         rssi: Some(-60),
         manufacturer_data,
+        is_potential_airpods: false,
+        last_seen: std::time::Instant::now(),
+        is_connected: false,
+        service_data: HashMap::new(),
         services: vec![],
+        tx_power_level: None,
     }
 }
 
@@ -264,10 +286,10 @@ pub fn create_ui_test_with_theme(theme: Theme) -> AppState {
     
     // Create a test config
     let mut config = create_test_config();
-    config.ui.theme = theme.to_string();
+    config.ui.theme = theme;
     
     // Apply the config
-    state.config = Arc::new(config);
+    state.config = config;
     
     state
 }
@@ -309,9 +331,9 @@ mod tests {
         let config = create_test_config();
         
         // Verify basic properties
-        assert_eq!(config.bluetooth.scan_duration, 5);
+        assert_eq!(config.bluetooth.scan_duration, Duration::from_secs(5));
         assert_eq!(config.ui.low_battery_threshold, 20);
-        assert_eq!(config.system.log_level, "info");
+        assert_eq!(config.system.log_level, LogLevel::Info);
     }
     
     #[tokio::test]

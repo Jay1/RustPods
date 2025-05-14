@@ -3,6 +3,7 @@ use std::fmt;
 use std::default::Default;
 use std::collections::HashMap;
 use std::time::Duration;
+use log::{debug, warn, error, info};
 
 use btleplug::api::{
     BDAddr, Central, Manager as _, 
@@ -11,7 +12,8 @@ use btleplug::api::{
 use btleplug::platform::{Adapter, Manager};
 use tokio::time::sleep;
 
-use crate::bluetooth::BleError;
+use crate::bluetooth::{BleError, BluetoothError};
+use crate::error::{ErrorContext, RecoveryAction};
 use crate::bluetooth::scanner::DiscoveredDevice;
 
 /// Adapter capabilities
@@ -123,8 +125,18 @@ pub struct AdapterManager {
 
 impl AdapterManager {
     /// Create a new adapter manager
-    pub async fn new() -> Result<Self, BleError> {
-        let manager = Arc::new(Manager::new().await?);
+    pub async fn new() -> Result<Self, BluetoothError> {
+        let ctx = ErrorContext::new("AdapterManager", "new");
+        
+        // Use enhanced error handling 
+        let manager = Arc::new(
+            crate::bluetooth::handle_bluetooth_error(
+                Manager::new().await,
+                "AdapterManager", 
+                "new", 
+                Some(RecoveryAction::RestartApplication)
+            )?
+        );
         
         let mut adapter_manager = Self {
             manager,
@@ -139,42 +151,80 @@ impl AdapterManager {
         // Auto-select the first adapter if available
         if !adapter_manager.available_adapters.is_empty() {
             adapter_manager.selected_index = Some(0);
+        } else {
+            warn!("No Bluetooth adapters found during initialization");
         }
         
         Ok(adapter_manager)
     }
     
+    /// Backward compatibility method for code that still expects BleError
+    #[deprecated(since = "0.1.0", note = "Use methods returning BluetoothError instead")]
+    pub async fn new_with_ble_error() -> Result<Self, BleError> {
+        Self::new().await.map_err(|e| e.into())
+    }
+    
     /// Refresh the list of available adapters with retry logic
-    pub async fn refresh_adapters(&mut self) -> Result<(), BleError> {
-        // Retry up to 3 times with increasing delays
-        let mut attempt = 0;
-        let max_attempts = 3;
-        let mut last_error = None;
+    pub async fn refresh_adapters(&mut self) -> Result<(), BluetoothError> {
+        let ctx = ErrorContext::new("AdapterManager", "refresh_adapters");
         
-        while attempt < max_attempts {
-            match self.try_refresh_adapters().await {
-                Ok(()) => return Ok(()),
+        // Try to refresh the adapters
+        let mut result = self.try_refresh_adapters().await;
+        let mut attempt = 1;
+        let mut last_error = None;
+        let max_attempts = 3;
+        let retry_delay = Duration::from_millis(500);
+        
+        while result.is_err() && attempt < max_attempts {
+            match result {
+                Ok(_) => break, // Success, break out of the loop
                 Err(e) => {
                     attempt += 1;
+                    let error_string = format!("{}", e);
                     last_error = Some(e);
                     
-                    // Don't sleep on the last attempt
                     if attempt < max_attempts {
-                        // Exponential backoff: 100ms, 500ms, 1000ms
-                        let delay = Duration::from_millis(100 * (5_u64.pow(attempt)));
-                        sleep(delay).await;
+                        warn!(
+                            "{}Attempt {}/{} to refresh adapters failed: {}. Retrying...",
+                            ctx, attempt, max_attempts, error_string
+                        );
+                    } else {
+                        error!(
+                            "{}All {} attempts to refresh adapters failed: {}",
+                            ctx, max_attempts, error_string
+                        );
                     }
                 }
             }
+            
+            // Add a delay before retrying
+            tokio::time::sleep(retry_delay).await;
+            
+            // Try again
+            result = self.try_refresh_adapters().await;
         }
         
-        // If we get here, all attempts failed
-        Err(last_error.unwrap_or(BleError::AdapterNotFound))
+        result
+    }
+    
+    /// Backward compatibility method for code that still expects BleError
+    #[deprecated(since = "0.1.0", note = "Use methods returning BluetoothError instead")]
+    pub async fn refresh_adapters_with_ble_error(&mut self) -> Result<(), BleError> {
+        self.refresh_adapters().await.map_err(|e| e.into())
     }
     
     /// Try to refresh adapter list once
-    async fn try_refresh_adapters(&mut self) -> Result<(), BleError> {
-        let adapters = self.manager.adapters().await?;
+    async fn try_refresh_adapters(&mut self) -> Result<(), BluetoothError> {
+        let ctx = ErrorContext::new("AdapterManager", "try_refresh_adapters");
+        
+        // Get the list of adapters from the system using enhanced error handling
+        let adapters = crate::bluetooth::handle_bluetooth_error(
+            self.manager.adapters().await,
+            "AdapterManager",
+            "try_refresh_adapters",
+            Some(RecoveryAction::Retry)
+        )?;
+        
         let mut adapter_infos = Vec::new();
         
         for (index, adapter) in adapters.iter().enumerate() {
@@ -194,15 +244,19 @@ impl AdapterManager {
             // Try to get vendor information
             let vendor = Self::get_adapter_vendor(adapter).await;
             
+            // Get adapter name
+            let name = Self::get_adapter_name(adapter, index).await;
+            
             let info = AdapterInfo {
                 index,
                 address,
-                name: Self::get_adapter_name(adapter, index).await,
+                name,
                 is_default: index == 0, // First adapter is considered default
                 capabilities,
                 vendor,
             };
             
+            log::debug!("{}Found adapter: {} (status: {:?})", ctx, info.name, info.capabilities.status);
             adapter_infos.push(info);
         }
         
@@ -211,6 +265,7 @@ impl AdapterManager {
         // Reset selection if the selected adapter is no longer available
         if let Some(index) = self.selected_index {
             if index >= self.available_adapters.len() {
+                log::warn!("{}Previously selected adapter #{} is no longer available", ctx, index);
                 self.selected_index = None;
             }
         }
@@ -306,26 +361,47 @@ impl AdapterManager {
     }
     
     /// Select an adapter by index
-    pub fn select_adapter(&mut self, index: usize) -> Result<(), BleError> {
+    pub fn select_adapter(&mut self, index: usize) -> Result<(), BluetoothError> {
+        let ctx = ErrorContext::new("AdapterManager", "select_adapter")
+            .with_metadata("adapter_index", index.to_string());
+        
         if index >= self.available_adapters.len() {
-            return Err(BleError::AdapterNotFound);
+            log::error!("{}Invalid adapter index: {} (available: {})",
+                        ctx, index, self.available_adapters.len());
+            return Err(BluetoothError::AdapterNotAvailable {
+                reason: format!("Adapter index {} out of bounds (max: {})",
+                               index, self.available_adapters.len().saturating_sub(1)),
+                recovery: RecoveryAction::SelectDifferentAdapter
+            });
         }
         
         self.selected_index = Some(index);
+        log::debug!("{}Selected adapter index {}: {}",
+                    ctx, index, self.available_adapters[index].name);
         Ok(())
     }
     
+    /// Backward compatibility method for code that still expects BleError
+    #[deprecated(since = "0.1.0", note = "Use methods returning BluetoothError instead")]
+    pub fn select_adapter_with_ble_error(&mut self, index: usize) -> Result<(), BleError> {
+        self.select_adapter(index).map_err(|e| e.into())
+    }
+    
     /// Select the best available adapter based on capabilities
-    pub fn select_best_adapter(&mut self) -> Result<(), BleError> {
+    pub fn select_best_adapter(&mut self) -> Result<(), BluetoothError> {
+        let ctx = ErrorContext::new("AdapterManager", "select_best_adapter");
+        
         if self.available_adapters.is_empty() {
-            return Err(BleError::AdapterNotFound);
+            log::error!("{}No adapters available", ctx);
+            return Err(BluetoothError::NoAdapter);
         }
         
         // Find the first adapter with normal status that supports scanning
         for (index, info) in self.available_adapters.iter().enumerate() {
-            if info.capabilities.status == AdapterStatus::Normal && 
-               info.capabilities.supports_scanning {
+            if info.capabilities.status == AdapterStatus::Normal &&
+                info.capabilities.supports_scanning {
                 self.selected_index = Some(index);
+                log::debug!("{}Selected optimal adapter #{}: {}", ctx, index, info.name);
                 return Ok(());
             }
         }
@@ -334,21 +410,53 @@ impl AdapterManager {
         for (index, info) in self.available_adapters.iter().enumerate() {
             if info.capabilities.supports_scanning {
                 self.selected_index = Some(index);
+                log::debug!("{}Selected adapter with scanning support #{}: {}", ctx, index, info.name);
                 return Ok(());
             }
         }
         
         // Last resort: use the first adapter regardless of capabilities
         self.selected_index = Some(0);
+        log::warn!("{}Selecting first available adapter regardless of capabilities: {}",
+                   ctx, self.available_adapters[0].name);
         Ok(())
     }
     
+    /// Backward compatibility method for code that still expects BleError
+    #[deprecated(since = "0.1.0", note = "Use methods returning BluetoothError instead")]
+    pub fn select_best_adapter_with_ble_error(&mut self) -> Result<(), BleError> {
+        self.select_best_adapter().map_err(|e| e.into())
+    }
+    
     /// Get the currently selected adapter
-    pub async fn get_selected_adapter(&self) -> Result<Adapter, BleError> {
-        let index = self.selected_index.ok_or(BleError::AdapterNotFound)?;
+    pub async fn get_selected_adapter(&self) -> Result<Adapter, BluetoothError> {
+        let ctx = ErrorContext::new("AdapterManager", "get_selected_adapter");
         
-        let adapters = self.manager.adapters().await?;
-        adapters.into_iter().nth(index).ok_or(BleError::AdapterNotFound)
+        let index = self.selected_index.ok_or_else(|| {
+            log::error!("{}No adapter selected", ctx);
+            BluetoothError::NoAdapter
+        })?;
+        
+        let adapters = crate::bluetooth::handle_bluetooth_error(
+            self.manager.adapters().await,
+            "AdapterManager",
+            "get_selected_adapter",
+            Some(RecoveryAction::RestartApplication)
+        )?;
+        
+        adapters.into_iter().nth(index).ok_or_else(|| {
+            log::error!("{}Selected adapter no longer available", ctx);
+            BluetoothError::AdapterNotAvailable {
+                reason: format!("Selected adapter at index {} is no longer available", index),
+                recovery: RecoveryAction::SelectDifferentAdapter
+            }
+        })
+    }
+    
+    /// Backward compatibility method for code that still expects BleError
+    #[deprecated(since = "0.1.0", note = "Use methods returning BluetoothError instead")]
+    pub async fn get_selected_adapter_with_ble_error(&self) -> Result<Adapter, BleError> {
+        self.get_selected_adapter().await.map_err(|e| e.into())
     }
     
     /// Get info about the currently selected adapter
@@ -362,32 +470,88 @@ impl AdapterManager {
     }
     
     /// Check if the adapter supports scanning
-    pub async fn check_scanning_capability(&self, adapter: &Adapter) -> Result<bool, BleError> {
-        // Try to start a very brief scan to see if scanning is supported
-        let result = adapter.start_scan(ScanFilter::default()).await;
+    async fn check_scanning_capability(&mut self, adapter: &Adapter) -> Result<bool, BluetoothError> {
+        let ctx = ErrorContext::new("AdapterManager", "check_scanning_capability");
         
-        // If the scan started successfully, stop it immediately
+        // First, check if it's possible to start a scan without errors
+        let result = crate::bluetooth::handle_bluetooth_error(
+            adapter.start_scan(ScanFilter::default()).await,
+            "AdapterManager",
+            "check_scanning_capability",
+            Some(RecoveryAction::Retry)
+        );
+
+        // If scan start succeeds, make sure to stop it
         if result.is_ok() {
-            let _ = adapter.stop_scan().await;
+            // Stop the scan and ignore errors since we're just checking capabilities
+            if let Err(err) = adapter.stop_scan().await {
+                log::warn!("{}Failed to stop scan during capability check: {}", ctx, err);
+            }
             return Ok(true);
         }
         
-        // Check if the error indicates scanning is not supported
+        // Check if the error indicates scanning is unsupported or just a temporary failure
         match result {
-            Err(btleplug::Error::NotSupported(_)) => Ok(false),
-            Err(e) => Err(BleError::BtlePlugError(e.to_string())),
-            _ => Ok(true),
+            Ok(_) => {
+                // Scan started successfully, so scanning is supported
+                log::debug!("{}Adapter supports scanning", ctx);
+                return Ok(true);
+            },
+            Err(BluetoothError::ScanFailed(ref msg)) => {
+                // Check message to see if scanning is fundamentally unsupported
+                let scanning_unsupported = msg.to_lowercase().contains("not supported") ||
+                                           msg.to_lowercase().contains("unsupported");
+                
+                if scanning_unsupported {
+                    log::warn!("{}Adapter does not support scanning: {}", ctx, msg);
+                    return Ok(false);
+                } else {
+                    // This might be a temporary error, so assume scanning is supported
+                    log::debug!("{}Scan failed but adapter might support scanning: {}", ctx, msg);
+                    return Ok(true);
+                }
+            },
+            Err(BluetoothError::NoAdapter) => {
+                log::error!("{}No adapter available for scanning", ctx);
+                return Ok(false);
+            },
+            Err(BluetoothError::PermissionDenied(_)) => {
+                log::error!("{}Permission denied for scanning", ctx);
+                // Permission issues need to be resolved by the user, but the adapter technically supports scanning
+                return Ok(true);
+            },
+            Err(e) => {
+                log::warn!("{}Other error during scan test: {}", ctx, e);
+                // For other errors, we assume scanning is supported but there's a temporary issue
+                return Ok(true);
+            },
         }
     }
     
+    /// Backward compatibility method for code that still expects BleError
+    #[deprecated(since = "0.1.0", note = "Use methods returning BluetoothError instead")]
+    pub async fn check_scanning_capability_with_ble_error(&mut self, adapter: &Adapter) -> Result<bool, BleError> {
+        self.check_scanning_capability(adapter).await.map_err(|e| e.into())
+    }
+    
     /// Attempt to recover an adapter that's in a troubled state
-    pub async fn try_recover_adapter(&mut self, index: usize) -> Result<bool, BleError> {
+    pub async fn try_recover_adapter(&mut self, index: usize) -> Result<bool, BluetoothError> {
+        let ctx = ErrorContext::new("AdapterManager", "try_recover_adapter")
+            .with_metadata("adapter_index", index.to_string());
+        
         if index >= self.available_adapters.len() {
-            return Err(BleError::AdapterNotFound);
+            return Err(BluetoothError::NoAdapter);
         }
         
-        let adapters = self.manager.adapters().await?;
-        let adapter = adapters.into_iter().nth(index).ok_or(BleError::AdapterNotFound)?;
+        // Get the latest adapter list from the system
+        let adapters = self.manager.adapters().await.map_err(BluetoothError::from)?;
+        let adapter = adapters.into_iter().nth(index)
+            .ok_or_else(|| BluetoothError::AdapterNotAvailable {
+                reason: format!("Adapter at index {} not found", index),
+                recovery: RecoveryAction::RestartApplication
+            })?;
+        
+        log::info!("{}Attempting to recover adapter", ctx);
         
         // First try to check scanning capability again (it might have recovered on its own)
         let supports_scanning = self.check_scanning_capability(&adapter).await?;
@@ -411,10 +575,14 @@ impl AdapterManager {
                 
                 // Now update adapter history with the copied values
                 self.update_adapter_history(&adapter_id, AdapterStatus::Normal, timestamp);
+                
+                log::info!("{}Successfully recovered adapter", ctx);
             }
             
             return Ok(true);
         }
+        
+        log::warn!("{}Could not recover adapter through scanning capability check", ctx);
         
         // If checking the capability didn't resolve the issue, we'd need more advanced recovery
         // techniques that are platform-specific and may require system-level permissions.
@@ -423,31 +591,90 @@ impl AdapterManager {
         Ok(false)
     }
     
+    /// Backward compatibility method for code that still expects BleError
+    #[deprecated(since = "0.1.0", note = "Use methods returning BluetoothError instead")]
+    pub async fn try_recover_adapter_with_ble_error(&mut self, index: usize) -> Result<bool, BleError> {
+        self.try_recover_adapter(index).await.map_err(|e| e.into())
+    }
+    
     /// Get the adapter for the specified address
-    pub async fn get_adapter_by_address(&self, address: BDAddr) -> Result<Adapter, BleError> {
+    pub async fn get_adapter_by_address(&self, address: BDAddr) -> Result<Adapter, BluetoothError> {
+        let ctx = ErrorContext::new("AdapterManager", "get_adapter_by_address")
+            .with_metadata("adapter_address", address.to_string());
+        
         // Get the list of adapters
-        let adapters = self.manager.adapters().await?;
+        let adapters = crate::bluetooth::handle_bluetooth_error(
+            self.manager.adapters().await,
+            "AdapterManager",
+            "get_adapter_by_address",
+            Some(RecoveryAction::RestartApplication)
+        )?;
+        
+        if adapters.is_empty() {
+            return Err(BluetoothError::NoAdapter);
+        }
         
         // Find the adapter with the specified address
         for adapter in adapters {
             if let Some(addr) = Self::get_adapter_address(&adapter).await {
                 if addr == address {
+                    log::debug!("{}Found adapter matching address {}", ctx, address);
                     return Ok(adapter);
                 }
             }
         }
         
         // If we get here, no adapter was found
-        Err(BleError::AdapterNotFound)
+        log::warn!("{}No adapter found with address {}", ctx, address);
+        Err(BluetoothError::AdapterNotAvailable {
+            reason: format!("No adapter with address {} found", address),
+            recovery: RecoveryAction::RestartApplication
+        })
+    }
+    
+    /// Backward compatibility method for code that still expects BleError
+    #[deprecated(since = "0.1.0", note = "Use methods returning BluetoothError instead")]
+    pub async fn get_adapter_by_address_with_ble_error(&self, address: BDAddr) -> Result<Adapter, BleError> {
+        self.get_adapter_by_address(address).await.map_err(|e| e.into())
     }
     
     /// Check if Bluetooth is available
-    pub async fn is_bluetooth_available(&self) -> Result<bool, BleError> {
-        // Get the list of adapters
-        let adapters = self.manager.adapters().await?;
+    pub async fn is_bluetooth_available(&self) -> Result<bool, BluetoothError> {
+        let ctx = ErrorContext::new("AdapterManager", "is_bluetooth_available");
         
-        // Check if there are any adapters
-        Ok(!adapters.is_empty())
+        // Get the list of adapters with error handling
+        let adapters_result = self.manager.adapters().await;
+        
+        match adapters_result {
+            Ok(adapters) => {
+                // Check if there are any adapters
+                let is_available = !adapters.is_empty();
+                log::debug!("{}Bluetooth is {}", ctx, if is_available { "available" } else { "not available" });
+                Ok(is_available)
+            },
+            Err(e) => {
+                // If error relates to Bluetooth being unavailable, return false instead of error
+                let err_str = e.to_string().to_lowercase();
+                if err_str.contains("bluetooth") &&
+                    (err_str.contains("unavailable") || 
+                     err_str.contains("disabled") || 
+                     err_str.contains("powered off")) {
+                    log::info!("{}Bluetooth is not available: {}", ctx, e);
+                    return Ok(false);
+                }
+                
+                // For other errors, use our error handling utility
+                let error = crate::bluetooth::convert_btleplug_error(e, "AdapterManager", "is_bluetooth_available");
+                log::error!("{}Error checking Bluetooth availability: {}", ctx, error);
+                Err(error)
+            }
+        }
+    }
+    
+    /// Backward compatibility method for code that still expects BleError
+    #[deprecated(since = "0.1.0", note = "Use methods returning BluetoothError instead")]
+    pub async fn is_bluetooth_available_with_ble_error(&self) -> Result<bool, BleError> {
+        self.is_bluetooth_available().await.map_err(|e| e.into())
     }
 }
 
@@ -479,16 +706,29 @@ pub struct BluetoothAdapter {
 
 impl BluetoothAdapter {
     /// Create a new BluetoothAdapter
-    pub async fn new() -> Result<Self, BleError> {
-        // Create a manager
-        let manager = Manager::new().await?;
+    pub async fn new() -> Result<Self, BluetoothError> {
+        let ctx = ErrorContext::new("BluetoothAdapter", "new");
+        
+        // Create a manager with proper error conversion
+        let manager = Manager::new().await.map_err(|e| {
+            log::error!("{}Failed to initialize Bluetooth manager: {}", ctx, e);
+            BluetoothError::from(e)
+        })?;
         
         // Get the adapter list
-        let adapters = manager.adapters().await?;
+        let adapters = manager.adapters().await.map_err(|e| {
+            log::error!("{}Failed to get Bluetooth adapters: {}", ctx, e);
+            BluetoothError::from(e)
+        })?;
         
         // Find the first adapter
         let adapter = adapters.into_iter().next()
-            .ok_or(BleError::AdapterNotFound)?;
+            .ok_or_else(|| {
+                log::error!("{}No Bluetooth adapters found", ctx);
+                BluetoothError::NoAdapter
+            })?;
+        
+        log::debug!("{}Successfully found Bluetooth adapter", ctx);
         
         // Check if scanning is supported
         let mut capabilities = AdapterCapabilities::default();
@@ -511,17 +751,31 @@ impl BluetoothAdapter {
         })
     }
     
+    /// Backward compatibility method for code that still expects BleError
+    #[deprecated(since = "0.1.0", note = "Use methods returning BluetoothError instead")]
+    pub async fn new_with_ble_error() -> Result<Self, BleError> {
+        Self::new().await.map_err(|e| e.into())
+    }
+    
     /// Get the Bluetooth adapter address
     ///
     /// This method returns the address of the Bluetooth adapter if available
-    pub async fn get_address(&self) -> Result<Option<BDAddr>, BleError> {
+    pub async fn get_address(&self) -> Result<Option<BDAddr>, BluetoothError> {
+        let ctx = ErrorContext::new("BluetoothAdapter", "get_address");
+        
         // This is not directly supported by btleplug in a cross-platform way
         // For Windows, we can get this from the adapter properties
         // For other platforms, we might need different approaches
-        
         // We just return None for now as a proper implementation would be platform-specific
         // A more robust implementation would use platform-specific code to get the address
+        log::debug!("{}Getting adapter address is not supported cross-platform", ctx);
         Ok(None)
+    }
+    
+    /// Backward compatibility method for code that still expects BleError
+    #[deprecated(since = "0.1.0", note = "Use methods returning BluetoothError instead")]
+    pub async fn get_address_with_ble_error(&self) -> Result<Option<BDAddr>, BleError> {
+        self.get_address().await.map_err(|e| e.into())
     }
     
     /// Get the adapter capabilities
@@ -540,49 +794,115 @@ impl BluetoothAdapter {
     }
     
     /// Start scanning for devices
-    pub async fn start_scan(&self) -> Result<Vec<DiscoveredDevice>, BleError> {
-        // Start scanning
-        self.adapter.start_scan(ScanFilter::default()).await?;
+    pub async fn start_scan(&self) -> Result<Vec<DiscoveredDevice>, BluetoothError> {
+        let ctx = ErrorContext::new("BluetoothAdapter", "start_scan");
+        
+        // Start scanning with better error handling
+        self.adapter.start_scan(ScanFilter::default()).await.map_err(|e| {
+            log::error!("{}Failed to start scan: {}", ctx, e);
+            BluetoothError::ScanFailed(format!("Failed to start scan: {}", e))
+        })?;
+        
+        log::debug!("{}Successfully started Bluetooth scan", ctx);
         
         // Return empty list initially
         Ok(Vec::new())
     }
     
+    /// Backward compatibility method for code that still expects BleError
+    #[deprecated(since = "0.1.0", note = "Use methods returning BluetoothError instead")]
+    pub async fn start_scan_with_ble_error(&self) -> Result<Vec<DiscoveredDevice>, BleError> {
+        self.start_scan().await.map_err(|e| e.into())
+    }
+    
     /// Stop scanning for devices
-    pub async fn stop_scan(&self) -> Result<(), BleError> {
-        self.adapter.stop_scan().await?;
+    pub async fn stop_scan(&self) -> Result<(), BluetoothError> {
+        let ctx = ErrorContext::new("BluetoothAdapter", "stop_scan");
+        
+        self.adapter.stop_scan().await.map_err(|e| {
+            log::warn!("{}Failed to stop scan: {}", ctx, e);
+            BluetoothError::from(e)
+        })?;
+        
+        log::debug!("{}Successfully stopped Bluetooth scan", ctx);
         Ok(())
     }
     
+    /// Backward compatibility method for code that still expects BleError
+    #[deprecated(since = "0.1.0", note = "Use methods returning BluetoothError instead")]
+    pub async fn stop_scan_with_ble_error(&self) -> Result<(), BleError> {
+        self.stop_scan().await.map_err(|e| e.into())
+    }
+    
     /// Get discovered devices
-    pub async fn get_discovered_devices(&self) -> Result<Vec<DiscoveredDevice>, BleError> {
-        let peripherals = self.adapter.peripherals().await?;
+    pub async fn get_discovered_devices(&self) -> Result<Vec<DiscoveredDevice>, BluetoothError> {
+        let ctx = ErrorContext::new("BluetoothAdapter", "get_discovered_devices");
+        
+        let peripherals = self.adapter.peripherals().await.map_err(|e| {
+            log::error!("{}Failed to get peripherals: {}", ctx, e);
+            BluetoothError::from(e)
+        })?;
         
         // Convert peripherals to discovered devices
         let mut devices = Vec::new();
         
         for peripheral in peripherals {
             // Try to get properties
-            if let Ok(properties) = peripheral.properties().await {
-                if let Some(properties) = properties {
+            match peripheral.properties().await {
+                Ok(Some(properties)) => {
                     // Create discovered device
                     let device = DiscoveredDevice {
-                        name: properties.local_name,
                         address: properties.address,
+                        name: properties.local_name,
                         rssi: properties.rssi,
-                        is_connected: false, // We'll check this later
-                        is_potential_airpods: false, // We'll check this later
                         manufacturer_data: properties.manufacturer_data,
+                        is_potential_airpods: false, // We'll compute this later
+                        last_seen: std::time::Instant::now(),
+                        is_connected: false, // Default, will be updated if needed
                         service_data: properties.service_data,
                         services: properties.services,
-                        last_seen: std::time::Instant::now(),
+                        tx_power_level: properties.tx_power_level,
                     };
                     
                     devices.push(device);
+                },
+                Ok(None) => {
+                    log::debug!("{}Skipping peripheral with no properties: {}", ctx, peripheral.address());
+                },
+                Err(e) => {
+                    log::warn!("{}Error getting properties for peripheral {}: {}",
+                        ctx, peripheral.address(), e);
+                    // Continue with other devices
                 }
             }
         }
         
+        log::debug!("{}Found {} devices", ctx, devices.len());
         Ok(devices)
+    }
+    
+    /// Backward compatibility method for code that still expects BleError
+    #[deprecated(since = "0.1.0", note = "Use methods returning BluetoothError instead")]
+    pub async fn get_discovered_devices_with_ble_error(&self) -> Result<Vec<DiscoveredDevice>, BleError> {
+        self.get_discovered_devices().await.map_err(|e| e.into())
+    }
+
+    /// Create a new adapter with retry logic
+    pub async fn new_with_retry() -> Result<Self, BluetoothError> {
+        let ctx = ErrorContext::new("AdapterManager", "new");
+        let mut result = Self::new().await;
+        let mut attempt = 0;
+        let max_attempts = 3;
+        let retry_delay = Duration::from_millis(500);
+
+        while result.is_err() && attempt < max_attempts {
+            attempt += 1;
+            debug!("{}Adapter initialization attempt {}/{} failed, retrying...", 
+                ctx, attempt, max_attempts);
+            sleep(retry_delay).await;
+            result = Self::new().await;
+        }
+
+        result
     }
 } 

@@ -385,45 +385,32 @@ impl AppConfig {
     ///
     /// Result containing the loaded configuration or an error
     pub fn load_from_path<P: AsRef<std::path::Path>>(path: P) -> Result<Self, ConfigError> {
-        use std::fs::File;
-        use std::io::Read;
-        
         let path = path.as_ref();
         
-        // Check if the file exists - return IoError for non-existent files
+        // If the file doesn't exist, return default config
         if !path.exists() {
-            log::error!("Config file does not exist: {:?}", path);
-            return Err(ConfigError::IoError(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                format!("Config file not found: {:?}", path)
-            )));
+            log::info!("Configuration file not found at {}, using defaults", path.display());
+            return Ok(Self::default());
         }
         
-        // Read the file
-        let mut file = File::open(path)
-            .map_err(|e| {
-                log::error!("Failed to open config file: {}", e);
-                ConfigError::IoError(e)
-            })?;
+        let file_content = match std::fs::read_to_string(path) {
+            Ok(content) => content,
+            Err(e) => match e.kind() {
+                std::io::ErrorKind::NotFound => return Err(ConfigError::FileNotFound(path.to_path_buf())),
+                std::io::ErrorKind::PermissionDenied => return Err(ConfigError::PermissionDenied(path.to_path_buf())),
+                _ => return Err(ConfigError::IoError(e))
+            }
+        };
         
-        let mut contents = String::new();
-        file.read_to_string(&mut contents)
-            .map_err(|e| {
-                log::error!("Failed to read config file: {}", e);
-                ConfigError::IoError(e)
-            })?;
-        
-        // Deserialize
-        let mut config: Self = serde_json::from_str(&contents)
-            .map_err(|e| {
-                log::error!("Failed to parse config file: {}", e);
-                ConfigError::SerializationError(e)
-            })?;
-        
-        // Set the settings path
+        let mut config: Self = serde_json::from_str(&file_content)
+            .map_err(ConfigError::SerializationError)?;
+            
+        // Update the settings path
         config.settings_path = path.to_path_buf();
         
-        log::debug!("Loaded configuration from {:?}", path);
+        // Validate the config
+        config.validate()?;
+        
         Ok(config)
     }
     
@@ -449,47 +436,32 @@ impl AppConfig {
     ///
     /// Result indicating success or an error
     pub fn save_to_path<P: AsRef<std::path::Path>>(&self, path: P) -> Result<(), ConfigError> {
-        use std::fs::{self, File};
-        use std::io::Write;
-        
         let path = path.as_ref();
         
-        // Ensure the directory exists
+        // Validate before saving
+        self.validate()?;
+        
+        // Create parent directories if they don't exist
         if let Some(parent) = path.parent() {
             if !parent.exists() {
-                log::debug!("Creating config directory: {:?}", parent);
-                if let Err(e) = fs::create_dir_all(parent) {
-                    log::error!("Failed to create config directory: {}", e);
-                    
-                    // Fall back to current directory
-                    let fallback_path = std::path::PathBuf::from("settings.json");
-                    log::warn!("Falling back to current directory: {:?}", fallback_path);
-                    return self.save_to_path(fallback_path);
-                }
+                std::fs::create_dir_all(parent).map_err(|e| match e.kind() {
+                    std::io::ErrorKind::PermissionDenied => ConfigError::PermissionDenied(parent.to_path_buf()),
+                    _ => ConfigError::FileSystemError(format!("Failed to create directory {}: {}", parent.display(), e))
+                })?;
             }
         }
         
-        // Serialize
+        // Convert to JSON
         let json = serde_json::to_string_pretty(self)
-            .map_err(|e| {
-                log::error!("Failed to serialize config: {}", e);
-                ConfigError::SerializationError(e)
-            })?;
+            .map_err(|e| ConfigError::SerializationError(e))?;
+            
+        // Write to file with error handling
+        std::fs::write(path, json).map_err(|e| match e.kind() {
+            std::io::ErrorKind::PermissionDenied => ConfigError::PermissionDenied(path.to_path_buf()),
+            _ => ConfigError::IoError(e)
+        })?;
         
-        // Write to file
-        let mut file = File::create(path)
-            .map_err(|e| {
-                log::error!("Failed to create config file: {}", e);
-                ConfigError::IoError(e)
-            })?;
-        
-        file.write_all(json.as_bytes())
-            .map_err(|e| {
-                log::error!("Failed to write config file: {}", e);
-                ConfigError::IoError(e)
-            })?;
-        
-        log::debug!("Saved configuration to {:?}", path);
+        log::info!("Configuration saved to {}", path.display());
         Ok(())
     }
     
@@ -515,18 +487,35 @@ impl AppConfig {
     
     /// Validate the configuration
     pub fn validate(&self) -> Result<(), ConfigError> {
-        // Validate Bluetooth configuration
-        self.bluetooth.validate()?;
-        
-        // Validate UI configuration
-        self.ui.validate()?;
-        
-        // Validate system configuration
-        self.system.validate()?;
-        
-        // Validate battery configuration
-        self.battery.validate()?;
-        
+        // Validate each section
+        self.bluetooth.validate()
+            .map_err(|e| match e {
+                ConfigError::ValidationFailed(field, msg) => 
+                    ConfigError::ValidationFailed(format!("bluetooth.{}", field), msg),
+                _ => e
+            })?;
+                
+        self.ui.validate()
+            .map_err(|e| match e {
+                ConfigError::ValidationFailed(field, msg) => 
+                    ConfigError::ValidationFailed(format!("ui.{}", field), msg),
+                _ => e
+            })?;
+                
+        self.system.validate()
+            .map_err(|e| match e {
+                ConfigError::ValidationFailed(field, msg) => 
+                    ConfigError::ValidationFailed(format!("system.{}", field), msg),
+                _ => e
+            })?;
+                
+        self.battery.validate()
+            .map_err(|e| match e {
+                ConfigError::ValidationFailed(field, msg) => 
+                    ConfigError::ValidationFailed(format!("battery.{}", field), msg),
+                _ => e
+            })?;
+            
         Ok(())
     }
 }
@@ -534,46 +523,46 @@ impl AppConfig {
 impl BluetoothConfig {
     /// Validate Bluetooth configuration
     pub fn validate(&self) -> Result<(), ConfigError> {
-        // Scan duration should be between 1 and 60 seconds
-        if self.scan_duration.as_secs() < 1 || self.scan_duration.as_secs() > 60 {
+        if self.scan_duration.as_secs() == 0 {
             return Err(ConfigError::ValidationFailed(
                 "scan_duration".to_string(),
-                format!("Scan duration must be between 1 and 60 seconds, got {}", self.scan_duration.as_secs())
+                "Scan duration must be greater than zero".to_string()
             ));
         }
         
-        // Scan interval should be between 5 seconds and 10 minutes
-        if self.scan_interval.as_secs() < 5 || self.scan_interval.as_secs() > 600 {
+        if self.scan_interval.as_secs() == 0 {
             return Err(ConfigError::ValidationFailed(
                 "scan_interval".to_string(),
-                format!("Scan interval must be between 5 and 600 seconds, got {}", self.scan_interval.as_secs())
+                "Scan interval must be greater than zero".to_string()
             ));
         }
         
-        // If min_rssi is set, it should be in a reasonable range (-100 to 0)
+        if self.battery_refresh_interval == 0 {
+            return Err(ConfigError::ValidationFailed(
+                "battery_refresh_interval".to_string(),
+                "Battery refresh interval must be greater than zero".to_string()
+            ));
+        }
+        
         if let Some(rssi) = self.min_rssi {
-            if !(-100..=0).contains(&rssi) {
+            // RSSI is a negative value, and smaller values (e.g. -100) are weaker than larger values (e.g. -60)
+            if rssi > 0 {
                 return Err(ConfigError::ValidationFailed(
                     "min_rssi".to_string(),
-                    format!("RSSI must be between -100 and 0, got {}", rssi)
+                    "RSSI minimum value should be negative".to_string()
+                ));
+            }
+            
+            if rssi < -100 {
+                return Err(ConfigError::ValidationFailed(
+                    "min_rssi".to_string(),
+                    "RSSI minimum value should be greater than -100".to_string()
                 ));
             }
         }
         
-        // Battery refresh interval should be between 1 and 300 seconds
-        if self.battery_refresh_interval < 1 || self.battery_refresh_interval > 300 {
-            return Err(ConfigError::ValidationFailed(
-                "battery_refresh_interval".to_string(),
-                format!("Battery refresh interval must be between 1 and 300 seconds, got {}", self.battery_refresh_interval)
-            ));
-        }
-        
-        // Reconnect attempts should be between 1 and 10
-        if self.reconnect_attempts < 1 || self.reconnect_attempts > 10 {
-            return Err(ConfigError::ValidationFailed(
-                "reconnect_attempts".to_string(),
-                format!("Reconnect attempts must be between 1 and 10, got {}", self.reconnect_attempts)
-            ));
+        if self.reconnect_attempts > 10 {
+            log::warn!("High reconnect_attempts value ({}), this could cause delays", self.reconnect_attempts);
         }
         
         Ok(())
@@ -583,21 +572,23 @@ impl BluetoothConfig {
 impl UiConfig {
     /// Validate UI configuration
     pub fn validate(&self) -> Result<(), ConfigError> {
-        // Low battery threshold should be between 1 and 100
-        if self.low_battery_threshold < 1 || self.low_battery_threshold > 100 {
+        if self.low_battery_threshold > 100 {
             return Err(ConfigError::ValidationFailed(
                 "low_battery_threshold".to_string(),
-                format!("Low battery threshold must be between 1 and 100, got {}", self.low_battery_threshold)
+                "Low battery threshold cannot exceed 100%".to_string()
             ));
         }
         
-        // Auto-hide timeout should be reasonable if set
         if let Some(timeout) = self.auto_hide_timeout {
-            if !(5..=3600).contains(&timeout) {
+            if timeout < 5 {
                 return Err(ConfigError::ValidationFailed(
                     "auto_hide_timeout".to_string(),
-                    format!("Auto-hide timeout must be between 5 and 3600 seconds, got {}", timeout)
+                    "Auto hide timeout should be at least 5 seconds".to_string()
                 ));
+            }
+            
+            if timeout > 3600 {
+                log::warn!("Very long auto-hide timeout ({}s), consider a shorter value", timeout);
             }
         }
         
@@ -608,13 +599,16 @@ impl UiConfig {
 impl SystemConfig {
     /// Validate system configuration
     pub fn validate(&self) -> Result<(), ConfigError> {
-        // Validate auto_save_interval
         if let Some(interval) = self.auto_save_interval {
-            if interval < 30 {
+            if interval < 10 {
                 return Err(ConfigError::ValidationFailed(
-                    "system.auto_save_interval".to_string(),
-                    "Auto-save interval must be at least 30 seconds".to_string(),
+                    "auto_save_interval".to_string(),
+                    "Auto-save interval should be at least 10 seconds".to_string()
                 ));
+            }
+            
+            if interval > 3600 {
+                log::warn!("Very long auto-save interval ({}s), consider a shorter value", interval);
             }
         }
         
@@ -625,19 +619,17 @@ impl SystemConfig {
 impl BatteryConfig {
     /// Validate the battery configuration
     pub fn validate(&self) -> Result<(), ConfigError> {
-        // Validate low threshold
         if self.low_threshold > 100 {
             return Err(ConfigError::ValidationFailed(
-                "battery.low_threshold".to_string(),
-                "Low battery threshold must be between 0 and 100".to_string(),
+                "low_threshold".to_string(),
+                "Low battery threshold cannot exceed 100%".to_string()
             ));
         }
         
-        // Validate change threshold
         if self.change_threshold > 50 {
             return Err(ConfigError::ValidationFailed(
-                "battery.change_threshold".to_string(),
-                "Level change threshold must be between 0 and 50".to_string(),
+                "change_threshold".to_string(),
+                "Change threshold should not exceed 50%".to_string()
             ));
         }
         
@@ -667,6 +659,38 @@ pub enum ConfigError {
     /// Validation error
     #[error("Validation failed for {0}: {1}")]
     ValidationFailed(String, String),
+    
+    /// Path error
+    #[error("Path error: {0}")]
+    PathError(String),
+    
+    /// File not found error
+    #[error("Configuration file not found: {0}")]
+    FileNotFound(PathBuf),
+    
+    /// Permission denied
+    #[error("Permission denied when accessing configuration file: {0}")]
+    PermissionDenied(PathBuf),
+    
+    /// File system error
+    #[error("File system error: {0}")]
+    FileSystemError(String),
+}
+
+impl From<ConfigError> for crate::error::RustPodsError {
+    fn from(err: ConfigError) -> Self {
+        match err {
+            ConfigError::IoError(e) => crate::error::RustPodsError::IoError(e.to_string()),
+            ConfigError::SerializationError(e) => crate::error::RustPodsError::ParseError(e.to_string()),
+            ConfigError::LockError => crate::error::RustPodsError::State("Failed to lock configuration".to_string()),
+            ConfigError::InvalidConfig(msg) => crate::error::RustPodsError::Config(msg),
+            ConfigError::ValidationFailed(field, msg) => crate::error::RustPodsError::Validation(format!("{}: {}", field, msg)),
+            ConfigError::PathError(msg) => crate::error::RustPodsError::Path(msg),
+            ConfigError::FileNotFound(path) => crate::error::RustPodsError::FileNotFound(path),
+            ConfigError::PermissionDenied(path) => crate::error::RustPodsError::PermissionDenied(path.to_string_lossy().to_string()),
+            ConfigError::FileSystemError(msg) => crate::error::RustPodsError::IoError(msg),
+        }
+    }
 }
 
 /// Get the default settings path

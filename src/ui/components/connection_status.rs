@@ -86,7 +86,6 @@ impl ConnectionStatus {
         };
         
         // Clone the color and size to own them before moving into the closure
-        let status_color = status_color;
         let dot_size_value = dot_size;
         
         container(iced::widget::Space::new(
@@ -99,7 +98,7 @@ impl ConnectionStatus {
                 border_radius: dot_size_value.into(),
                 border_width: 0.0,
                 border_color: Color::TRANSPARENT,
-                ..Default::default()
+                text_color: None,
             }
         })))
         .width(Length::Fixed(dot_size))
@@ -160,8 +159,7 @@ impl UiComponent for ConnectionStatus {
                 border_radius: 4.0.into(),
                 border_width: 1.0,
                 border_color,
-                text_color: Some(text_color),
-                ..Default::default()
+                text_color: Some(text_color)
             }
         })))
         .padding(8)

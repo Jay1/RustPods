@@ -341,7 +341,7 @@ impl SettingsView {
 }
 
 /// Bluetooth settings enum
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum BluetoothSetting {
     /// Auto scan on startup
     AutoScanOnStartup(bool),
@@ -360,7 +360,7 @@ pub enum BluetoothSetting {
 }
 
 /// UI settings enum
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum UiSetting {
     /// Theme
     Theme(Theme),
@@ -377,7 +377,7 @@ pub enum UiSetting {
 }
 
 /// System settings enum
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SystemSetting {
     /// Start on boot
     StartOnBoot(bool),

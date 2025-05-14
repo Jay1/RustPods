@@ -36,9 +36,9 @@ impl EnhancedBatteryDisplay {
             .horizontal_alignment(alignment::Horizontal::Center);
             
         // Create rows for each component
-        let left_row = display.create_battery_row("Left", battery_clone.left, battery_clone.charging.left);
-        let right_row = display.create_battery_row("Right", battery_clone.right, battery_clone.charging.right);
-        let case_row = display.create_battery_row("Case", battery_clone.case, battery_clone.charging.case);
+        let left_row = display.create_battery_row("Left", battery_clone.left, battery_clone.charging.as_ref().is_some_and(|c| c.is_left_charging()));
+        let right_row = display.create_battery_row("Right", battery_clone.right, battery_clone.charging.as_ref().is_some_and(|c| c.is_right_charging()));
+        let case_row = display.create_battery_row("Case", battery_clone.case, battery_clone.charging.as_ref().is_some_and(|c| c.is_case_charging()));
         
         // Create a status row
         let status = text(display.get_battery_status())
@@ -73,9 +73,9 @@ impl UiComponent for EnhancedBatteryDisplay {
                 .horizontal_alignment(alignment::Horizontal::Center);
                 
             // Create rows for each component
-            let left_row = self.create_battery_row("Left", battery.left, battery.charging.left);
-            let right_row = self.create_battery_row("Right", battery.right, battery.charging.right);
-            let case_row = self.create_battery_row("Case", battery.case, battery.charging.case);
+            let left_row = self.create_battery_row("Left", battery.left, battery.charging.as_ref().is_some_and(|c| c.is_left_charging()));
+            let right_row = self.create_battery_row("Right", battery.right, battery.charging.as_ref().is_some_and(|c| c.is_right_charging()));
+            let case_row = self.create_battery_row("Case", battery.case, battery.charging.as_ref().is_some_and(|c| c.is_case_charging()));
             
             // Create a status row
             let status = text(self.get_battery_status())
@@ -181,9 +181,7 @@ impl EnhancedBatteryDisplay {
     fn get_battery_status(&self) -> &'static str {
         if let Some(battery) = &self.battery {
             // Check if any component is charging
-            let is_charging = battery.charging.case || 
-                              battery.charging.left || 
-                              battery.charging.right;
+            let is_charging = battery.charging.as_ref().is_some_and(|c| c.is_any_charging());
             
             if is_charging {
                 return "Charging";
@@ -225,7 +223,7 @@ fn battery_level_low(battery: &AirPodsBattery) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::airpods::ChargingStatus;
+    use crate::airpods::AirPodsChargingState;
     
     #[test]
     fn test_enhanced_battery_display_creation() {
@@ -234,11 +232,7 @@ mod tests {
             left: Some(80),
             right: Some(75),
             case: Some(90),
-            charging: ChargingStatus {
-                left: false,
-                right: false,
-                case: true,
-            },
+            charging: Some(AirPodsChargingState::CaseCharging),
         };
         
         let display = EnhancedBatteryDisplay::new(Some(battery.clone()));
@@ -248,7 +242,8 @@ mod tests {
             assert_eq!(b.left, Some(80));
             assert_eq!(b.right, Some(75));
             assert_eq!(b.case, Some(90));
-            assert!(b.charging.case);
+            assert!(b.charging.is_some());
+            assert_eq!(*b.charging.as_ref().unwrap(), AirPodsChargingState::CaseCharging);
         }
         
         // Test empty creation
@@ -263,11 +258,7 @@ mod tests {
             left: Some(15),
             right: Some(50),
             case: Some(75),
-            charging: ChargingStatus {
-                left: false,
-                right: false,
-                case: false,
-            },
+            charging: Some(AirPodsChargingState::NotCharging),
         };
         
         assert!(battery_level_low(&low_battery));
@@ -277,11 +268,7 @@ mod tests {
             left: Some(60),
             right: Some(50),
             case: Some(75),
-            charging: ChargingStatus {
-                left: false,
-                right: false,
-                case: false,
-            },
+            charging: Some(AirPodsChargingState::NotCharging),
         };
         
         assert!(!battery_level_low(&good_battery));

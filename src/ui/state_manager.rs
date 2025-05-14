@@ -308,9 +308,10 @@ impl StateManager {
                                 address: device.address,
                                 name: Some(name.clone()),
                                 device_type: crate::airpods::AirPodsType::detect_from_name(name),
-                                battery: crate::airpods::AirPodsBattery::default(),
+                                battery: Some(crate::airpods::AirPodsBattery::default()),
                                 rssi: device.rssi,
-                                raw_data: vec![],
+                                is_connected: false,
+                                last_seen: std::time::Instant::now(),
                             };
                             
                             self.notify_ui(Message::AirPodsConnected(airpods));

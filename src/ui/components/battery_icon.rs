@@ -253,7 +253,7 @@ fn battery_level_style(level: Option<u8>, is_charging: bool) -> iced::theme::Pro
     };
     
     // Create a new color that is owned and can be moved into the closure
-    let color = color;
+    /* color already defined */
     let bg_color = SURFACE1;
     
     iced::theme::ProgressBar::Custom(Box::new(move |_: &iced::Theme| {

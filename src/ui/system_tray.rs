@@ -6,9 +6,8 @@ use crate::ui::Message;
 use crate::config::{AppConfig, Theme as ConfigTheme};
 use crate::ui::state_manager::StateManager;
 use crate::bluetooth::AirPodsBatteryStatus;
+use crate::error::{RustPodsError, ErrorContext, ErrorSeverity, RecoveryAction};
 use std::sync::Arc;
-
-
 
 /// Menu item information for system tray
 struct MenuItem {
@@ -81,11 +80,51 @@ pub enum SystemTrayError {
     
     #[error("Windows-specific error: {0}")]
     WindowsError(#[from] io::Error),
+    
+    #[error("Failed to connect to state manager: {0}")]
+    StateManagerError(String),
+    
+    #[error("Failed to update battery status: {0}")]
+    BatteryUpdateError(String),
+    
+    #[error("Failed to clean up resources: {0}")]
+    CleanupError(String),
+    
+    #[error("Notification error: {0}")]
+    NotificationError(String),
+    
+    #[error("Icon resource error: {0}")]
+    ResourceError(String),
+}
+
+impl From<SystemTrayError> for RustPodsError {
+    fn from(err: SystemTrayError) -> Self {
+        match err {
+            SystemTrayError::Creation(msg) => RustPodsError::Ui(format!("Failed to create system tray: {}", msg)),
+            SystemTrayError::MenuItem(msg) => RustPodsError::Ui(format!("Failed to add menu item: {}", msg)),
+            SystemTrayError::SetIcon(msg) => RustPodsError::Ui(format!("Failed to set system tray icon: {}", msg)),
+            SystemTrayError::SetTooltip(msg) => RustPodsError::Ui(format!("Failed to set system tray tooltip: {}", msg)),
+            SystemTrayError::EventHandling(msg) => RustPodsError::Ui(format!("Failed to handle system tray event: {}", msg)),
+            SystemTrayError::Registry(msg) => RustPodsError::System(msg),
+            SystemTrayError::WindowsError(err) => RustPodsError::System(format!("Windows API error: {}", err)),
+            SystemTrayError::StateManagerError(msg) => RustPodsError::State(msg),
+            SystemTrayError::BatteryUpdateError(msg) => RustPodsError::BatteryMonitor(msg),
+            SystemTrayError::CleanupError(msg) => RustPodsError::Lifecycle(msg),
+            SystemTrayError::NotificationError(msg) => RustPodsError::Ui(format!("Notification error: {}", msg)),
+            SystemTrayError::ResourceError(msg) => RustPodsError::Ui(format!("Resource error: {}", msg)),
+        }
+    }
 }
 
 impl SystemTray {
     /// Create a new system tray
     pub fn new(tx: mpsc::Sender<Message>, config: AppConfig) -> Result<Self, SystemTrayError> {
+        // Create error context for this operation
+        let ctx = ErrorContext::new("SystemTray", "new")
+            .with_metadata("config", format!("{:?}", config.ui.theme));
+        
+        log::debug!("Creating system tray with theme: {:?}", config.ui.theme);
+        
         // Determine theme mode from config
         let theme_mode = Self::detect_theme_mode(&config);
         
@@ -95,21 +134,21 @@ impl SystemTray {
         // Temporary dummy icon path - replace with actual icon path later
         let icon_path = "C:\\Windows\\System32\\shell32.dll,0";
         
+        // Create the tray item with better error handling
         let mut tray = TrayItem::new(app_name, icon_path)
-            .map_err(|e| SystemTrayError::Creation(e.to_string()))?;
+            .map_err(|e| {
+                let msg = format!("Failed to create tray item: {}", e);
+                log::error!("{}", msg);
+                SystemTrayError::Creation(msg)
+            })?;
         
         // Set a tooltip for the tray icon
         #[cfg(target_os = "windows")]
         {
-            // The tooltip functionality may not be directly supported in the current version
-            // We'll work with what's available in the API
             log::info!("Setting initial tooltip: RustPods - Disconnected");
-            
-            // If direct tooltip setting isn't available, we'll track it internally
-            // and update the tray icon when needed
         }
         
-        // Define menu groups
+        // Define menu groups with better error handling
         let main_actions = vec![
             MenuItem { 
                 label: "Show/Hide Window".to_string(), 
@@ -155,32 +194,49 @@ impl SystemTray {
             },
         ];
         
-        // Add main actions group
+        // Try to add menu items with better error handling
         Self::add_menu_group(&mut tray, &tx, &main_actions)
-            .map_err(SystemTrayError::MenuItem)?;
+            .map_err(|e| {
+                log::error!("Failed to add main actions to tray: {}", e);
+                SystemTrayError::MenuItem(e)
+            })?;
         
         // Add separator
         tray.add_menu_item("-", || {})
-            .map_err(|e| SystemTrayError::MenuItem(e.to_string()))?;
+            .map_err(|e| {
+                let msg = format!("Failed to add separator: {}", e);
+                log::error!("{}", msg);
+                SystemTrayError::MenuItem(msg)
+            })?;
         
-        // Add scan group
+        // Rest of menu adding with better error handling
         Self::add_menu_group(&mut tray, &tx, &scan_actions)
-            .map_err(SystemTrayError::MenuItem)?;
+            .map_err(|e| {
+                log::error!("Failed to add scan actions to tray: {}", e);
+                SystemTrayError::MenuItem(e)
+            })?;
         
-        // Add separator
         tray.add_menu_item("-", || {})
-            .map_err(|e| SystemTrayError::MenuItem(e.to_string()))?;
+            .map_err(|e| {
+                let msg = format!("Failed to add separator: {}", e);
+                log::error!("{}", msg);
+                SystemTrayError::MenuItem(msg)
+            })?;
         
-        // Add settings group
         Self::add_menu_group(&mut tray, &tx, &settings_actions)
-            .map_err(SystemTrayError::MenuItem)?;
+            .map_err(|e| {
+                log::error!("Failed to add settings actions to tray: {}", e);
+                SystemTrayError::MenuItem(e)
+            })?;
         
-        // Add separator
         tray.add_menu_item("-", || {})
-            .map_err(|e| SystemTrayError::MenuItem(e.to_string()))?;
+            .map_err(|e| {
+                let msg = format!("Failed to add separator: {}", e);
+                log::error!("{}", msg);
+                SystemTrayError::MenuItem(msg)
+            })?;
         
-        // Add about group
-        // Special handling for about dialog
+        // Special about section with better error handling
         let tx_clone = tx.clone();
         let about_label = if let Some(shortcut) = &about_actions[0].shortcut {
             format!("{}\t{}", about_actions[0].label, shortcut)
@@ -189,65 +245,51 @@ impl SystemTray {
         };
         
         tray.add_menu_item(&about_label, move || {
-            // Display the about dialog
-            // This would ideally open a custom about dialog, but for now we'll just show a message
             let version = env!("CARGO_PKG_VERSION", "0.1.0");
             let about_message = format!(
                 "RustPods v{}\nA simple AirPods battery monitor for Windows\nDeveloped with Rust and Iced", 
                 version
             );
-            let _ = tx_clone.send(Message::Status(about_message));
+            if let Err(e) = tx_clone.send(Message::Status(about_message)) {
+                log::error!("Failed to send about message: {}", e);
+            }
         })
-        .map_err(|e| SystemTrayError::MenuItem(e.to_string()))?;
+        .map_err(|e| {
+            let msg = format!("Failed to add about menu item: {}", e);
+            log::error!("{}", msg);
+            SystemTrayError::MenuItem(msg)
+        })?;
         
-        // Add separator
+        // Exit section with better error handling
         tray.add_menu_item("-", || {})
-            .map_err(|e| SystemTrayError::MenuItem(e.to_string()))?;
+            .map_err(|e| {
+                let msg = format!("Failed to add separator: {}", e);
+                log::error!("{}", msg);
+                SystemTrayError::MenuItem(msg)
+            })?;
         
-        // Add exit group
         Self::add_menu_group(&mut tray, &tx, &exit_actions)
-            .map_err(SystemTrayError::MenuItem)?;
+            .map_err(|e| {
+                log::error!("Failed to add exit actions to tray: {}", e);
+                SystemTrayError::MenuItem(e)
+            })?;
         
-        let mut startup_registered = false;
-        
-        // Create system tray structure
-        let mut system_tray = Self {
+        // Create the system tray
+        let mut system_tray = SystemTray {
             tray,
             tx,
             config,
             is_connected: false,
             theme_mode,
-            startup_registered,
+            startup_registered: false,
             state_manager: None,
             last_battery_status: None,
         };
         
-        // Register startup if enabled in config
-        #[cfg(target_os = "windows")]
-        if system_tray.config.system.launch_at_startup {
-            if let Err(e) = system_tray.set_startup_enabled(true) {
-                log::error!("Failed to set startup: {}", e);
-            } else {
-                startup_registered = true;
-            }
-        }
+        // Update the icon based on the initial theme
+        system_tray.update_icon(false)?;
         
-        // Register click handlers if supported by the platform
-        #[cfg(target_os = "windows")]
-        {
-            // In tray-item 0.7, the event handling API might be different
-            // We'll use the available API instead
-            
-            // The system tray icon click handling is typically implemented via menu items
-            // We've already set up appropriate menu items for our functionality
-            
-            log::info!("Registered handlers for tray item clicks via menu");
-            
-            // Setup global system event handling for Windows
-            system_tray.setup_system_event_handling()?;
-        }
-        
-        // Return the tray
+        log::info!("System tray created successfully");
         Ok(system_tray)
     }
     
@@ -378,11 +420,20 @@ impl SystemTray {
     /// Cleanup resources before exit
     #[cfg(target_os = "windows")]
     pub fn cleanup(&mut self) -> Result<(), SystemTrayError> {
-        // In a real implementation, this would:
-        // - Unregister any global hotkeys
-        // - Release other system resources
-        // - Save any pending state
-        log::info!("SystemTray cleanup performed");
+        let ctx = ErrorContext::new("SystemTray", "cleanup");
+        
+        log::debug!("Cleaning up system tray resources");
+        
+        // Perform any cleanup actions here
+        // For example, unregister from Windows registry if needed
+        
+        #[cfg(target_os = "windows")]
+        {
+            // Windows-specific cleanup code would go here
+            log::debug!("Performing Windows-specific cleanup");
+        }
+        
+        log::info!("System tray resources cleaned up successfully");
         Ok(())
     }
     
@@ -477,6 +528,10 @@ impl SystemTray {
     
     /// Connect the system tray to the state manager
     pub fn connect_state_manager(&mut self, state_manager: Arc<StateManager>) -> Result<(), SystemTrayError> {
+        let ctx = ErrorContext::new("SystemTray", "connect_state_manager");
+        
+        log::debug!("Connecting system tray to state manager");
+        
         self.state_manager = Some(state_manager);
         
         // Initialize from current state if available
@@ -505,6 +560,7 @@ impl SystemTray {
             }
         }
         
+        log::info!("System tray connected to state manager successfully");
         Ok(())
     }
     
@@ -555,6 +611,10 @@ impl SystemTray {
 
     /// Update with new battery status from state manager
     pub fn handle_battery_update(&mut self, status: AirPodsBatteryStatus) -> Result<(), SystemTrayError> {
+        let ctx = ErrorContext::new("SystemTray", "handle_battery_update");
+        
+        log::debug!("Handling battery update");
+        
         // Store the status
         self.last_battery_status = Some(status.clone());
         
@@ -574,6 +634,13 @@ impl SystemTray {
         
         // Check if we should show low battery notification
         self.check_low_battery_notification(&status);
+        
+        // Update state manager if available
+        if let Some(state_manager) = &self.state_manager {
+            // Notify state manager of battery update
+            // This is just a placeholder - actual implementation would depend on StateManager API
+            log::debug!("Notifying state manager of battery update");
+        }
         
         Ok(())
     }

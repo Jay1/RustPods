@@ -1,6 +1,7 @@
 //! Integration tests for UI state management
 
-use rustpods::ui::state::{AppState, Message};
+use rustpods::ui::state::AppState;
+use rustpods::ui::message::Message;
 use rustpods::ui::theme::Theme;
 use rustpods::bluetooth::BleEvent;
 use rustpods::airpods::{DetectedAirPods, AirPodsType, AirPodsBattery};
@@ -224,7 +225,11 @@ fn create_test_airpods() -> DetectedAirPods {
             left: Some(70),
             right: Some(70),
             case: None,
-            charging: false,
+            charging: ChargingStatus {
+                left: false,
+                right: false,
+                case: false,
+            },
         },
         rssi: Some(-60),
         raw_data: vec![0x01, 0x02, 0x03],

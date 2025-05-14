@@ -402,11 +402,11 @@ fn start_battery_monitoring(
                     left: Some((80 + (tokio::time::Instant::now().elapsed().as_secs() % 20) as u8).min(100)),
                     right: Some((75 + (tokio::time::Instant::now().elapsed().as_secs() % 20) as u8).min(100)),
                     case: Some((90 + (tokio::time::Instant::now().elapsed().as_secs() % 10) as u8).min(100)),
-                    charging: crate::airpods::ChargingStatus {
-                        left: false,
-                        right: false,
-                        case: (tokio::time::Instant::now().elapsed().as_secs() % 60) < 30,
-                    },
+                    charging: Some(if (tokio::time::Instant::now().elapsed().as_secs() % 60) < 30 {
+                        crate::airpods::AirPodsChargingState::CaseCharging
+                    } else {
+                        crate::airpods::AirPodsChargingState::NotCharging
+                    }),
                 };
                 
                 // Create battery status

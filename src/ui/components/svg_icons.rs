@@ -66,7 +66,7 @@ pub fn refresh_icon_svg_string(animated: bool, progress: f32) -> String {
 /// styled by Iced's color properties.
 pub fn battery_icon_svg_string(percentage: f32, charging: bool) -> String {
     // Clamp percentage between 0.0 and 1.0
-    let p = percentage.max(0.0).min(1.0);
+    let p = percentage.clamp(0.0, 1.0);
 
     // Define the inner dimensions for the fill level
     let fill_area_x = 4.0;

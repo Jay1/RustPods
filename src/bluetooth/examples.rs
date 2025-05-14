@@ -47,6 +47,15 @@ pub async fn scan_with_adapter() -> Result<(), Box<dyn std::error::Error>> {
                             if device.is_potential_airpods { "Yes" } else { "No" }
                         );
                     },
+                    BleEvent::DeviceUpdated(device) => {
+                        println!(
+                            "Updated device: {} ({}), RSSI: {}, AirPods: {}", 
+                            device.name.as_deref().unwrap_or("Unnamed"), 
+                            device.address,
+                            device.rssi.unwrap_or(0),
+                            if device.is_potential_airpods { "Yes" } else { "No" }
+                        );
+                    },
                     BleEvent::DeviceLost(addr) => {
                         println!("Lost device: {}", addr);
                     },
@@ -63,12 +72,19 @@ pub async fn scan_with_adapter() -> Result<(), Box<dyn std::error::Error>> {
                         println!("Scanning completed.");
                         break;
                     },
+                    BleEvent::ScanStarted => {
+                        println!("Scanning started.");
+                    },
+                    BleEvent::ScanStopped => {
+                        println!("Scanning stopped.");
+                        break;
+                    },
                     BleEvent::AirPodsDetected(airpods) => {
                         println!("AirPods detected: {:?} - Battery: L:{}% R:{}% Case:{}%", 
                             airpods.device_type,
-                            airpods.battery.left.unwrap_or(0),
-                            airpods.battery.right.unwrap_or(0),
-                            airpods.battery.case.unwrap_or(0));
+                            airpods.battery.as_ref().and_then(|b| b.left).unwrap_or(0),
+                            airpods.battery.as_ref().and_then(|b| b.right).unwrap_or(0),
+                            airpods.battery.as_ref().and_then(|b| b.case).unwrap_or(0));
                     }
                 }
             },
@@ -115,6 +131,12 @@ pub async fn interval_scanning() -> Result<(), Box<dyn std::error::Error>> {
                          device.address,
                          device.rssi);
             },
+            BleEvent::DeviceUpdated(device) => {
+                println!("  - Updated: {} ({:?}, RSSI: {:?})", 
+                         device.name.as_deref().unwrap_or("Unnamed"),
+                         device.address,
+                         device.rssi);
+            },
             BleEvent::DeviceLost(addr) => {
                 println!("  - Device lost: {}", addr);
             },
@@ -132,12 +154,19 @@ pub async fn interval_scanning() -> Result<(), Box<dyn std::error::Error>> {
                 println!("Scanning completed.");
                 break;
             },
+            BleEvent::ScanStarted => {
+                println!("Scanning started.");
+            },
+            BleEvent::ScanStopped => {
+                println!("Scanning stopped.");
+                break;
+            },
             BleEvent::AirPodsDetected(airpods) => {
                 println!("  - AirPods detected: {:?} - Battery: L:{}% R:{}% Case:{}%", 
                          airpods.device_type,
-                         airpods.battery.left.unwrap_or(0),
-                         airpods.battery.right.unwrap_or(0),
-                         airpods.battery.case.unwrap_or(0));
+                         airpods.battery.as_ref().and_then(|b| b.left).unwrap_or(0),
+                         airpods.battery.as_ref().and_then(|b| b.right).unwrap_or(0),
+                         airpods.battery.as_ref().and_then(|b| b.case).unwrap_or(0));
             }
         }
     }
@@ -184,9 +213,9 @@ pub async fn airpods_filtering() -> Result<(), Box<dyn std::error::Error>> {
                 BleEvent::AirPodsDetected(airpods) => {
                     println!("🎧 Detected AirPods: {:?}", airpods.device_type);
                     println!("    Battery: L:{}% R:{}% Case:{}%",
-                        airpods.battery.left.unwrap_or(0),
-                        airpods.battery.right.unwrap_or(0),
-                        airpods.battery.case.unwrap_or(0));
+                        airpods.battery.as_ref().and_then(|b| b.left).unwrap_or(0),
+                        airpods.battery.as_ref().and_then(|b| b.right).unwrap_or(0),
+                        airpods.battery.as_ref().and_then(|b| b.case).unwrap_or(0));
                     
                     // Get filtered devices
                     let all_airpods = scanner_clone.get_filtered_airpods(&airpods_all_models_filter()).await;
@@ -195,8 +224,7 @@ pub async fn airpods_filtering() -> Result<(), Box<dyn std::error::Error>> {
                     
                     // Custom filter: AirPods with strong signal
                     let custom_airpods_filter = crate::airpods::detector::create_custom_airpods_filter(
-                        Some(-70), // Strong signal filter
-                        None // Any AirPods model
+                        crate::airpods::AirPodsFilterOptions::new().with_min_rssi(-70)
                     );
                     
                     let custom_filtered = scanner_clone.get_filtered_airpods(&custom_airpods_filter).await;
@@ -208,6 +236,12 @@ pub async fn airpods_filtering() -> Result<(), Box<dyn std::error::Error>> {
                     println!("  - Pro models only: {} device(s)", pro_airpods.len());
                     println!("  - Nearby AirPods (-60 RSSI): {} device(s)", nearby_airpods.len());
                     println!("  - Custom filter: {} device(s)", custom_filtered.len());
+
+                    // Print the battery status
+                    println!("Battery status:");
+                    println!("  Left: {:?}%", airpods.battery.as_ref().and_then(|b| b.left).unwrap_or(0));
+                    println!("  Right: {:?}%", airpods.battery.as_ref().and_then(|b| b.right).unwrap_or(0));
+                    println!("  Case: {:?}%", airpods.battery.as_ref().and_then(|b| b.case).unwrap_or(0));
                 },
                 _ => {} // Ignore other events
             }

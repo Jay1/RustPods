@@ -10,7 +10,22 @@ use std::time::{Duration, Instant};
 use uuid::Uuid;
 
 use crate::config::AppConfig;
-use crate::error::{RustPodsError, ErrorSeverity, ErrorStats};
+use crate::error::{RustPodsError, ErrorSeverity, ErrorStats, RecoveryAction, ErrorContext};
+
+/// Error entry for telemetry tracking
+#[derive(Debug, Clone)]
+pub struct ErrorEntry {
+    /// The error type as a string
+    pub error_type: String,
+    /// The error message
+    pub error_message: String,
+    /// When the error occurred
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    /// Context information about the error
+    pub context: Option<ErrorContext>,
+    /// Recovery action attempted
+    pub recovery: Option<RecoveryAction>,
+}
 
 /// Telemetry manager
 pub struct TelemetryManager {
@@ -31,6 +46,15 @@ pub struct TelemetryManager {
     
     /// Application version
     app_version: String,
+    
+    /// Error handler
+    error_handler: Option<Box<dyn FnMut(&RustPodsError)>>,
+
+    /// Error queue for diagnostic triggering
+    error_queue: Vec<ErrorEntry>,
+
+    /// Diagnostics information
+    diagnostics: DiagnosticsInfo,
 }
 
 /// Usage metrics collected for telemetry
@@ -55,6 +79,16 @@ pub struct UsageMetrics {
     pub features_used: HashMap<String, u32>,
 }
 
+/// Diagnostic information tracking
+#[derive(Debug, Default, Clone)]
+struct DiagnosticsInfo {
+    /// Last time diagnostics were collected
+    last_collection: Option<chrono::DateTime<chrono::Utc>>,
+    
+    /// Number of times diagnostics have been collected
+    collection_count: u32,
+}
+
 impl TelemetryManager {
     /// Create a new telemetry manager
     pub fn new(config: &AppConfig) -> Self {
@@ -68,6 +102,9 @@ impl TelemetryManager {
             last_upload: Instant::now(),
             usage_metrics: Arc::new(Mutex::new(UsageMetrics::default())),
             app_version: env!("CARGO_PKG_VERSION").to_string(),
+            error_handler: None,
+            error_queue: Vec::new(),
+            diagnostics: DiagnosticsInfo::default(),
         }
     }
     
@@ -132,7 +169,7 @@ impl TelemetryManager {
         }
     }
     
-    /// Record an error for telemetry
+    /// Record an error occurrence
     pub fn record_error(&mut self, error: &RustPodsError) {
         if !self.enabled {
             return;
@@ -142,33 +179,77 @@ impl TelemetryManager {
         match error {
             RustPodsError::Bluetooth(_) => self.error_stats.bluetooth_errors += 1,
             RustPodsError::BluetoothApiError(_) => self.error_stats.bluetooth_errors += 1,
+            RustPodsError::BluetoothError(_) => self.error_stats.bluetooth_errors += 1,
             RustPodsError::AirPods(_) => self.error_stats.airpods_errors += 1,
             RustPodsError::Ui(_) => self.error_stats.ui_errors += 1,
+            RustPodsError::UiError => self.error_stats.ui_errors += 1,
             RustPodsError::Config(_) => self.error_stats.config_errors += 1,
             RustPodsError::ConfigError(_) => self.error_stats.config_errors += 1,
-            RustPodsError::UiError => self.error_stats.ui_errors += 1,
             RustPodsError::Application(_) => self.error_stats.app_errors += 1,
-            RustPodsError::DeviceNotFound => self.error_stats.device_errors += 1,
-            RustPodsError::Device(_) => self.error_stats.device_errors += 1,
+            RustPodsError::General(_) => self.error_stats.app_errors += 1,
+            RustPodsError::System(_) => self.error_stats.system_errors += 1,
+            RustPodsError::DeviceNotFound => self.error_stats.bluetooth_errors += 1,
+            RustPodsError::Device(_) => self.error_stats.bluetooth_errors += 1,
             RustPodsError::BatteryMonitor(_) => self.error_stats.battery_errors += 1,
             RustPodsError::BatteryMonitorError(_) => self.error_stats.battery_errors += 1,
-            RustPodsError::System(_) => self.error_stats.system_errors += 1,
-            RustPodsError::StatePersistence(_) => self.error_stats.persistence_errors += 1,
-            RustPodsError::Lifecycle(_) => self.error_stats.lifecycle_errors += 1,
+            RustPodsError::StatePersistence(_) => self.error_stats.app_errors += 1,
             RustPodsError::State(_) => self.error_stats.app_errors += 1,
-            RustPodsError::General(_) => self.error_stats.app_errors += 1,
+            RustPodsError::Lifecycle(_) => self.error_stats.app_errors += 1,
+            RustPodsError::IoError(_) => self.error_stats.system_errors += 1,
+            RustPodsError::ParseError(_) => self.error_stats.config_errors += 1,
+            RustPodsError::Path(_) => self.error_stats.system_errors += 1,
+            RustPodsError::FileNotFound(_) => self.error_stats.system_errors += 1,
+            RustPodsError::PermissionDenied(_) => self.error_stats.system_errors += 1,
+            RustPodsError::Validation(_) => self.error_stats.app_errors += 1,
+            RustPodsError::Parse(_) => self.error_stats.config_errors += 1,
+            RustPodsError::Timeout(_) => self.error_stats.bluetooth_errors += 1,
+            RustPodsError::Context { .. } => self.error_stats.app_errors += 1,
+            RustPodsError::InvalidData(_) => self.error_stats.app_errors += 1,
         }
         
+        // Add to error queue for diagnostic monitoring
+        self.error_queue.push(ErrorEntry {
+            error_type: error.get_category().to_string(),
+            error_message: error.to_string(),
+            timestamp: chrono::Utc::now(),
+            context: None,
+            recovery: Some(error.recovery_action()),
+        });
+        
+        // Limit error queue size
+        if self.error_queue.len() > 100 {  // Assuming MAX_ERROR_HISTORY is 100
+            self.error_queue.remove(0);
+        }
+        
+        // Update severity counts
         match error.severity() {
             ErrorSeverity::Critical => self.error_stats.critical_errors += 1,
             ErrorSeverity::Error => self.error_stats.error_level_errors += 1,
-            ErrorSeverity::Recoverable => self.error_stats.recoverable_errors += 1,
+            ErrorSeverity::Major => self.error_stats.error_level_errors += 1,
+            ErrorSeverity::Minor => self.error_stats.recoverable_errors += 1,
             ErrorSeverity::Warning => self.error_stats.warnings += 1,
-            ErrorSeverity::Major => self.error_stats.critical_errors += 1,
-            ErrorSeverity::Minor => self.error_stats.warnings += 1,
+            ErrorSeverity::Info => {}, // No action for info
         }
         
-        self.error_stats.total_errors += 1;
+        // Call the handler if provided
+        if let Some(handler) = &mut self.error_handler {
+            handler(error);
+        }
+        
+        // Log the error
+        match error.severity() {
+            ErrorSeverity::Critical => log::error!("CRITICAL: {}", error),
+            ErrorSeverity::Major => log::error!("{}", error),
+            ErrorSeverity::Error => log::error!("{}", error),
+            ErrorSeverity::Minor => log::warn!("{}", error),
+            ErrorSeverity::Warning => log::warn!("{}", error),
+            ErrorSeverity::Info => log::info!("{}", error),
+        }
+        
+        // Check if we need to trigger data collection
+        if self.should_collect_diagnostics() {
+            self.collect_diagnostics();
+        }
     }
     
     /// Check if telemetry should be uploaded
@@ -237,6 +318,52 @@ impl TelemetryManager {
         if let Ok(mut metrics) = self.usage_metrics.lock() {
             metrics.total_runtime_seconds += seconds;
         }
+    }
+    
+    /// Check if diagnostic data collection should be triggered
+    fn should_collect_diagnostics(&self) -> bool {
+        // If we've hit a critical error threshold or high error rate in a short time
+        let recent_errors = self.error_queue.len();
+        let critical_errors = self.error_queue.iter()
+            .filter(|err| match err.recovery {
+                Some(RecoveryAction::RestartApplication) => true,
+                _ => false,
+            })
+            .count();
+        
+        // Criteria for collecting diagnostics:
+        // 1. Any critical error
+        // 2. More than 10 errors in a short timeframe
+        // 3. More than 5 errors of the same type
+        if critical_errors > 0 || recent_errors > 10 {
+            return true;
+        }
+        
+        // Check for patterns of errors
+        let mut error_types = std::collections::HashMap::new();
+        for error in &self.error_queue {
+            *error_types.entry(error.error_type.clone()).or_insert(0) += 1;
+        }
+        
+        error_types.values().any(|&count| count > 5)
+    }
+    
+    /// Collect diagnostic data about the system state
+    fn collect_diagnostics(&mut self) {
+        // Log that we're collecting diagnostics
+        log::info!("Collecting diagnostic data due to error patterns");
+        
+        // In a real implementation, we'd collect data about:
+        // - System state
+        // - Bluetooth adapter state
+        // - Device connection state
+        // - Configuration
+        // - Memory usage
+        // - etc.
+        
+        // For now, just update the last collection time
+        self.diagnostics.last_collection = Some(chrono::Utc::now());
+        self.diagnostics.collection_count += 1;
     }
 }
 

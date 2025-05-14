@@ -250,6 +250,89 @@ impl Message {
     }
 }
 
+impl PartialEq for Message {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            // Standard variants that can be directly compared
+            (Self::ToggleVisibility, Self::ToggleVisibility) => true,
+            (Self::Exit, Self::Exit) => true,
+            (Self::DeviceDiscovered(a), Self::DeviceDiscovered(b)) => a == b,
+            (Self::DeviceUpdated(a), Self::DeviceUpdated(b)) => a == b,
+            (Self::SelectDevice(a), Self::SelectDevice(b)) => a == b,
+            (Self::StartScan, Self::StartScan) => true,
+            (Self::StopScan, Self::StopScan) => true,
+            (Self::ScanCompleted, Self::ScanCompleted) => true,
+            (Self::ScanStarted, Self::ScanStarted) => true,
+            (Self::ScanStopped, Self::ScanStopped) => true,
+            (Self::ScanProgress(a), Self::ScanProgress(b)) => a == b,
+            (Self::ToggleAutoScan(a), Self::ToggleAutoScan(b)) => a == b,
+            (Self::Tick, Self::Tick) => true,
+            (Self::AnimationTick, Self::AnimationTick) => true,
+            (Self::AnimationProgress(a), Self::AnimationProgress(b)) => a == b,
+            (Self::AirPodsConnected(a), Self::AirPodsConnected(b)) => a == b,
+            (Self::DeviceDisconnected, Self::DeviceDisconnected) => true,
+            (Self::DeviceReconnected(a), Self::DeviceReconnected(b)) => a == b,
+            (Self::ConnectionStateChanged(a), Self::ConnectionStateChanged(b)) => a == b,
+            (Self::ConnectionError(a), Self::ConnectionError(b)) => a == b,
+            (Self::BluetoothError(a), Self::BluetoothError(b)) => a == b,
+            (Self::BatteryStatusUpdated(a), Self::BatteryStatusUpdated(b)) => a == b,
+            (Self::BatteryUpdateFailed(a), Self::BatteryUpdateFailed(b)) => a == b,
+            (Self::LowBatteryWarning(a, c), Self::LowBatteryWarning(b, d)) => a == b && c == d,
+            (Self::Error(a), Self::Error(b)) => a == b,
+            (Self::ClearError, Self::ClearError) => true,
+            (Self::Status(a), Self::Status(b)) => a == b,
+            (Self::ClearStatus, Self::ClearStatus) => true,
+            (Self::RetryConnection, Self::RetryConnection) => true,
+            (Self::AdapterChanged(a), Self::AdapterChanged(b)) => a == b,
+            (Self::UpdateBluetoothSetting(a), Self::UpdateBluetoothSetting(b)) => a == b,
+            (Self::UpdateUiSetting(a), Self::UpdateUiSetting(b)) => a == b,
+            (Self::UpdateSystemSetting(a), Self::UpdateSystemSetting(b)) => a == b,
+            (Self::SettingsChanged(a), Self::SettingsChanged(b)) => a == b,
+            (Self::OpenSettings, Self::OpenSettings) => true,
+            (Self::SaveSettings, Self::SaveSettings) => true,
+            (Self::ResetSettings, Self::ResetSettings) => true,
+            (Self::CloseSettings, Self::CloseSettings) => true,
+            (Self::SelectSettingsTab(a), Self::SelectSettingsTab(b)) => a == b,
+            (Self::BatteryAnimationTick, Self::BatteryAnimationTick) => true,
+            (Self::WindowMove(a), Self::WindowMove(b)) => a == b,
+            (Self::FormValidationError { field: a, message: c }, 
+             Self::FormValidationError { field: b, message: d }) => a == b && c == d,
+            (Self::ContextMenu(a), Self::ContextMenu(b)) => a == b,
+            (Self::ContextMenuItemSelected(a), Self::ContextMenuItemSelected(b)) => a == b,
+            (Self::DoubleClick, Self::DoubleClick) => true,
+            (Self::DragStarted { id: a, position: c }, 
+             Self::DragStarted { id: b, position: d }) => a == b && c == d,
+            (Self::DragMoved { id: a, position: c }, 
+             Self::DragMoved { id: b, position: d }) => a == b && c == d,
+            (Self::DragEnded { id: a, position: c }, 
+             Self::DragEnded { id: b, position: d }) => a == b && c == d,
+            (Self::RawEvent(a), Self::RawEvent(b)) => a == b,
+            (Self::WindowFocused, Self::WindowFocused) => true,
+            (Self::WindowBlurred, Self::WindowBlurred) => true,
+            (Self::WindowCloseRequested, Self::WindowCloseRequested) => true,
+            
+            // Special case for InitializeSystemTray - just check variant, ignore field
+            (Self::InitializeSystemTray(_), Self::InitializeSystemTray(_)) => true,
+            
+            (Self::ShowWindow, Self::ShowWindow) => true,
+            (Self::HideWindow, Self::HideWindow) => true,
+            (Self::WindowUpdate, Self::WindowUpdate) => true,
+            (Self::ToggleDisplayMode, Self::ToggleDisplayMode) => true,
+            (Self::SystemSleep, Self::SystemSleep) => true,
+            (Self::SystemWake, Self::SystemWake) => true,
+            (Self::AppStarting, Self::AppStarting) => true,
+            (Self::AppInitialized, Self::AppInitialized) => true,
+            (Self::AppBackground, Self::AppBackground) => true,
+            (Self::AppForeground, Self::AppForeground) => true,
+            (Self::SaveState, Self::SaveState) => true,
+            (Self::LoadState, Self::LoadState) => true,
+            (Self::RestoreConnection(a), Self::RestoreConnection(b)) => a == b,
+            // Different variants are not equal
+            _ => false,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -285,6 +368,7 @@ mod tests {
             is_connected: false,
             service_data: HashMap::new(),
             services: Vec::new(),
+            tx_power_level: None,
         };
         
         // Create messages with the device

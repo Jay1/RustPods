@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use crate::ui::state_manager::StateManager;
 use crate::ui::window_management::{DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH};
-use crate::ui::run_state_ui;
+use crate::ui::state_app::StateApp;
 
 /// Application entry point using Iced
 pub struct App {
@@ -132,8 +132,28 @@ pub fn run_ui() -> iced::Result {
     // Create the state manager
     let state_manager = Arc::new(StateManager::new(sender));
     
-    // Run the Iced application using state UI
-    run_state_ui()
+    // Run the Iced application
+    <StateApp as Application>::run(Settings {
+        flags: state_manager,
+        antialiasing: true,
+        exit_on_close_request: true,
+        id: Some(String::from("rustpods")),
+        window: iced::window::Settings {
+            size: (800, 600),
+            position: iced::window::Position::Default,
+            min_size: Some((400, 300)),
+            max_size: None,
+            visible: true,
+            resizable: true,
+            decorations: true,
+            transparent: false,
+            level: iced::window::Level::Normal,
+            icon: None,
+            platform_specific: Default::default(),
+        },
+        default_font: iced::Font::DEFAULT,
+        default_text_size: 16.0,
+    })
 }
 
 /// Process messages received from the UI
@@ -201,3 +221,5 @@ pub fn view(state: &AppState) -> Element<'_, Message, iced::Renderer<Theme>> {
         state.main_window.view()
     }
 }
+
+ 

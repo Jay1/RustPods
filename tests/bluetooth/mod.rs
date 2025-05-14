@@ -22,8 +22,8 @@ pub mod detection;           // Tests for device detection
 pub mod filtering;           // Tests for device filtering
 pub mod scanning;            // Tests for device scanning
 
-//! Bluetooth module tests
-//!
-//! Tests for Bluetooth scanning and connection functionality.
+// Bluetooth module tests
+//
+// Tests for Bluetooth scanning and connection functionality.
 
 pub mod scanner_tests; 

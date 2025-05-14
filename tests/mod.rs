@@ -34,16 +34,12 @@ pub mod settings_ui_tests;
 pub mod test_helpers;
 
 // Other test modules
-mod form_validation_tests;
-mod window_visibility_tests;
-mod system_tray_tests;
-mod system_tray_integration_tests;
-mod settings_window_tests;
-mod state_manager_tests;
-mod app_config_tests;
-mod app_battery_monitoring_tests;
-mod error_handling_tests;
-mod settings_ui_tests;
+pub mod form_validation_tests;
+pub mod window_visibility_tests;
+pub mod system_tray_integration_tests;
+pub mod settings_window_tests;
+pub mod state_manager_tests;
+pub mod error_handling_tests;
 
 #[cfg(test)]
 mod tests {

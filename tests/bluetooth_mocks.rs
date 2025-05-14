@@ -12,10 +12,11 @@ use btleplug::api::BDAddr;
 use tokio::task::JoinHandle;
 
 use rustpods::bluetooth::{
-    DiscoveredDevice, BleEvent, BleError, EventFilter, 
-    AirPodsBatteryStatus, AirPodsCharging, AirPodsBattery,
+    DiscoveredDevice, BleEvent, EventFilter, 
+    AirPodsBatteryStatus
 };
-use rustpods::airpods::{DetectedAirPods, AirPodsType};
+use rustpods::error::BluetoothError;
+use rustpods::airpods::{DetectedAirPods, AirPodsType, AirPodsBattery, AirPodsChargingState};
 use rustpods::config::AppConfig;
 
 // SECTION: Mock Bluetooth Adapter
@@ -39,7 +40,7 @@ pub struct MockBluetoothAdapter {
     pub behavior_flags: Arc<Mutex<MockBehaviorFlags>>,
 }
 
-/// A mock representation of a Bluetooth device
+/// Mock device that stores additional testing details
 #[derive(Debug, Clone)]
 pub struct MockDevice {
     /// Device address
@@ -137,7 +138,7 @@ impl MockBluetoothAdapter {
     }
     
     /// Start scanning for devices
-    pub async fn start_scanning(&mut self) -> Result<(), BleError> {
+    pub async fn start_scanning(&mut self) -> Result<(), BluetoothError> {
         // Check if we should fail this scan
         {
             let mut flags = self.behavior_flags.lock().unwrap();
@@ -145,7 +146,7 @@ impl MockBluetoothAdapter {
                 flags.fail_next_scan = false;
                 self.last_error = Some("Scan failed".to_string());
                 self.record_event(MockAdapterEvent::Error("Scan failed".to_string()));
-                return Err(BleError::ScanningNotSupported);
+                return Err(BluetoothError::Other("Scanning not supported".to_string()));
             }
             
             // Apply operation delay if configured
@@ -157,13 +158,13 @@ impl MockBluetoothAdapter {
         if !self.is_enabled {
             self.last_error = Some("Adapter disabled".to_string());
             self.record_event(MockAdapterEvent::Error("Adapter disabled".to_string()));
-            return Err(BleError::BluetoothDisabled);
+            return Err(BluetoothError::Other("Bluetooth is disabled".to_string()));
         }
         
         if !self.supports_scanning {
             self.last_error = Some("Scanning not supported".to_string());
             self.record_event(MockAdapterEvent::Error("Scanning not supported".to_string()));
-            return Err(BleError::ScanningNotSupported);
+            return Err(BluetoothError::Other("Scanning not supported".to_string()));
         }
         
         self.is_scanning = true;
@@ -201,12 +202,17 @@ impl MockBluetoothAdapter {
                                     left: Some(80 - (i as u8 % 30)),
                                     right: Some(85 - (i as u8 % 20)),
                                     case: Some(90 - (i as u8 % 15)),
+                                    charging: Some(if i % 2 == 0 {
+                                        AirPodsChargingState::BothBudsCharging
+                                    } else if i % 3 == 0 {
+                                        AirPodsChargingState::LeftCharging
+                                    } else if i % 5 == 0 {
+                                        AirPodsChargingState::CaseCharging
+                                    } else {
+                                        AirPodsChargingState::NotCharging
+                                    }),
                                 },
-                                charging: AirPodsCharging {
-                                    left: i % 2 == 0,
-                                    right: i % 3 == 0,
-                                    case: i % 5 == 0,
-                                },
+                                last_updated: Instant::now(),
                             })
                         } else {
                             None
@@ -235,7 +241,7 @@ impl MockBluetoothAdapter {
     }
     
     /// Stop scanning for devices
-    pub async fn stop_scanning(&mut self) -> Result<(), BleError> {
+    pub async fn stop_scanning(&mut self) -> Result<(), BluetoothError> {
         if !self.is_scanning {
             return Ok(());
         }
@@ -253,7 +259,7 @@ impl MockBluetoothAdapter {
     }
     
     /// Connect to a device
-    pub async fn connect_to_device(&mut self, address: &str) -> Result<(), BleError> {
+    pub async fn connect_to_device(&mut self, address: &str) -> Result<(), BluetoothError> {
         // Check if we should fail this connection
         {
             let mut flags = self.behavior_flags.lock().unwrap();
@@ -261,7 +267,7 @@ impl MockBluetoothAdapter {
                 flags.fail_next_connect = false;
                 self.last_error = Some(format!("Failed to connect to {}", address));
                 self.record_event(MockAdapterEvent::Error(format!("Failed to connect to {}", address)));
-                return Err(BleError::ConnectionFailed(format!("Failed to connect to {}", address)));
+                return Err(BluetoothError::ConnectionFailed(format!("Failed to connect to {}", address)));
             }
             
             // Apply operation delay if configured
@@ -275,42 +281,52 @@ impl MockBluetoothAdapter {
             Some(device) => {
                 device.connection_attempts += 1;
                 device.is_connected = true;
+                device.last_seen = Instant::now();
                 self.record_event(MockAdapterEvent::DeviceConnected(address.to_string()));
                 Ok(())
             }
             None => {
                 self.last_error = Some(format!("Device not found: {}", address));
                 self.record_event(MockAdapterEvent::Error(format!("Device not found: {}", address)));
-                Err(BleError::DeviceNotFound)
+                Err(BluetoothError::DeviceNotFound(format!("Device not found: {}", address)))
             }
         }
     }
     
     /// Disconnect from a device
-    pub async fn disconnect_device(&mut self, address: &str) -> Result<(), BleError> {
+    pub async fn disconnect_from_device(&mut self, address: &str) -> Result<(), BluetoothError> {
+        // Check if we should fail this disconnect
+        {
+            let flags = self.behavior_flags.lock().unwrap();
+            
+            // Apply operation delay if configured
+            if let Some(delay) = flags.operation_delay {
+                tokio::time::sleep(delay).await;
+            }
+        }
+        
+        // Update the device connection state
         let mut devices = self.devices.lock().unwrap();
-        match devices.get_mut(address) {
-            Some(device) => {
-                device.is_connected = false;
-                self.record_event(MockAdapterEvent::DeviceDisconnected(address.to_string()));
-                Ok(())
-            }
-            None => {
-                self.last_error = Some(format!("Device not found: {}", address));
-                self.record_event(MockAdapterEvent::Error(format!("Device not found: {}", address)));
-                Err(BleError::DeviceNotFound)
-            }
+        
+        if let Some(device) = devices.get_mut(address) {
+            device.is_connected = false;
+            
+            // Record the event
+            self.record_event(MockAdapterEvent::DeviceDisconnected(address.to_string()));
+            Ok(())
+        } else {
+            Err(BluetoothError::DeviceNotFound(format!("Device not found: {}", address)))
         }
     }
     
     /// Get device battery status (for AirPods)
-    pub async fn get_device_battery(&self, address: &str) -> Result<AirPodsBatteryStatus, BleError> {
+    pub async fn get_device_battery(&self, address: &str) -> Result<AirPodsBatteryStatus, BluetoothError> {
         // Check if we should fail this battery update
         {
             let flags = self.behavior_flags.lock().unwrap();
             if flags.fail_battery_update {
-                self.last_error = Some(format!("Failed to get battery status for {}", address));
-                return Err(BleError::DeviceError(format!("Failed to get battery status for {}", address)));
+                // Don't try to modify self.last_error since self is immutable
+                return Err(BluetoothError::Other(format!("Failed to get battery status for {}", address)));
             }
             
             // Apply operation delay if configured
@@ -325,11 +341,11 @@ impl MockBluetoothAdapter {
                 if let Some(battery) = &device.battery_status {
                     Ok(battery.clone())
                 } else {
-                    Err(BleError::DeviceError(format!("Device {} does not support battery status", address)))
+                    Err(BluetoothError::Other(format!("Device {} does not support battery status", address)))
                 }
             }
             None => {
-                Err(BleError::DeviceNotFound)
+                Err(BluetoothError::DeviceNotFound(format!("Device not found: {}", address)))
             }
         }
     }
@@ -345,6 +361,10 @@ impl MockBluetoothAdapter {
                 manufacturer_data: mock_device.manufacturer_data.clone(),
                 is_potential_airpods: mock_device.is_airpods,
                 last_seen: mock_device.last_seen,
+                is_connected: mock_device.is_connected,
+                service_data: HashMap::new(),
+                services: Vec::new(),
+                tx_power_level: None,
             }
         })
     }
@@ -360,6 +380,10 @@ impl MockBluetoothAdapter {
                 manufacturer_data: mock_device.manufacturer_data.clone(),
                 is_potential_airpods: mock_device.is_airpods,
                 last_seen: mock_device.last_seen,
+                is_connected: mock_device.is_connected,
+                service_data: HashMap::new(),
+                services: Vec::new(),
+                tx_power_level: None,
             }
         }).collect()
     }
@@ -375,15 +399,14 @@ impl MockBluetoothAdapter {
                     return None;
                 }
                 
-                let battery_status = mock_device.battery_status.as_ref().unwrap();
-                
                 Some(DetectedAirPods {
                     address: BDAddr::from_str_hex(&mock_device.address).unwrap_or_default(),
                     name: mock_device.name.clone(),
-                    device_type: mock_device.airpods_type.unwrap_or(AirPodsType::AirPods2),
-                    battery: battery_status.battery.clone(),
+                    device_type: mock_device.airpods_type.as_ref().unwrap_or(&AirPodsType::AirPods2).clone(),
+                    battery: mock_device.battery_status.as_ref().map(|status| status.battery.clone()),
                     rssi: mock_device.rssi,
-                    raw_data: vec![0x01, 0x02, 0x03, 0x04], // Dummy raw data
+                    last_seen: mock_device.last_seen,
+                    is_connected: mock_device.is_connected,
                 })
             })
             .collect()
@@ -455,10 +478,79 @@ impl MockBleScanner {
         }
     }
     
+    /// Create a new method to handle scanning properly
+    async fn run_scan_task(
+        adapter_clone: Arc<Mutex<MockBluetoothAdapter>>,
+        devices_clone: Arc<Mutex<HashMap<BDAddr, DiscoveredDevice>>>,
+        event_tx: mpsc::Sender<BleEvent>,
+        mut cancel_rx: mpsc::Receiver<()>,
+        event_history_clone: Arc<Mutex<Vec<BleEvent>>>,
+    ) {
+        let mut interval = tokio::time::interval(Duration::from_secs(1));
+        
+        loop {
+            tokio::select! {
+                _ = interval.tick() => {
+                    // Get a copy of the devices before locking
+                    let mock_devices = {
+                        let adapter_guard = adapter_clone.lock().unwrap();
+                        adapter_guard.get_all_devices()
+                    };
+                    
+                    for device in mock_devices {
+                        // Update devices map
+                        {
+                            let mut devices = devices_clone.lock().unwrap();
+                            devices.insert(device.address, device.clone());
+                        }
+                        
+                        // Send discovery event
+                        let event = BleEvent::DeviceDiscovered(device);
+                        if let Err(e) = event_tx.send(event.clone()).await {
+                            log::error!("Failed to send event: {:?}", e);
+                            break;
+                        }
+                        
+                        // Record event
+                        {
+                            let mut history = event_history_clone.lock().unwrap();
+                            history.push(event);
+                        }
+                    }
+                    
+                    // Simulate AirPods device updates
+                    let airpods = {
+                        let adapter_guard = adapter_clone.lock().unwrap();
+                        adapter_guard.get_airpods_devices()
+                    };
+                    
+                    for device in airpods {
+                        // Send AirPods event
+                        let event = BleEvent::AirPodsDetected(device);
+                        if let Err(e) = event_tx.send(event.clone()).await {
+                            log::error!("Failed to send event: {:?}", e);
+                            break;
+                        }
+                        
+                        // Record event
+                        {
+                            let mut history = event_history_clone.lock().unwrap();
+                            history.push(event);
+                        }
+                    }
+                }
+                _ = cancel_rx.recv() => {
+                    // Cancellation received, exit loop
+                    break;
+                }
+            }
+        }
+    }
+    
     /// Start scanning for devices
-    pub async fn start_scanning(&mut self) -> Result<mpsc::Receiver<BleEvent>, BleError> {
+    pub async fn start_scanning(&mut self) -> Result<mpsc::Receiver<BleEvent>, BluetoothError> {
         if self.is_scanning {
-            return Err(BleError::ScanInProgress);
+            return Err(BluetoothError::Other("Scan already in progress".to_string()));
         }
         
         // Create channels for events and cancellation
@@ -481,62 +573,14 @@ impl MockBleScanner {
         let devices_clone = self.devices.clone();
         let event_history_clone = self.event_history.clone();
         
-        let task = tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(1));
-            let mut cancel_rx = cancel_rx;
-            
-            loop {
-                tokio::select! {
-                    _ = interval.tick() => {
-                        // Simulate device discovery
-                        let adapter = adapter_clone.lock().unwrap();
-                        let mock_devices = adapter.get_all_devices();
-                        
-                        for device in mock_devices {
-                            // Update devices map
-                            {
-                                let mut devices = devices_clone.lock().unwrap();
-                                devices.insert(device.address, device.clone());
-                            }
-                            
-                            // Send discovery event
-                            let event = BleEvent::DeviceDiscovered(device);
-                            if let Err(e) = event_tx.send(event.clone()).await {
-                                println!("Failed to send event: {:?}", e);
-                                break;
-                            }
-                            
-                            // Record event
-                            {
-                                let mut history = event_history_clone.lock().unwrap();
-                                history.push(event);
-                            }
-                        }
-                        
-                        // Simulate AirPods device updates
-                        let airpods = adapter.get_airpods_devices();
-                        for device in airpods {
-                            // Send AirPods event
-                            let event = BleEvent::AirPodsDetected(device);
-                            if let Err(e) = event_tx.send(event.clone()).await {
-                                println!("Failed to send event: {:?}", e);
-                                break;
-                            }
-                            
-                            // Record event
-                            {
-                                let mut history = event_history_clone.lock().unwrap();
-                                history.push(event);
-                            }
-                        }
-                    }
-                    _ = cancel_rx.recv() => {
-                        // Cancellation received, exit loop
-                        break;
-                    }
-                }
-            }
-        });
+        // Use the new method to avoid thread safety issues
+        let task = tokio::spawn(Self::run_scan_task(
+            adapter_clone,
+            devices_clone,
+            event_tx,
+            cancel_rx,
+            event_history_clone
+        ));
         
         self.scan_task = Some(task);
         
@@ -544,7 +588,7 @@ impl MockBleScanner {
     }
     
     /// Stop scanning for devices
-    pub async fn stop_scanning(&mut self) -> Result<(), BleError> {
+    pub async fn stop_scanning(&mut self) -> Result<(), BluetoothError> {
         if !self.is_scanning {
             return Ok(());
         }
@@ -636,7 +680,7 @@ impl MockEventBroker {
     /// Start the event broker
     pub fn start(&mut self) -> JoinHandle<()> {
         let subscriptions = self.subscriptions.clone();
-        let mut receiver = mpsc::unbounded_channel().1; // Dummy receiver for initial setup
+        let mut receiver: tokio::sync::mpsc::UnboundedReceiver<BleEvent> = mpsc::unbounded_channel().1; // Dummy receiver for initial setup
         std::mem::swap(&mut receiver, &mut mpsc::unbounded_channel().1);
         let event_history = self.event_history.clone();
         let is_running = self.is_running.clone();
@@ -655,7 +699,10 @@ impl MockEventBroker {
             }
         });
         
-        self.task_handle = Some(task.clone());
+        // Store task handle
+        self.task_handle = Some(task);
+        
+        // Return the task
         task
     }
     
@@ -831,6 +878,10 @@ mod tests {
             manufacturer_data: HashMap::new(),
             is_potential_airpods: false,
             last_seen: Instant::now(),
+            is_connected: false,
+            service_data: HashMap::new(),
+            services: Vec::new(),
+            tx_power_level: None,
         };
         
         let event = BleEvent::DeviceDiscovered(device);

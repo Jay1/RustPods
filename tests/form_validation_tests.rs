@@ -1,7 +1,94 @@
 //! Tests for form validation
 //! These tests verify the functionality of form validation components
 
-use crate::test_helpers::{TestForm, test_validator};
+use std::collections::HashMap;
+use rustpods::ui::form_validation::{FormValidator, ValidationRule, Result, ValidationError};
+
+// Create a test module locally instead of importing it
+mod test_helpers {
+    use std::collections::HashMap;
+    use rustpods::ui::form_validation::{ValidationRule, Result, ValidationError};
+
+    pub struct TestForm {
+        pub values: HashMap<String, String>,
+        pub errors: HashMap<String, String>,
+        validators: HashMap<String, ValidationRule>,
+    }
+
+    impl TestForm {
+        pub fn new() -> Self {
+            let mut form = Self {
+                values: HashMap::new(),
+                errors: HashMap::new(),
+                validators: HashMap::new(),
+            };
+            
+            // Add some default validators
+            form.validators.insert(
+                "required_field".to_string(), 
+                ValidationRule::new("required_field")
+                    .required()
+                    .validator(|val| {
+                        if val.is_empty() {
+                            Err(ValidationError::Custom("Field cannot be empty".to_string()))
+                        } else {
+                            Ok(())
+                        }
+                    })
+            );
+            
+            form.validators.insert(
+                "number_field".to_string(), 
+                ValidationRule::new("number_field")
+                    .validator(|val| {
+                        match val.parse::<i32>() {
+                            Ok(num) if num >= 0 && num <= 100 => Ok(()),
+                            Ok(_) => Err(ValidationError::Custom("Number out of range".to_string())),
+                            Err(_) => Err(ValidationError::Custom("Not a valid number".to_string())),
+                        }
+                    })
+            );
+            
+            form
+        }
+        
+        pub fn set_field(&mut self, name: &str, value: &str) {
+            self.values.insert(name.to_string(), value.to_string());
+            self.validate_field(name);
+        }
+        
+        fn validate_field(&mut self, name: &str) {
+            if let Some(rule) = self.validators.get(name) {
+                if let Some(validator) = &rule.validator {
+                    if let Some(value) = self.values.get(name) {
+                        match validator(value) {
+                            Ok(_) => {
+                                self.errors.remove(name);
+                            },
+                            Err(err) => {
+                                self.errors.insert(name.to_string(), err.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        pub fn is_valid(&self) -> bool {
+            self.errors.is_empty()
+        }
+    }
+
+    pub fn test_validator(value: &str) -> Result<()> {
+        if value.is_empty() {
+            Err(ValidationError::Custom("Field cannot be empty".to_string()))
+        } else {
+            Ok(())
+        }
+    }
+}
+
+use test_helpers::{TestForm, test_validator};
 
 /// Test form validation basic functionality
 #[test]
@@ -65,6 +152,12 @@ fn test_validator_function() {
     // Check error message
     match result {
         Ok(_) => panic!("Expected an error, but got Ok"),
-        Err(msg) => assert_eq!(msg, "Field cannot be empty"),
+        Err(err) => {
+            if let ValidationError::Custom(msg) = err {
+                assert_eq!(msg, "Field cannot be empty");
+            } else {
+                panic!("Expected Custom error, got {:?}", err);
+            }
+        }
     }
 } 

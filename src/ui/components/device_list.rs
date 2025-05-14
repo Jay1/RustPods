@@ -124,6 +124,7 @@ mod tests {
             is_connected: false,
             service_data: HashMap::new(),
             services: Vec::new(),
+            tx_power_level: None,
         };
 
         let device2 = DiscoveredDevice {
@@ -136,6 +137,7 @@ mod tests {
             is_connected: false,
             service_data: HashMap::new(),
             services: Vec::new(),
+            tx_power_level: None,
         };
 
         let devices = vec![device1, device2];

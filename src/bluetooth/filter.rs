@@ -187,6 +187,7 @@ mod tests {
             is_connected: false,
             service_data: HashMap::new(),
             services: Vec::new(),
+            tx_power_level: None,
         }
     }
     

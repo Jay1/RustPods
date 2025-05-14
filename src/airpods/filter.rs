@@ -3,8 +3,9 @@
 // use btleplug::api::BDAddr;
 
 use crate::bluetooth::scanner::DiscoveredDevice;
+// use crate::error::AirPodsError;
 // Remove unused detect_airpods import
-use super::{AirPodsType, identify_airpods_type};
+use super::{AirPodsType, identify_airpods_type, Result};
 
 /// Apple company identifier for manufacturer data
 pub const APPLE_COMPANY_ID: u16 = 0x004C;
@@ -94,7 +95,7 @@ impl AirPodsFilterOptions {
     }
     
     /// Apply the filter to a list of discovered devices
-    pub fn apply_filter(&self, devices: &[DiscoveredDevice]) -> Vec<DiscoveredDevice> {
+    pub fn apply_filter(&self, devices: &[DiscoveredDevice]) -> Result<Vec<DiscoveredDevice>> {
         let now = std::time::Instant::now();
         
         let mut filtered_devices: Vec<DiscoveredDevice> = devices
@@ -140,8 +141,11 @@ impl AirPodsFilterOptions {
                 // Apply model type filter if configured
                 if let Some(model_types) = &self.model_types {
                     if let Some(data) = device.manufacturer_data.get(&APPLE_COMPANY_ID) {
-                        let device_type = identify_airpods_type(&device.name, data);
-                        if !model_types.contains(&device_type) || device_type == AirPodsType::Unknown {
+                        if let Ok(device_type) = identify_airpods_type(&device.name, data) {
+                            if !model_types.contains(&device_type) || device_type == AirPodsType::Unknown {
+                                return false;
+                            }
+                        } else {
                             return false;
                         }
                     } else {
@@ -152,7 +156,7 @@ impl AirPodsFilterOptions {
                 // Apply battery info filter if configured
                 if self.require_battery_info {
                     if let Some(data) = device.manufacturer_data.get(&APPLE_COMPANY_ID) {
-                        if super::parse_airpods_data(data).is_none() {
+                        if super::parse_airpods_data(data).is_err() {
                             return false;
                         }
                     } else {
@@ -182,12 +186,13 @@ impl AirPodsFilterOptions {
             filtered_devices.truncate(max);
         }
         
-        filtered_devices
+        Ok(filtered_devices)
     }
     
     /// Creates a filter function for use with the BleScanner
     pub fn create_filter_function(&self) -> AirPodsFilter {
         let filter = self.clone();
+        
         Box::new(move |device: &DiscoveredDevice| {
             // Basic Apple manufacturer data check - minimum requirement
             if !device.manufacturer_data.contains_key(&APPLE_COMPANY_ID) {
@@ -219,9 +224,14 @@ impl AirPodsFilterOptions {
             // Apply model type filter if configured
             if let Some(model_types) = &filter.model_types {
                 if let Some(data) = device.manufacturer_data.get(&APPLE_COMPANY_ID) {
-                    let device_type = identify_airpods_type(&device.name, data);
-                    if !model_types.contains(&device_type) || device_type == AirPodsType::Unknown {
-                        return false;
+                    // Handle errors from identify_airpods_type gracefully
+                    match identify_airpods_type(&device.name, data) {
+                        Ok(device_type) => {
+                            if !model_types.contains(&device_type) || device_type == AirPodsType::Unknown {
+                                return false;
+                            }
+                        },
+                        Err(_) => return false, // Skip devices we can't identify
                     }
                 } else {
                     return false;
@@ -232,7 +242,7 @@ impl AirPodsFilterOptions {
             if filter.require_battery_info {
                 if let Some(data) = device.manufacturer_data.get(&APPLE_COMPANY_ID) {
                     // Use the parse_airpods_data function to check if battery information is available
-                    if super::parse_airpods_data(data).is_none() {
+                    if super::parse_airpods_data(data).is_err() {
                         return false;
                     }
                 } else {
@@ -246,38 +256,35 @@ impl AirPodsFilterOptions {
     }
 }
 
-/// Preset filter for all AirPods models
+/// Create a filter for all AirPods models
 pub fn airpods_all_models_filter() -> AirPodsFilter {
-    AirPodsFilterOptions::new().create_filter_function()
+    let options = AirPodsFilterOptions::new();
+    options.create_filter_function()
 }
 
-/// Preset filter for AirPods Pro models only
+/// Create a filter for AirPods Pro models only
 pub fn airpods_pro_filter() -> AirPodsFilter {
-    AirPodsFilterOptions::new()
-        .with_models(vec![AirPodsType::AirPodsPro, AirPodsType::AirPodsPro2])
-        .create_filter_function()
+    let options = AirPodsFilterOptions::new()
+        .with_models(vec![AirPodsType::AirPodsPro, AirPodsType::AirPodsPro2]);
+    options.create_filter_function()
 }
 
-/// Preset filter for stronger signal AirPods (likely to be current user's)
+/// Create a filter for nearby AirPods (based on signal strength)
 pub fn airpods_nearby_filter(min_rssi: i16) -> AirPodsFilter {
-    AirPodsFilterOptions::new()
-        .with_min_rssi(min_rssi) // Only include strong signals
-        .with_max_devices(3) // Limit to 3 closest devices
-        .create_filter_function()
+    let options = AirPodsFilterOptions::new().with_min_rssi(min_rssi);
+    options.create_filter_function()
 }
 
-/// Preset filter for AirPods with battery information
+/// Create a filter for AirPods with battery information
 pub fn airpods_with_battery_filter() -> AirPodsFilter {
-    AirPodsFilterOptions::new()
-        .with_battery_info(true)
-        .create_filter_function()
+    let options = AirPodsFilterOptions::new().with_battery_info(true);
+    options.create_filter_function()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::HashMap;
-    use btleplug::api::BDAddr;
     
     fn create_mock_device(
         name: Option<&str>,
@@ -286,80 +293,167 @@ mod tests {
         is_airpods: bool,
     ) -> DiscoveredDevice {
         let mut manufacturer_data = HashMap::new();
-        if let Some(d) = data {
-            manufacturer_data.insert(APPLE_COMPANY_ID, d);
+        
+        if let Some(bytes) = data {
+            manufacturer_data.insert(APPLE_COMPANY_ID, bytes);
         }
         
         DiscoveredDevice {
-            address: BDAddr::from([10, 20, 30, 40, 50, 60]),
+            address: btleplug::api::BDAddr::default(),
             name: name.map(String::from),
             rssi,
+            tx_power_level: None,
             manufacturer_data,
+            services: vec![],
             is_potential_airpods: is_airpods,
             last_seen: std::time::Instant::now(),
             is_connected: false,
             service_data: HashMap::new(),
-            services: Vec::new(),
         }
     }
     
     #[test]
     fn test_filter_by_rssi() {
-        let devices = vec![
-            create_mock_device(Some("AirPods"), Some(-50), Some(vec![0x07, 0x19, 0x01]), true),
-            create_mock_device(Some("AirPods"), Some(-90), Some(vec![0x07, 0x19, 0x01]), true),
-        ];
+        let filter = AirPodsFilterOptions::new().with_min_rssi(-70).create_filter_function();
         
-        let filter = AirPodsFilterOptions::new().with_min_rssi(-60);
-        let result = filter.apply_filter(&devices);
+        // Create test devices with different RSSI values
+        let strong_device = create_mock_device(Some("AirPods"), Some(-60), Some(vec![0x07, 0x19, 0x01, 0x02]), true);
+        let weak_device = create_mock_device(Some("AirPods"), Some(-80), Some(vec![0x07, 0x19, 0x01, 0x02]), true);
         
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].rssi, Some(-50));
+        assert!(filter(&strong_device));
+        assert!(!filter(&weak_device));
     }
     
     #[test]
     fn test_filter_by_name() {
-        let devices = vec![
-            create_mock_device(Some("AirPods Pro"), Some(-50), Some(vec![0x0E, 0x19, 0x01]), true),
-            create_mock_device(Some("Other Device"), Some(-50), Some(vec![0x07, 0x19, 0x01]), true),
-        ];
+        let filter = AirPodsFilterOptions::new().with_name_containing("Pro").create_filter_function();
         
-        let filter = AirPodsFilterOptions::new().with_name_containing("Pro");
-        let result = filter.apply_filter(&devices);
+        // Create test devices with different names
+        let pro_device = create_mock_device(Some("AirPods Pro"), Some(-60), Some(vec![0x0E, 0x19, 0x01, 0x02]), true);
+        let regular_device = create_mock_device(Some("AirPods"), Some(-60), Some(vec![0x07, 0x19, 0x01, 0x02]), true);
         
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].name, Some("AirPods Pro".to_string()));
+        assert!(filter(&pro_device));
+        assert!(!filter(&regular_device));
     }
     
     #[test]
     fn test_filter_by_model() {
-        let airpods_pro_data = vec![0x0E, 0x19, 0x01];
-        let airpods_regular_data = vec![0x07, 0x19, 0x01];
+        let filter = AirPodsFilterOptions::new()
+            .with_models(vec![AirPodsType::AirPodsPro])
+            .create_filter_function();
         
+        // Create test devices for different models
+        let pro_device = create_mock_device(
+            Some("AirPods Pro"),
+            Some(-60),
+            Some(vec![0x0E, 0x19, 0x01, 0x02]),
+            true
+        );
+        
+        let regular_device = create_mock_device(
+            Some("AirPods"),
+            Some(-60),
+            Some(vec![0x07, 0x19, 0x01, 0x02]),
+            true
+        );
+        
+        assert!(filter(&pro_device));
+        assert!(!filter(&regular_device));
+    }
+    
+    #[test]
+    fn test_apply_filter() {
+        let options = AirPodsFilterOptions::new()
+            .with_min_rssi(-70)
+            .with_models(vec![AirPodsType::AirPodsPro]);
+        
+        // Create test devices
         let devices = vec![
-            create_mock_device(Some("AirPods Pro"), Some(-50), Some(airpods_pro_data.clone()), true),
-            create_mock_device(Some("AirPods"), Some(-50), Some(airpods_regular_data.clone()), true),
+            create_mock_device(Some("AirPods Pro"), Some(-60), Some(vec![0x0E, 0x19, 0x01, 0x02]), true),
+            create_mock_device(Some("AirPods"), Some(-80), Some(vec![0x07, 0x19, 0x01, 0x02]), true),
         ];
         
-        let filter = AirPodsFilterOptions::new().with_models(vec![AirPodsType::AirPodsPro]);
-        let result = filter.apply_filter(&devices);
+        // Apply should normally succeed
+        let filtered = options.apply_filter(&devices).expect("Apply filter failed");
         
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].name, Some("AirPods Pro".to_string()));
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].name, Some("AirPods Pro".to_string()));
     }
     
     #[test]
     fn test_filter_function() {
-        let airpods_pro_data = vec![0x0E, 0x19, 0x01];
-        let device = create_mock_device(Some("AirPods Pro"), Some(-50), Some(airpods_pro_data), true);
+        let options = AirPodsFilterOptions::new()
+            .with_min_rssi(-70)
+            .with_models(vec![AirPodsType::AirPodsPro, AirPodsType::AirPodsPro2]);
         
-        let filter = AirPodsFilterOptions::new().with_models(vec![AirPodsType::AirPodsPro]);
-        let filter_fn = filter.create_filter_function();
+        // Create the filter function
+        let filter = options.create_filter_function();
         
-        assert!(filter_fn(&device));
+        // Test with various devices
+        let pro_device = create_mock_device(Some("AirPods Pro"), Some(-60), Some(vec![0x0E, 0x19, 0x01, 0x02]), true);
+        let weak_pro = create_mock_device(Some("AirPods Pro"), Some(-80), Some(vec![0x0E, 0x19, 0x01, 0x02]), true);
+        let regular = create_mock_device(Some("AirPods"), Some(-60), Some(vec![0x07, 0x19, 0x01, 0x02]), true);
         
-        // Test with a device that shouldn't pass the filter
-        let non_matching_device = create_mock_device(Some("AirPods"), Some(-50), Some(vec![0x07, 0x19, 0x01]), true);
-        assert!(!filter_fn(&non_matching_device));
+        assert!(filter(&pro_device));  // Should match
+        assert!(!filter(&weak_pro));   // Too weak signal
+        assert!(!filter(&regular));    // Wrong model
+    }
+    
+    #[test]
+    fn test_filter_with_invalid_data() {
+        // Test with invalid or corrupt data
+        let filter = AirPodsFilterOptions::new()
+            .with_models(vec![AirPodsType::AirPodsPro])
+            .create_filter_function();
+        
+        // Create a device with too-short data
+        let device_with_invalid_data = create_mock_device(
+            Some("AirPods Pro"), 
+            Some(-60), 
+            Some(vec![0x0E]), // Too short for proper identification
+            true
+        );
+        
+        // Should filter out invalid data
+        assert!(!filter(&device_with_invalid_data));
+    }
+    
+    #[test]
+    fn test_preset_filters() {
+        // Test the preset filter functions
+        let all_filter = airpods_all_models_filter();
+        let pro_filter = airpods_pro_filter();
+        let nearby_filter = airpods_nearby_filter(-70);
+        let battery_filter = airpods_with_battery_filter();
+        
+        // Create test devices
+        let pro_device = create_mock_device(
+            Some("AirPods Pro"), 
+            Some(-60), 
+            Some(vec![0x0E, 0x19, 0x01, 0x02]), 
+            true
+        );
+        
+        let regular_device = create_mock_device(
+            Some("AirPods"), 
+            Some(-60), 
+            Some(vec![0x07, 0x19, 0x01, 0x02]), 
+            true
+        );
+        
+        // Test all_filter
+        assert!(all_filter(&pro_device));
+        assert!(all_filter(&regular_device));
+        
+        // Test pro_filter
+        assert!(pro_filter(&pro_device));
+        assert!(!pro_filter(&regular_device));
+        
+        // Test nearby_filter
+        let weak_device = create_mock_device(Some("AirPods"), Some(-80), Some(vec![0x07, 0x19, 0x01, 0x02]), true);
+        assert!(nearby_filter(&pro_device));     // Strong signal
+        assert!(!nearby_filter(&weak_device));   // Weak signal
+        
+        // Test battery_filter - would need special setup to test battery data parsing
     }
 } 

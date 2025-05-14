@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use crate::ui::state_manager::StateManager;
 use crate::ui::window_management::{DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH};
-use crate::ui::run_state_ui;
+use crate::ui::state_app::run_state_ui;
 
 /// Application entry point using Iced
 pub struct App {
@@ -200,4 +200,4 @@ pub fn view(state: &AppState) -> Element<'_, Message, iced::Renderer<Theme>> {
     } else {
         state.main_window.view()
     }
-}
+} 

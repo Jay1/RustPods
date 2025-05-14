@@ -2,6 +2,7 @@
 
 use std::sync::mpsc;
 use std::time::Duration;
+use std::time::Instant;
 
 use btleplug::api::BDAddr;
 use mockall::predicate::*;
@@ -10,7 +11,7 @@ use mockall::mock;
 use rustpods::app::App;
 use rustpods::bluetooth::AirPodsBatteryStatus;
 use rustpods::airpods::{
-    AirPodsBattery, ChargingStatus, DetectedAirPods, AirPodsType
+    AirPodsBattery, AirPodsChargingState, DetectedAirPods, AirPodsType
 };
 use rustpods::ui::Message;
 
@@ -69,11 +70,7 @@ mod battery_message_tests {
             left: Some(80),
             right: Some(70),
             case: Some(90),
-            charging: ChargingStatus {
-                left: true,
-                right: false,
-                case: true,
-            },
+            charging: Some(AirPodsChargingState::LeftCharging),
         };
         let status = AirPodsBatteryStatus::new(battery);
         
@@ -85,9 +82,7 @@ mod battery_message_tests {
             assert_eq!(received_status.battery.left, Some(80));
             assert_eq!(received_status.battery.right, Some(70));
             assert_eq!(received_status.battery.case, Some(90));
-            assert!(received_status.battery.charging.left);
-            assert!(!received_status.battery.charging.right);
-            assert!(received_status.battery.charging.case);
+            assert!(matches!(received_status.battery.charging, Some(AirPodsChargingState::LeftCharging)));
         } else {
             panic!("Expected BatteryStatusUpdated message");
         }
@@ -99,35 +94,20 @@ mod battery_message_tests {
         // Create channel for UI messages
         let (tx, rx) = mpsc::channel();
         
-        // Create a battery status
-        let _battery = AirPodsBattery {
-            left: Some(80),
-            right: Some(70),
-            case: Some(90),
-            charging: ChargingStatus {
-                left: false,
-                right: false,
-                case: false,
-            },
-        };
-        
         // Create an AirPods device
         let airpods = DetectedAirPods {
             address: BDAddr::from([0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC]),
             name: Some("AirPods Pro".to_string()),
             device_type: AirPodsType::AirPodsPro,
-            battery: AirPodsBattery {
+            battery: Some(AirPodsBattery {
                 left: Some(80),
                 right: Some(90),
                 case: Some(95),
-                charging: ChargingStatus {
-                    left: false,
-                    right: false,
-                    case: false,
-                },
-            },
+                charging: Some(AirPodsChargingState::NotCharging),
+            }),
             rssi: Some(-60),
-            raw_data: vec![0x0E, 0x19, 0x01, 0x02, 0x03],
+            is_connected: false,
+            last_seen: Instant::now(),
         };
         
         // Send an AirPods connected message
@@ -138,9 +118,13 @@ mod battery_message_tests {
             assert_eq!(received_airpods.address, BDAddr::from([0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC]));
             assert_eq!(received_airpods.name, Some("AirPods Pro".to_string()));
             assert_eq!(received_airpods.device_type, AirPodsType::AirPodsPro);
-            assert_eq!(received_airpods.battery.left, Some(80));
-            assert_eq!(received_airpods.battery.right, Some(90));
-            assert_eq!(received_airpods.battery.case, Some(95));
+            if let Some(battery) = &received_airpods.battery {
+                assert_eq!(battery.left, Some(80));
+                assert_eq!(battery.right, Some(90));
+                assert_eq!(battery.case, Some(95));
+            } else {
+                panic!("Battery should be Some");
+            }
         } else {
             panic!("Expected AirPodsConnected message");
         }
@@ -174,33 +158,21 @@ mod battery_message_tests {
             left: Some(80),
             right: Some(75),
             case: Some(90),
-            charging: ChargingStatus {
-                left: false,
-                right: false,
-                case: true,
-            },
+            charging: Some(AirPodsChargingState::CaseCharging),
         };
         
         let battery2 = AirPodsBattery {
             left: Some(75),
             right: Some(70),
             case: Some(90),
-            charging: ChargingStatus {
-                left: true,
-                right: false,
-                case: true,
-            },
+            charging: Some(AirPodsChargingState::LeftCharging),
         };
         
         let battery3 = AirPodsBattery {
             left: Some(75),
             right: Some(70),
             case: Some(85),
-            charging: ChargingStatus {
-                left: true,
-                right: true,
-                case: true,
-            },
+            charging: Some(AirPodsChargingState::BothBudsCharging),
         };
         
         // Create AirPodsBatteryStatus objects
@@ -241,11 +213,7 @@ mod battery_message_tests {
             left: Some(75),
             right: Some(70),
             case: Some(90),
-            charging: ChargingStatus {
-                left: false,
-                right: false,
-                case: true,
-            },
+            charging: Some(AirPodsChargingState::CaseCharging),
         };
         
         let status = AirPodsBatteryStatus::new(battery.clone());
@@ -254,18 +222,15 @@ mod battery_message_tests {
             address: BDAddr::from([0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC]),
             name: Some("AirPods Pro".to_string()),
             device_type: AirPodsType::AirPodsPro,
-            battery: AirPodsBattery {
+            battery: Some(AirPodsBattery {
                 left: Some(80),
                 right: Some(90),
                 case: Some(95),
-                charging: ChargingStatus {
-                    left: false,
-                    right: false,
-                    case: false,
-                },
-            },
+                charging: Some(AirPodsChargingState::NotCharging),
+            }),
             rssi: Some(-60),
-            raw_data: vec![0x0E, 0x19, 0x01, 0x02, 0x03],
+            is_connected: false,
+            last_seen: Instant::now(),
         };
         
         // Send a mix of message types
@@ -311,11 +276,7 @@ mod app_status_tests {
             left,
             right,
             case,
-            charging: ChargingStatus {
-                left: false,
-                right: false,
-                case: false,
-            },
+            charging: Some(AirPodsChargingState::NotCharging),
         };
         
         AirPodsBatteryStatus::new(battery)
@@ -350,7 +311,9 @@ mod app_status_tests {
         fn simulate_connect_airpods(&self, airpods: DetectedAirPods) {
             // Update the battery status with the AirPods battery info
             let mut status = self.get_battery_status();
-            status.update(airpods.battery.clone());
+            if let Some(battery) = &airpods.battery {
+                status.update(battery.clone());
+            }
             *self.battery_status.lock().unwrap() = status.clone();
             
             // Send connection message
@@ -397,34 +360,20 @@ mod app_status_tests {
     fn test_app_connect_airpods() {
         let (app, rx) = MockAppStatus::new();
         
-        // Create an AirPods device
-        let _battery = AirPodsBattery {
-            left: Some(75),
-            right: Some(65),
-            case: Some(85),
-            charging: ChargingStatus {
-                left: true,
-                right: false,
-                case: false,
-            },
-        };
-        
+        // Create an AirPods device with battery info
         let airpods = DetectedAirPods {
             address: BDAddr::from([0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC]),
             name: Some("AirPods Pro".to_string()),
             device_type: AirPodsType::AirPodsPro,
-            battery: AirPodsBattery {
+            battery: Some(AirPodsBattery {
                 left: Some(80),
                 right: Some(90),
                 case: Some(95),
-                charging: ChargingStatus {
-                    left: false,
-                    right: false,
-                    case: false,
-                },
-            },
+                charging: Some(AirPodsChargingState::NotCharging),
+            }),
             rssi: Some(-60),
-            raw_data: vec![0x0E, 0x19, 0x01, 0x02, 0x03],
+            is_connected: false,
+            last_seen: Instant::now(),
         };
         
         // Simulate connecting AirPods
@@ -436,7 +385,7 @@ mod app_status_tests {
         assert_eq!(status.battery.left, Some(80));
         assert_eq!(status.battery.right, Some(90));
         assert_eq!(status.battery.case, Some(95));
-        assert!(!status.battery.charging.left);
+        assert!(matches!(status.battery.charging, Some(AirPodsChargingState::NotCharging)));
         
         // Verify the UI messages were sent (both connection and battery update)
         let mut message_count = 0;

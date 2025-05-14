@@ -36,6 +36,8 @@ pub enum EventType {
 pub enum BleEvent {
     /// A new device was discovered or updated
     DeviceDiscovered(DiscoveredDevice),
+    /// A device was updated with new information
+    DeviceUpdated(DiscoveredDevice),
     /// A device was lost (went out of range)
     DeviceLost(BDAddr),
     /// An error occurred during scanning
@@ -46,6 +48,10 @@ pub enum BleEvent {
     ScanCycleCompleted { devices_found: usize },
     /// All scanning has completed (due to cycle limit or cancellation)
     ScanningCompleted,
+    /// Scanning has begun
+    ScanStarted,
+    /// Scanning has been manually stopped
+    ScanStopped,
     /// AirPods detected with battery information
     AirPodsDetected(DetectedAirPods),
 }
@@ -55,11 +61,14 @@ impl BleEvent {
     pub fn get_type(&self) -> EventType {
         match self {
             Self::DeviceDiscovered(_) => EventType::DeviceDiscovered,
+            Self::DeviceUpdated(_) => EventType::DeviceDiscovered, // Map to same event type
             Self::DeviceLost(_) => EventType::DeviceLost,
             Self::Error(_) => EventType::Error,
             Self::AdapterChanged(_) => EventType::AdapterChanged,
             Self::ScanCycleCompleted { .. } => EventType::ScanCycleCompleted,
             Self::ScanningCompleted => EventType::ScanningCompleted,
+            Self::ScanStarted => EventType::ScanningCompleted, // Map to scanning completed type
+            Self::ScanStopped => EventType::ScanningCompleted, // Map to same event type
             Self::AirPodsDetected(_) => EventType::AirPodsDetected,
         }
     }
@@ -68,6 +77,7 @@ impl BleEvent {
     pub fn get_device_address(&self) -> Option<BDAddr> {
         match self {
             Self::DeviceDiscovered(device) => Some(device.address),
+            Self::DeviceUpdated(device) => Some(device.address),
             Self::DeviceLost(addr) => Some(*addr),
             Self::AirPodsDetected(airpods) => Some(airpods.address),
             _ => None,
@@ -327,6 +337,11 @@ impl EventBroker {
     /// Take ownership of the receiver
     fn take_receiver(&self) -> Receiver<BleEvent> {
         self.event_receiver.lock().unwrap().take().expect("Receiver already taken")
+    }
+    
+    /// Publish an event to all subscribers
+    pub fn publish_event(&mut self, event: BleEvent) {
+        let _ = self.event_sender.try_send(event);
     }
 }
 

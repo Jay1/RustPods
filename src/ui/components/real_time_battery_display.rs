@@ -5,16 +5,17 @@
 use iced::alignment;
 use iced::widget::{column, container, progress_bar, row, text};
 use iced::{Color, Element, Length};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crate::ui::{Message, UiComponent};
 use crate::ui::theme::Theme;
 use crate::bluetooth::AirPodsBatteryStatus;
+use crate::airpods::{AirPodsBattery, AirPodsChargingState};
 
 // Constants for animation
 const ANIMATION_DURATION_MS: u64 = 1000;
 const CHARGING_PULSE_SPEED: f32 = 0.5;
-const MIN_PULSE_OPACITY: f32 = 0.6;
+const MIN_PULSE_OPACITY: f32 = 0.7;
 
 /// Component for displaying real-time battery information with animations
 #[derive(Debug, Clone)]
@@ -33,6 +34,20 @@ pub struct RealTimeBatteryDisplay {
     previous_levels: Option<(Option<u8>, Option<u8>, Option<u8>)>,
     /// Show compact view
     compact_view: bool,
+}
+
+impl Default for RealTimeBatteryDisplay {
+    fn default() -> Self {
+        Self {
+            battery_status: None,
+            animation_progress: 0.0,
+            last_update: None,
+            show_time_since_update: true,
+            show_detailed_info: true,
+            previous_levels: None,
+            compact_view: false,
+        }
+    }
 }
 
 impl RealTimeBatteryDisplay {
@@ -241,12 +256,11 @@ impl RealTimeBatteryDisplay {
     /// Create a status summary display
     fn create_status_summary(&self) -> Element<'static, Message, iced::Renderer<Theme>> {
         if let Some(status) = &self.battery_status {
-            let is_charging = status.battery.charging.left || 
-                             status.battery.charging.right || 
-                             status.battery.charging.case;
-                             
+            let is_charging = status.battery.charging.as_ref().is_some_and(|c| c.is_any_charging());
+                               
             let is_low_battery = status.battery.left.is_some_and(|l| l <= 20) ||
-                                status.battery.right.is_some_and(|r| r <= 20);
+                                status.battery.right.is_some_and(|r| r <= 20) ||
+                                status.battery.case.is_some_and(|c| c <= 20);
             
             let (status_text, _color) = if is_charging {
                 ("Charging", Color::from_rgb(0.2, 0.6, 0.8))
@@ -314,21 +328,21 @@ impl RealTimeBatteryDisplay {
                 "Left",
                 status.battery.left,
                 prev_left,
-                status.battery.charging.left,
+                status.battery.charging.as_ref().is_some_and(|c| c.is_left_charging()),
             ));
             
             content = content.push(display.create_battery_bar(
                 "Right",
                 status.battery.right,
                 prev_right,
-                status.battery.charging.right,
+                status.battery.charging.as_ref().is_some_and(|c| c.is_right_charging()),
             ));
             
             content = content.push(display.create_battery_bar(
                 "Case",
                 status.battery.case,
                 prev_case,
-                status.battery.charging.case,
+                status.battery.charging.as_ref().is_some_and(|c| c.is_case_charging()),
             ));
             
             // Add status summary
@@ -404,21 +418,21 @@ impl UiComponent for RealTimeBatteryDisplay {
                 "Left",
                 status.battery.left,
                 prev_left,
-                status.battery.charging.left,
+                status.battery.charging.as_ref().is_some_and(|c| c.is_left_charging()),
             ));
             
             content = content.push(self.create_battery_bar(
                 "Right",
                 status.battery.right,
                 prev_right,
-                status.battery.charging.right,
+                status.battery.charging.as_ref().is_some_and(|c| c.is_right_charging()),
             ));
             
             content = content.push(self.create_battery_bar(
                 "Case",
                 status.battery.case,
                 prev_case,
-                status.battery.charging.case,
+                status.battery.charging.as_ref().is_some_and(|c| c.is_case_charging()),
             ));
             
             // Add status summary
@@ -454,7 +468,7 @@ impl UiComponent for RealTimeBatteryDisplay {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::airpods::{AirPodsBattery, ChargingStatus};
+    use crate::airpods::{AirPodsBattery, AirPodsChargingState};
     
     #[test]
     fn test_real_time_battery_display_creation() {
@@ -463,11 +477,7 @@ mod tests {
             left: Some(80),
             right: Some(75),
             case: Some(90),
-            charging: ChargingStatus {
-                left: false,
-                right: false,
-                case: true,
-            },
+            charging: Some(AirPodsChargingState::CaseCharging),
         };
         
         let status = AirPodsBatteryStatus::new(battery);
@@ -490,11 +500,7 @@ mod tests {
             left: Some(50),
             right: Some(60),
             case: Some(90),
-            charging: ChargingStatus {
-                left: false,
-                right: false,
-                case: false,
-            },
+            charging: Some(AirPodsChargingState::NotCharging),
         };
         
         let status = AirPodsBatteryStatus::new(battery);

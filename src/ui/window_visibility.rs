@@ -240,7 +240,7 @@ pub fn handle_window_events(
                 None
             }
             window::Event::CloseRequested => {
-                visibility_manager.handle_close_requested(bounds);
+                let _ = visibility_manager.handle_close_requested(bounds);
                 Some(Message::ToggleVisibility)
             }
             window::Event::Moved { x, y } => {
@@ -350,12 +350,12 @@ mod tests {
         );
         
         // Hide will update the position
-        manager.hide(rect);
+        let _ = manager.hide(rect);
         assert_eq!(manager.last_position(), Some(position));
         assert_eq!(manager.is_visible(), false);
         
         // Show again
-        manager.show();
+        let _ = manager.show();
         assert_eq!(manager.is_visible(), true);
     }
 } 

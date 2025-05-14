@@ -3,12 +3,14 @@
 
 use std::sync::Arc;
 
+// Import just what we can use from rustpods::ui::test_helpers
 use rustpods::ui::test_helpers::{
-    MockSystemTray, ThemeMode, TrayIconType, create_test_battery, create_test_state_manager, create_test_config
+    MockSystemTray, TrayIconType, ThemeMode, create_test_battery, create_test_state_manager, create_test_config
 };
 use rustpods::ui::Message;
 use rustpods::config::{AppConfig, Theme as ConfigTheme};
-use rustpods::bluetooth::{AirPodsBatteryStatus, AirPodsBattery, AirPodsCharging};
+use rustpods::bluetooth::AirPodsBatteryStatus;
+use rustpods::airpods::{AirPodsBattery, AirPodsChargingState};
 
 /// Test system tray update with battery status
 #[test]
@@ -66,7 +68,7 @@ fn test_system_tray_menu_clicks() {
     // Test the "Settings" menu item
     let message = tray.process_click("Settings");
     assert!(message.is_some());
-    assert!(matches!(message.unwrap(), Message::ShowSettings));
+    assert!(matches!(message.unwrap(), Message::SaveSettings));
     
     // Test the "Exit" menu item
     let message = tray.process_click("Exit");
@@ -125,12 +127,9 @@ fn test_system_tray_icon_updates() {
             left: Some(75),
             right: Some(80),
             case: Some(90),
+            charging: Some(AirPodsChargingState::NotCharging),
         },
-        charging: AirPodsCharging {
-            left: false,
-            right: false,
-            case: false,
-        },
+        last_updated: std::time::Instant::now(),
     };
     
     tray.update_battery(normal_battery.clone());
@@ -142,12 +141,9 @@ fn test_system_tray_icon_updates() {
             left: Some(15),
             right: Some(25),
             case: Some(50),
+            charging: Some(AirPodsChargingState::NotCharging),
         },
-        charging: AirPodsCharging {
-            left: false,
-            right: false,
-            case: false,
-        },
+        last_updated: std::time::Instant::now(),
     };
     
     tray.update_battery(low_battery.clone());
@@ -159,12 +155,9 @@ fn test_system_tray_icon_updates() {
             left: Some(45),
             right: Some(50),
             case: Some(70),
+            charging: Some(AirPodsChargingState::LeftCharging),
         },
-        charging: AirPodsCharging {
-            left: true,
-            right: false,
-            case: true,
-        },
+        last_updated: std::time::Instant::now(),
     };
     
     tray.update_battery(charging_battery.clone());
@@ -189,29 +182,23 @@ fn test_low_battery_notifications() {
             left: Some(75),
             right: Some(80),
             case: Some(90),
+            charging: Some(AirPodsChargingState::NotCharging),
         },
-        charging: AirPodsCharging {
-            left: false,
-            right: false,
-            case: false,
-        },
+        last_updated: std::time::Instant::now(),
     };
     
     tray.update_battery(normal_battery.clone());
     assert_eq!(tray.notifications.len(), 0);
     
-    // Test low battery levels (should trigger notifications)
+    // Test battery levels just below threshold
     let low_battery = AirPodsBatteryStatus {
         battery: AirPodsBattery {
             left: Some(15),
             right: Some(18),
             case: Some(50),
+            charging: Some(AirPodsChargingState::NotCharging),
         },
-        charging: AirPodsCharging {
-            left: false,
-            right: false,
-            case: false,
-        },
+        last_updated: std::time::Instant::now(),
     };
     
     tray.update_battery(low_battery.clone());
@@ -219,21 +206,18 @@ fn test_low_battery_notifications() {
     assert!(tray.notifications[0].contains("Left AirPod at 15%"));
     assert!(tray.notifications[1].contains("Right AirPod at 18%"));
     
-    // Test very low battery
-    let very_low_battery = AirPodsBatteryStatus {
+    // Test extremely low battery
+    let critical_battery = AirPodsBatteryStatus {
         battery: AirPodsBattery {
             left: Some(5),
             right: Some(7),
             case: Some(10),
+            charging: Some(AirPodsChargingState::NotCharging),
         },
-        charging: AirPodsCharging {
-            left: false,
-            right: false,
-            case: false,
-        },
+        last_updated: std::time::Instant::now(),
     };
     
-    tray.update_battery(very_low_battery.clone());
+    tray.update_battery(critical_battery.clone());
     assert_eq!(tray.notifications.len(), 5);
     assert!(tray.notifications[2].contains("Left AirPod at 5%"));
     assert!(tray.notifications[3].contains("Right AirPod at 7%"));
@@ -252,12 +236,9 @@ fn test_tooltip_format() {
             left: Some(75),
             right: Some(80),
             case: Some(90),
+            charging: Some(AirPodsChargingState::NotCharging),
         },
-        charging: AirPodsCharging {
-            left: false,
-            right: false,
-            case: false,
-        },
+        last_updated: std::time::Instant::now(),
     };
     
     tray.update_battery(battery.clone());
@@ -273,12 +254,9 @@ fn test_tooltip_format() {
             left: Some(65),
             right: None,
             case: Some(85),
+            charging: Some(AirPodsChargingState::NotCharging),
         },
-        charging: AirPodsCharging {
-            left: false,
-            right: false,
-            case: false,
-        },
+        last_updated: std::time::Instant::now(),
     };
     
     tray.update_battery(partial_battery.clone());
@@ -337,12 +315,9 @@ fn test_percentage_in_tray() {
             left: Some(65),
             right: Some(70),
             case: Some(80),
+            charging: Some(AirPodsChargingState::NotCharging),
         },
-        charging: AirPodsCharging {
-            left: false,
-            right: false,
-            case: false,
-        },
+        last_updated: std::time::Instant::now(),
     };
     
     // Default show percentage is true

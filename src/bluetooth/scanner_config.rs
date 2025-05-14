@@ -19,6 +19,18 @@ pub struct ScanConfig {
     pub device_inactive_timeout: Option<Duration>,
     /// Whether to continue scanning in a loop
     pub continuous: bool,
+    /// Whether to filter out known devices
+    pub filter_known_devices: bool,
+    /// Whether to only update RSSI for known devices
+    pub update_rssi_only: bool,
+    /// Interval for updating device data
+    pub update_interval: Duration,
+    /// Timeout for scanning
+    pub scan_timeout: Option<Duration>,
+    /// Maximum number of retries for operations
+    pub max_retries: u8,
+    /// Delay between retries
+    pub retry_delay: Duration,
 }
 
 impl Default for ScanConfig {
@@ -31,6 +43,12 @@ impl Default for ScanConfig {
             device_inactive_timeout: None,
             continuous: false,
             min_rssi: None,
+            filter_known_devices: false,
+            update_rssi_only: false,
+            update_interval: Duration::from_secs(5),
+            scan_timeout: None,
+            max_retries: 3,
+            retry_delay: Duration::from_secs(1),
         }
     }
 }
@@ -51,6 +69,12 @@ impl ScanConfig {
             device_inactive_timeout: None,
             continuous: true,
             min_rssi: None,
+            filter_known_devices: false,
+            update_rssi_only: false,
+            update_interval: Duration::from_secs(5),
+            scan_timeout: None,
+            max_retries: 3,
+            retry_delay: Duration::from_secs(1),
         }
     }
     
@@ -64,6 +88,12 @@ impl ScanConfig {
             device_inactive_timeout: None,
             continuous: false,
             min_rssi: Some(-80), // Filter out weak signals
+            filter_known_devices: false,
+            update_rssi_only: false,
+            update_interval: Duration::from_secs(5),
+            scan_timeout: None,
+            max_retries: 3,
+            retry_delay: Duration::from_secs(1),
         }
     }
     
@@ -77,6 +107,12 @@ impl ScanConfig {
             device_inactive_timeout: None,
             continuous: false,
             min_rssi: Some(-70), // AirPods are usually nearby
+            filter_known_devices: false,
+            update_rssi_only: false,
+            update_interval: Duration::from_secs(5),
+            scan_timeout: None,
+            max_retries: 3,
+            retry_delay: Duration::from_secs(1),
         }
     }
     
@@ -90,6 +126,12 @@ impl ScanConfig {
             device_inactive_timeout: None,
             continuous: false,
             min_rssi: None,
+            filter_known_devices: false,
+            update_rssi_only: false,
+            update_interval: Duration::from_secs(5),
+            scan_timeout: None,
+            max_retries: 3,
+            retry_delay: Duration::from_secs(1),
         }
     }
     
@@ -134,6 +176,42 @@ impl ScanConfig {
         self.min_rssi = min_rssi;
         self
     }
+    
+    /// Set whether to filter out known devices
+    pub fn with_filter_known_devices(mut self, filter_known_devices: bool) -> Self {
+        self.filter_known_devices = filter_known_devices;
+        self
+    }
+    
+    /// Set whether to only update RSSI for known devices
+    pub fn with_update_rssi_only(mut self, update_rssi_only: bool) -> Self {
+        self.update_rssi_only = update_rssi_only;
+        self
+    }
+    
+    /// Set the interval for updating device data
+    pub fn with_update_interval(mut self, update_interval: Duration) -> Self {
+        self.update_interval = update_interval;
+        self
+    }
+    
+    /// Set the scan timeout
+    pub fn with_scan_timeout(mut self, scan_timeout: Option<Duration>) -> Self {
+        self.scan_timeout = scan_timeout;
+        self
+    }
+    
+    /// Set the maximum number of retries for operations
+    pub fn with_max_retries(mut self, max_retries: u8) -> Self {
+        self.max_retries = max_retries;
+        self
+    }
+    
+    /// Set the delay between retries
+    pub fn with_retry_delay(mut self, retry_delay: Duration) -> Self {
+        self.retry_delay = retry_delay;
+        self
+    }
 }
 
 #[cfg(test)]
@@ -151,6 +229,12 @@ mod tests {
         assert_eq!(config.device_inactive_timeout, None);
         assert!(!config.continuous);
         assert_eq!(config.min_rssi, None);
+        assert!(!config.filter_known_devices);
+        assert!(!config.update_rssi_only);
+        assert_eq!(config.update_interval, Duration::from_secs(5));
+        assert_eq!(config.scan_timeout, None);
+        assert_eq!(config.max_retries, 3);
+        assert_eq!(config.retry_delay, Duration::from_secs(1));
     }
 
     #[test]
@@ -166,6 +250,12 @@ mod tests {
         assert_eq!(config.device_inactive_timeout, default_config.device_inactive_timeout);
         assert_eq!(config.continuous, default_config.continuous);
         assert_eq!(config.min_rssi, default_config.min_rssi);
+        assert_eq!(config.filter_known_devices, default_config.filter_known_devices);
+        assert_eq!(config.update_rssi_only, default_config.update_rssi_only);
+        assert_eq!(config.update_interval, default_config.update_interval);
+        assert_eq!(config.scan_timeout, default_config.scan_timeout);
+        assert_eq!(config.max_retries, default_config.max_retries);
+        assert_eq!(config.retry_delay, default_config.retry_delay);
     }
 
     #[test]
@@ -179,6 +269,12 @@ mod tests {
         assert_eq!(config.device_inactive_timeout, None);
         assert!(config.continuous);
         assert_eq!(config.min_rssi, None);
+        assert!(!config.filter_known_devices);
+        assert!(!config.update_rssi_only);
+        assert_eq!(config.update_interval, Duration::from_secs(5));
+        assert_eq!(config.scan_timeout, None);
+        assert_eq!(config.max_retries, 3);
+        assert_eq!(config.retry_delay, Duration::from_secs(1));
     }
 
     #[test]
@@ -192,6 +288,12 @@ mod tests {
         assert_eq!(config.device_inactive_timeout, None);
         assert!(!config.continuous);
         assert_eq!(config.min_rssi, Some(-80));
+        assert!(!config.filter_known_devices);
+        assert!(!config.update_rssi_only);
+        assert_eq!(config.update_interval, Duration::from_secs(5));
+        assert_eq!(config.scan_timeout, None);
+        assert_eq!(config.max_retries, 3);
+        assert_eq!(config.retry_delay, Duration::from_secs(1));
     }
 
     #[test]
@@ -205,6 +307,12 @@ mod tests {
         assert_eq!(config.device_inactive_timeout, None);
         assert!(!config.continuous);
         assert_eq!(config.min_rssi, Some(-70));
+        assert!(!config.filter_known_devices);
+        assert!(!config.update_rssi_only);
+        assert_eq!(config.update_interval, Duration::from_secs(5));
+        assert_eq!(config.scan_timeout, None);
+        assert_eq!(config.max_retries, 3);
+        assert_eq!(config.retry_delay, Duration::from_secs(1));
     }
 
     #[test]
@@ -219,6 +327,12 @@ mod tests {
         assert_eq!(config.device_inactive_timeout, None);
         assert!(!config.continuous);
         assert_eq!(config.min_rssi, None);
+        assert!(!config.filter_known_devices);
+        assert!(!config.update_rssi_only);
+        assert_eq!(config.update_interval, Duration::from_secs(5));
+        assert_eq!(config.scan_timeout, None);
+        assert_eq!(config.max_retries, 3);
+        assert_eq!(config.retry_delay, Duration::from_secs(1));
     }
 
     #[test]
@@ -276,6 +390,52 @@ mod tests {
     }
 
     #[test]
+    fn test_with_filter_known_devices() {
+        let config = ScanConfig::default().with_filter_known_devices(true);
+        
+        assert!(config.filter_known_devices);
+    }
+
+    #[test]
+    fn test_with_update_rssi_only() {
+        let config = ScanConfig::default().with_update_rssi_only(true);
+        
+        assert!(config.update_rssi_only);
+    }
+
+    #[test]
+    fn test_with_update_interval() {
+        let interval = Duration::from_secs(10);
+        let config = ScanConfig::default().with_update_interval(interval);
+        
+        assert_eq!(config.update_interval, interval);
+    }
+
+    #[test]
+    fn test_with_scan_timeout() {
+        let timeout = Some(Duration::from_secs(15));
+        let config = ScanConfig::default().with_scan_timeout(timeout);
+        
+        assert_eq!(config.scan_timeout, timeout);
+    }
+
+    #[test]
+    fn test_with_max_retries() {
+        let max_retries = 5;
+        let config = ScanConfig::default().with_max_retries(max_retries);
+        
+        assert_eq!(config.max_retries, max_retries);
+    }
+
+    #[test]
+    fn test_with_retry_delay() {
+        let delay = Duration::from_secs(2);
+        let config = ScanConfig::default().with_retry_delay(delay);
+        
+        assert_eq!(config.retry_delay, delay);
+    }
+
+    #[test]
     fn test_builder_pattern_chaining() {
         let config = ScanConfig::default()
             .with_scan_duration(Duration::from_secs(15))
@@ -284,7 +444,13 @@ mod tests {
             .with_max_cycles(Some(3))
             .with_device_inactive_timeout(Some(Duration::from_secs(60)))
             .with_continuous(true)
-            .with_min_rssi(Some(-75));
+            .with_min_rssi(Some(-75))
+            .with_filter_known_devices(true)
+            .with_update_rssi_only(true)
+            .with_update_interval(Duration::from_secs(10))
+            .with_scan_timeout(Some(Duration::from_secs(15)))
+            .with_max_retries(5)
+            .with_retry_delay(Duration::from_secs(2));
         
         assert_eq!(config.scan_duration, Duration::from_secs(15));
         assert_eq!(config.interval_between_scans, Duration::from_secs(30));
@@ -293,5 +459,11 @@ mod tests {
         assert_eq!(config.device_inactive_timeout, Some(Duration::from_secs(60)));
         assert!(config.continuous);
         assert_eq!(config.min_rssi, Some(-75));
+        assert!(config.filter_known_devices);
+        assert!(config.update_rssi_only);
+        assert_eq!(config.update_interval, Duration::from_secs(10));
+        assert_eq!(config.scan_timeout, Some(Duration::from_secs(15)));
+        assert_eq!(config.max_retries, 5);
+        assert_eq!(config.retry_delay, Duration::from_secs(2));
     }
 } 

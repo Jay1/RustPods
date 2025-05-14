@@ -3,6 +3,7 @@
 // Module exports
 mod app;
 mod state_app;
+mod fixed_state_app;
 pub mod components;
 pub mod state;
 pub mod state_manager;
@@ -20,7 +21,7 @@ pub mod test_helpers;
 
 // Re-exports for easier access
 pub use app::{run_ui, view, subscription};
-pub use state_app::run_state_ui;
+pub use fixed_state_app::{StateApp, run_state_ui};
 pub use state::AppState;
 pub use message::Message;
 pub use system_tray::SystemTray;

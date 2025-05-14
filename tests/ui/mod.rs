@@ -21,19 +21,14 @@ pub mod messages;
 pub mod rendering;
 pub mod state;
 
-//! UI module tests
-//!
-//! Tests for user interface components and theme functionality.
+// UI module tests
+//
+// Tests for user interface components and theme functionality.
 
 pub mod theme_tests;
 pub mod state_tests;
-
-mod state;
-mod messages;
-mod rendering;
-mod components;
-mod battery_display_tests;
-mod user_interaction_tests;
+pub mod battery_display_tests;
+pub mod user_interaction_tests;
 
 // Re-export all test modules
 pub use state::*;

@@ -3,18 +3,18 @@
 
 use std::sync::Arc;
 use std::collections::HashMap;
-use std::time::Duration;
-use chrono::{DateTime, Utc};
+use std::time::{Instant, Duration};
+use std::path::PathBuf;
 use iced::{Point, Size, Rectangle};
 use btleplug::api::BDAddr;
 
 use rustpods::ui::Message;
 use rustpods::ui::state_manager::{StateManager, Action};
-use rustpods::config::{AppConfig, BluetoothConfig, UiConfig, SystemConfig};
-use rustpods::ui::theme::Theme;
+use rustpods::config::{AppConfig, Theme};
+use rustpods::config::{BluetoothConfig, UiConfig, SystemConfig, LogLevel};
+use rustpods::config::app_config::BatteryConfig;
 use rustpods::bluetooth::AirPodsBatteryStatus;
-use rustpods::airpods::AirPodsBattery;
-use rustpods::bluetooth::AirPodsCharging;
+use rustpods::airpods::{AirPodsBattery, AirPodsChargingState};
 
 /// Create a test AppConfig for testing
 pub fn create_test_config() -> AppConfig {
@@ -23,24 +23,40 @@ pub fn create_test_config() -> AppConfig {
             auto_scan_on_startup: true,
             scan_duration: Duration::from_secs(5),
             scan_interval: Duration::from_secs(30),
-            battery_refresh_interval: Duration::from_secs(60),
-            min_rssi: -80,
+            battery_refresh_interval: 60,
+            min_rssi: Some(-80),
             auto_reconnect: true,
             reconnect_attempts: 3,
+            adaptive_polling: false,
         },
         ui: UiConfig {
             show_notifications: true,
             start_minimized: false,
-            theme: Theme::CatppuccinMocha,
+            theme: Theme::Dark,
             show_percentage_in_tray: true,
             show_low_battery_warning: true,
             low_battery_threshold: 20,
+            remember_window_position: true,
+            last_window_position: None,
+            minimize_to_tray_on_close: true,
+            minimize_on_blur: false,
+            auto_hide_timeout: None,
         },
         system: SystemConfig {
             launch_at_startup: true,
-            log_level: "info".to_string(),
+            log_level: LogLevel::Info,
             enable_telemetry: false,
+            auto_save_interval: Some(300),
+            enable_crash_recovery: true,
         },
+        battery: BatteryConfig {
+            low_threshold: 20,
+            smoothing_enabled: true,
+            change_threshold: 5,
+            notify_low: true,
+            notify_charged: true,
+        },
+        settings_path: PathBuf::from("settings.json"),
     }
 }
 
@@ -57,11 +73,7 @@ pub fn create_test_battery() -> AirPodsBatteryStatus {
             left: Some(75),
             right: Some(80),
             case: Some(90),
-            charging: AirPodsCharging {
-                left: false,
-                right: false,
-                case: true,
-            },
+            charging: Some(AirPodsChargingState::CaseCharging),
         },
         last_updated: std::time::Instant::now(),
     }
@@ -186,6 +198,30 @@ impl MockWindowVisibilityManager {
     }
 }
 
+/// Mock tray icon types
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TrayIconType {
+    /// Disconnected icon
+    Disconnected,
+    /// Connected with battery level
+    BatteryLevel(u8),
+    /// Charging icon
+    Charging,
+    /// Low battery icon
+    LowBattery,
+}
+
+/// Mock theme modes
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ThemeMode {
+    /// Light theme
+    Light,
+    /// Dark theme
+    Dark,
+    /// System theme
+    System,
+}
+
 /// A mock implementation of the system tray
 #[derive(Debug, Clone)]
 pub struct MockSystemTray {
@@ -209,30 +245,6 @@ pub struct MockSystemTray {
     pub low_battery_threshold: u8,
     /// Notifications shown
     pub notifications: Vec<String>,
-}
-
-/// Mock tray icon types
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TrayIconType {
-    /// Disconnected icon
-    Disconnected,
-    /// Connected with battery level
-    BatteryLevel(u8),
-    /// Charging icon
-    Charging,
-    /// Low battery icon
-    LowBattery,
-}
-
-/// Mock theme modes
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ThemeMode {
-    /// Light theme
-    Light,
-    /// Dark theme
-    Dark,
-    /// System theme
-    System,
 }
 
 impl MockSystemTray {
@@ -310,7 +322,7 @@ impl MockSystemTray {
             "Hide" => Some(Message::HideWindow),
             "Start Scan" => Some(Message::StartScan),
             "Stop Scan" => Some(Message::StopScan),
-            "Settings" => Some(Message::ShowSettings),
+            "Settings" => Some(Message::SaveSettings),
             "Exit" => Some(Message::Exit),
             _ => None,
         }
@@ -337,7 +349,7 @@ impl MockSystemTray {
                 state_manager.dispatch(Action::StopScanning);
             },
             "exit" => {
-                state_manager.dispatch(Action::Exit);
+                state_manager.dispatch(Action::Shutdown);
             },
             _ => {}
         }
@@ -376,7 +388,9 @@ impl MockSystemTray {
     /// Update icon based on battery status
     pub fn update_icon_with_battery(&mut self, battery: &AirPodsBatteryStatus) {
         // Determine whether any component is charging
-        let is_charging = battery.battery.charging.left || battery.battery.charging.right || battery.battery.charging.case;
+        let is_charging = battery.battery.charging
+            .map(|state| state != AirPodsChargingState::NotCharging)
+            .unwrap_or(false);
         
         // Get minimum battery level for icon
         let min_level = [battery.battery.left, battery.battery.right]
@@ -440,25 +454,21 @@ impl MockSystemTray {
     }
     
     /// Update theme mode
-    pub fn update_theme(&mut self, theme: ThemeMode) {
-        self.theme_mode = theme;
-        self.actions.push(format!("update_theme: {:?}", theme));
+    pub fn update_theme(&mut self, theme_mode: ThemeMode) {
+        self.theme_mode = theme_mode;
+        self.actions.push(format!("update_theme: {:?}", theme_mode));
     }
     
     /// Update config settings
     pub fn update_config(&mut self, config: &AppConfig) {
-        // Update show percentage setting
-        self.show_percentage = config.ui.show_percentage_in_tray;
-        
-        // Update theme mode
         match config.ui.theme {
-            rustpods::config::Theme::Light => self.theme_mode = ThemeMode::Light,
-            rustpods::config::Theme::Dark => self.theme_mode = ThemeMode::Dark,
-            rustpods::config::Theme::System => self.theme_mode = ThemeMode::System,
-            rustpods::config::Theme::CatppuccinMocha => self.theme_mode = ThemeMode::Dark,
+            Theme::Light => self.theme_mode = ThemeMode::Light,
+            Theme::Dark => self.theme_mode = ThemeMode::Dark,
+            Theme::System => self.theme_mode = ThemeMode::System,
+            _ => (), // For other themes, don't change mode
         }
         
-        // Update low battery threshold
+        self.show_percentage = config.ui.show_percentage_in_tray;
         self.low_battery_threshold = config.ui.low_battery_threshold;
         
         self.actions.push("update_config".to_string());

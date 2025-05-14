@@ -3,7 +3,7 @@
 //! to enable headless testing without requiring real Bluetooth hardware.
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use std::future::Future;
 use std::pin::Pin;
@@ -12,15 +12,21 @@ use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::task::JoinHandle;
 use mockall::mock;
 use mockall::predicate::*;
+use futures::future::{Ready, BoxFuture};
+use futures::{FutureExt, StreamExt}; // Import these traits for boxed() and next()
 
 use rustpods::bluetooth::{
     AdapterInfo, AdapterStatus, AdapterCapabilities, BleError, 
     DiscoveredDevice, BleAdapterEvent, BluetoothAdapter,
-    AdapterManager, BleScanner, ScanConfig, BleScannerConfig
+    AdapterManager, BleScanner, ScanConfig, AirPodsBatteryStatus, EventFilter,
+    BleScannerConfig, // Import the correct BleScannerConfig
 };
-use rustpods::airpods::{DetectedAirPods, AirPodsType, AirPodsBattery};
-use btleplug::api::{BDAddr, Central, Peripheral, ScanFilter};
+use rustpods::config::Configurable; // Add the missing Configurable trait
+use rustpods::airpods::{AirPodsBattery, AirPodsChargingState, AirPodsType};
+use rustpods::airpods::detector::DetectedAirPods;
+use btleplug::api::{BDAddr, ScanFilter};
 use btleplug::platform::{Adapter, Manager, PeripheralId};
+use std::str::FromStr;
 
 /// Generate a mock for the BluetoothAdapter
 mock! {
@@ -48,6 +54,7 @@ mock! {
         pub fn with_adapter_config(adapter: Arc<Adapter>, config: BleScannerConfig) -> Self;
         pub fn set_config(&mut self, config: ScanConfig);
         pub fn get_config(&self) -> &ScanConfig;
+        pub fn as_configurable(&mut self) -> &mut dyn Configurable;
         pub async fn initialize(&mut self) -> Result<(), BleError>;
         pub async fn start_scanning(&mut self) -> Result<Receiver<BleAdapterEvent>, BleError>;
         pub async fn stop_scanning(&mut self) -> Result<(), BleError>;
@@ -64,11 +71,11 @@ mock! {
         pub async fn new() -> Result<Self, BleError>;
         pub async fn refresh_adapters(&mut self) -> Result<(), BleError>;
         pub fn get_adapters(&self) -> &Vec<AdapterInfo>;
-        pub fn get_selected_adapter_info(&self) -> Option<&AdapterInfo>;
+        pub fn get_selected_adapter_info<'a>(&'a self) -> Option<&'a AdapterInfo>;
         pub async fn get_selected_adapter(&self) -> Result<Adapter, BleError>;
         pub fn select_adapter(&mut self, index: usize) -> Result<(), BleError>;
         pub fn select_best_adapter(&mut self) -> Result<(), BleError>;
-        pub fn get_adapter_history(&self, adapter_id: &str) -> Option<&[(Instant, AdapterStatus)]>;
+        pub fn get_adapter_history<'a>(&'a self, adapter_id: &str) -> Option<&'a [(Instant, AdapterStatus)]>;
     }
 }
 
@@ -88,9 +95,12 @@ impl Default for MockBluetoothAdapterBuilder {
                 supports_scanning: true,
                 supports_connecting: true,
                 is_powered_on: true,
-                max_connections: Some(10),
-                last_checked: Instant::now(),
+                max_connections: 10,
+                last_checked: Some(Instant::now()),
                 status: AdapterStatus::Normal,
+                supports_central_role: true,
+                supports_advertising: true,
+                adapter_info: None,
             },
             status: AdapterStatus::Normal,
             devices: vec![],
@@ -162,7 +172,7 @@ impl MockBluetoothAdapterBuilder {
         mock.expect_start_scanning()
             .returning(move |_| {
                 if should_fail {
-                    return futures::future::ready(Err(BleError::ScanningAlreadyInProgress)).boxed();
+                    return futures::future::ready(Err(BleError::ScanInProgress)).boxed();
                 }
                 
                 let devices = devices.clone();
@@ -199,13 +209,7 @@ impl MockBluetoothAdapterBuilder {
         // Setup discover_devices behavior
         let should_fail = self.should_fail_discovery;
         let devices = self.devices.clone();
-        mock.expect_discover_devices()
-            .returning(move || {
-                if should_fail {
-                    return futures::future::ready(Err(BleError::AdapterNotConnected)).boxed();
-                }
-                futures::future::ready(Ok(devices.clone())).boxed()
-            });
+                        mock.expect_discover_devices()            .returning(move || {                if should_fail {                    return futures::future::ready(Err(BleError::AdapterNotInitialized)).boxed();                }                futures::future::ready(Ok(devices.clone())).boxed()            });
         
         // Setup clone behavior
         mock.expect_clone()
@@ -246,16 +250,21 @@ impl Default for MockBleScannerBuilder {
             config: ScanConfig::default(),
             devices: vec![],
             adapter_infos: vec![AdapterInfo {
-                id: "mock-adapter-1".to_string(),
-                address: BDAddr::from([0x00, 0x11, 0x22, 0x33, 0x44, 0x55]),
-                name: Some("Mock Adapter 1".to_string()),
+                index: 0,
+                is_default: true,
+                vendor: Some("Mock".to_string()),
+                address: Some(BDAddr::from([0x00, 0x11, 0x22, 0x33, 0x44, 0x55])),
+                name: "Mock Adapter 1".to_string(),
                 capabilities: AdapterCapabilities {
                     supports_scanning: true,
                     supports_connecting: true,
                     is_powered_on: true,
-                    max_connections: Some(10),
-                    last_checked: Instant::now(),
+                    max_connections: 10,
+                    last_checked: Some(Instant::now()),
                     status: AdapterStatus::Normal,
+                    supports_central_role: true,
+                    supports_advertising: true,
+                    adapter_info: None,
                 },
             }],
             should_fail_initialize: false,
@@ -328,6 +337,13 @@ impl MockBleScannerBuilder {
                 new_mock
             });
         
+        // Setup with_adapter_config constructor
+        mock.expect_with_adapter_config()
+            .returning(|_, _| {
+                // Return a new mock with default configuration
+                MockBleScanner::new()
+            });
+        
         // Setup set_config behavior
         mock.expect_set_config()
             .returning(|_| ());
@@ -354,7 +370,7 @@ impl MockBleScannerBuilder {
         mock.expect_start_scanning()
             .returning(move || {
                 if should_fail {
-                    return futures::future::ready(Err(BleError::ScanningAlreadyInProgress)).boxed();
+                    return futures::future::ready(Err(BleError::ScanInProgress)).boxed();
                 }
                 
                 let devices = devices.clone();
@@ -407,27 +423,28 @@ impl MockBleScannerBuilder {
     }
 }
 
-/// Create a test discovered device
+/// Create a test discovered device for tests
 pub fn create_test_discovered_device(
     address: &str,
     name: Option<&str>,
     rssi: Option<i16>,
     manufacturer_data: Option<HashMap<u16, Vec<u8>>>,
 ) -> DiscoveredDevice {
-    let addr = address.parse().unwrap_or_else(|_| {
-        BDAddr::from([0x11, 0x22, 0x33, 0x44, 0x55, 0x66])
-    });
-    
     DiscoveredDevice {
-        address: addr,
+        address: from_str_or_panic(address),
         name: name.map(String::from),
         rssi,
-        manufacturer_data: manufacturer_data.unwrap_or_default(),
-        services: vec![],
+        manufacturer_data: manufacturer_data.unwrap_or_else(HashMap::new),
+        is_potential_airpods: false,
+        last_seen: Instant::now(),
+        is_connected: false,
+        service_data: HashMap::new(),
+        services: Vec::new(),
+        tx_power_level: None,
     }
 }
 
-/// Create an Apple device with the specified manufacturer data
+/// Create an Apple device for tests with manufacturer data
 pub fn create_apple_device(
     address: &str,
     name: Option<&str>,
@@ -435,9 +452,20 @@ pub fn create_apple_device(
     data: Vec<u8>,
 ) -> DiscoveredDevice {
     let mut manufacturer_data = HashMap::new();
-    manufacturer_data.insert(76, data); // 76 is Apple's manufacturer ID
+    manufacturer_data.insert(0x004C, data); // Apple Company ID
     
-    create_test_discovered_device(address, name, rssi, Some(manufacturer_data))
+    DiscoveredDevice {
+        address: from_str_or_panic(address),
+        name: name.map(String::from),
+        rssi,
+        manufacturer_data,
+        is_potential_airpods: true,
+        last_seen: Instant::now(),
+        is_connected: false,
+        service_data: HashMap::new(),
+        services: Vec::new(),
+        tx_power_level: None,
+    }
 }
 
 /// Create AirPods manufacturer data with specified battery levels
@@ -500,6 +528,49 @@ mock! {
     }
 }
 
+/// Create mock battery status for testing
+pub fn create_mock_battery_status(left: u8, right: u8, case: u8, charging_status: AirPodsChargingState) -> AirPodsBatteryStatus {
+    let battery = AirPodsBattery {
+        left: Some(left),
+        right: Some(right),
+        case: Some(case),
+        charging: Some(charging_status),
+    };
+    
+    AirPodsBatteryStatus::new(battery)
+}
+
+/// Helper function to convert string address to BDAddr
+pub fn from_str_or_panic(s: &str) -> BDAddr {
+    // Split the string by ':' and parse each part as a hex number
+    let parts: Vec<&str> = s.split(':').collect();
+    if parts.len() != 6 {
+        panic!("Invalid BDAddr format: {}", s);
+    }
+    
+    let mut bytes = [0u8; 6];
+    for (i, part) in parts.iter().enumerate() {
+        bytes[i] = u8::from_str_radix(part, 16)
+            .unwrap_or_else(|_| panic!("Invalid byte in BDAddr: {}", part));
+    }
+    
+    BDAddr::from(bytes)
+}
+
+impl MockBleScanner {
+    // Add these methods to support the test_mock_scanner_initialization test
+    
+    /// Get all discovered devices
+    pub fn get_devices(&self) -> Vec<DiscoveredDevice> {
+        self.get_discovered_devices()
+    }
+    
+    /// Get event history
+    pub fn get_event_history(&self) -> Vec<BleAdapterEvent> {
+        vec![] // Return empty history as a stub
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -539,6 +610,32 @@ mod tests {
         
         // We should have received at least the ScanStarted event
         assert!(event_count >= 1);
+    }
+    
+    #[tokio::test]
+    async fn test_mock_scanner_initialization() {
+        // Test creating a scanner and initializing it
+        let mut mock_scanner = MockBleScannerBuilder::new()
+            .with_devices(vec![
+                create_test_discovered_device("00:11:22:33:44:55", Some("Test Device 1"), Some(-60), None),
+                create_apple_device("66:77:88:99:AA:BB", Some("AirPods"), Some(-60), vec![1, 2, 3, 4])
+            ])
+            .build();
+        
+        let init_result = mock_scanner.initialize().await;
+        assert!(init_result.is_ok(), "Scanner initialization should succeed");
+        
+        // Should be able to get devices
+        let devices = mock_scanner.get_devices();
+        assert_eq!(devices.len(), 2, "Should have 2 devices");
+        
+        // Start scanning
+        let events_rx = mock_scanner.start_scanning().await.unwrap();
+        assert!(mock_scanner.is_scanning(), "Scanner should be scanning");
+        
+        // Check event history
+        let history = mock_scanner.get_event_history();
+        assert!(!history.is_empty(), "Should have event history");
     }
     
     #[tokio::test]
@@ -635,5 +732,29 @@ mod tests {
         
         // Status flags
         assert_eq!(data[6], 0x03);
+    }
+    
+    #[tokio::test]
+    async fn test_initialize_scanner_handles_error() {
+        // Create a scanner that will return error
+        let mut mock_scanner = MockBleScannerBuilder::new()
+            .with_should_fail_initialize(true)
+            .build();
+        
+        // Initialize should fail
+        let init_result = mock_scanner.initialize().await;
+        
+        // Verify we got the expected error
+        assert!(init_result.is_err());
+        match init_result {
+            Err(BleError::AdapterNotInitialized) => {
+                println!("✅ Expected error received");
+            },
+            _ => panic!("Expected AdapterNotInitialized error"),
+        }
+        
+        // Should be able to try again - it will fail again but that's ok
+        let events_rx = mock_scanner.start_scanning().await;
+        assert!(events_rx.is_err());
     }
 } 

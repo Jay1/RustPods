@@ -3,7 +3,6 @@ pub mod config;
 pub mod bluetooth;
 pub mod airpods;
 pub mod ui;
-pub mod errors;
 pub mod state_persistence;
 pub mod lifecycle_manager;
 pub mod app_state_controller;
@@ -34,6 +33,13 @@ pub use ui::{AppState, Message, run_ui};
 pub use config::AppConfig;
 pub use error::{RustPodsError, ErrorManager, ErrorSeverity, RecoveryAction};
 pub use app_controller::AppController;
-pub use logging::init_logger;
+pub use logging::configure_logging;
 pub use telemetry::TelemetryManager;
-pub use diagnostics::{DiagnosticsManager, DiagnosticLevel}; 
+pub use diagnostics::{DiagnosticsManager, DiagnosticLevel};
+
+/// Initialize logging with default settings
+pub fn init_logging() {
+    if let Err(e) = logging::configure_logging(config::LogLevel::Info, None, true) {
+        eprintln!("Failed to initialize logging: {}", e);
+    }
+} 

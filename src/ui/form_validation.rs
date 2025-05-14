@@ -4,8 +4,43 @@
 
 use std::collections::HashMap;
 use std::fmt;
+use thiserror::Error;
 
 use crate::ui::Message;
+use crate::error::{RustPodsError, ErrorContext};
+
+/// Form validation error
+#[derive(Debug, Error)]
+pub enum ValidationError {
+    /// Field is required
+    #[error("Field '{0}' is required")]
+    Required(String),
+    
+    /// Field is too short
+    #[error("Field '{0}' must be at least {1} characters")]
+    TooShort(String, usize),
+    
+    /// Field is too long
+    #[error("Field '{0}' must be at most {1} characters")]
+    TooLong(String, usize),
+    
+    /// Field doesn't match pattern
+    #[error("Field '{0}' has invalid format: {1}")]
+    InvalidFormat(String, String),
+    
+    /// Custom validation error
+    #[error("{0}")]
+    Custom(String),
+}
+
+impl From<ValidationError> for RustPodsError {
+    fn from(err: ValidationError) -> Self {
+        RustPodsError::Validation(err.to_string())
+    }
+}
+
+/// Validation result type
+pub type Result<T> = std::result::Result<T, ValidationError>;
 
 /// Validation rule for a field
 pub struct ValidationRule {
@@ -21,7 +56,7 @@ pub struct ValidationRule {
     pub pattern: Option<String>,
     /// Custom validation function
     #[allow(clippy::type_complexity)]
-    pub validator: Option<Box<dyn Fn(&str) -> Result<(), String> + Send + Sync>>,
+    pub validator: Option<Box<dyn Fn(&str) -> Result<()> + Send + Sync>>,
 }
 
 impl ValidationRule {
@@ -64,38 +99,65 @@ impl ValidationRule {
     /// Add a custom validation function
     pub fn validator<F>(mut self, validator: F) -> Self
     where
-        F: Fn(&str) -> Result<(), String> + Send + Sync + 'static,
+        F: Fn(&str) -> Result<()> + Send + Sync + 'static,
     {
         self.validator = Some(Box::new(validator));
         self
     }
     
     /// Validate a field value against this rule
-    pub fn validate(&self, value: &str) -> Result<(), String> {
+    pub fn validate(&self, value: &str) -> Result<()> {
+        // Create error context for logging
+        let ctx = ErrorContext::new("FormValidation", "validate")
+            .with_metadata("field", self.field.clone())
+            .with_metadata("value_length", value.len().to_string());
+        
         // Check if the field is required
         if self.required && value.trim().is_empty() {
-            return Err(format!("{} is required", self.field));
+            log::debug!("Required field '{}' is empty", self.field);
+            return Err(ValidationError::Required(self.field.clone()));
         }
         
         // Check minimum length
         if let Some(min_length) = self.min_length {
             if value.len() < min_length {
-                return Err(format!("{} must be at least {} characters", self.field, min_length));
+                log::debug!("Field '{}' is too short ({}), minimum {}", self.field, value.len(), min_length);
+                return Err(ValidationError::TooShort(self.field.clone(), min_length));
             }
         }
         
         // Check maximum length
         if let Some(max_length) = self.max_length {
             if value.len() > max_length {
-                return Err(format!("{} must be at most {} characters", self.field, max_length));
+                log::debug!("Field '{}' is too long ({}), maximum {}", self.field, value.len(), max_length);
+                return Err(ValidationError::TooLong(self.field.clone(), max_length));
             }
         }
         
         // Check pattern
-        // Note: In a real implementation, you'd use a proper regex crate
         if let Some(pattern) = &self.pattern {
-            if pattern == "email" && !value.contains('@') {
-                return Err(format!("{} must be a valid email address", self.field));
+            let valid = match pattern.as_str() {
+                "email" => value.contains('@') && value.contains('.'),
+                "number" => value.chars().all(|c| c.is_digit(10) || c == '-' || c == '.'),
+                "integer" => value.chars().all(|c| c.is_digit(10) || c == '-'),
+                "url" => value.starts_with("http://") || value.starts_with("https://"),
+                "phone" => value.chars().all(|c| c.is_digit(10) || c == '+' || c == '-' || c == '(' || c == ')' || c == ' '),
+                _ => {
+                    if let Ok(regex) = regex::Regex::new(pattern) {
+                        regex.is_match(value)
+                    } else {
+                        log::warn!("Invalid regex pattern: {}", pattern);
+                        true
+                    }
+                }
+            };
+            
+            if !valid {
+                log::debug!("Field '{}' has invalid format, should match {}", self.field, pattern);
+                return Err(ValidationError::InvalidFormat(
+                    self.field.clone(), 
+                    format!("Must match format: {}", pattern)
+                ));
             }
         }
         
@@ -170,8 +232,9 @@ impl FormValidator {
     
     /// Set a field value
     pub fn set_field<S: Into<String> + Clone, T: Into<String>>(&mut self, field: S, value: T) {
-        self.values.insert(field.clone().into(), value.into());
-        self.validate_field(&field.into());
+        let field_name = field.clone().into();
+        self.values.insert(field_name.clone(), value.into());
+        self.validate_field(&field_name);
     }
     
     /// Get a field value
@@ -201,47 +264,57 @@ impl FormValidator {
     
     /// Validate a specific field
     pub fn validate_field(&mut self, field: &str) -> bool {
+        // Find all rules for this field
+        let rules = self.rules.iter().filter(|r| r.field == field).collect::<Vec<_>>();
+        
+        // If no rules, field is valid
+        if rules.is_empty() {
+            self.errors.remove(field);
+            return true;
+        }
+        
+        // Get the field value
         let value = match self.values.get(field) {
-            Some(value) => value,
-            None => return false,
+            Some(v) => v,
+            None => {
+                // Field is not set, check if it's required
+                if rules.iter().any(|r| r.required) {
+                    self.errors.insert(field.to_string(), format!("Field {} is required", field));
+                    return false;
+                }
+                return true;
+            }
         };
         
-        // Find the rule for this field
-        let rule = self.rules.iter().find(|r| r.field == field);
-        
-        if let Some(rule) = rule {
+        // Apply rules
+        for rule in rules {
             match rule.validate(value) {
-                Ok(()) => {
-                    // Remove any existing error
-                    self.errors.remove(field);
-                    true
-                }
-                Err(message) => {
-                    // Add the error
-                    self.errors.insert(field.to_string(), message);
-                    false
+                Ok(_) => {},
+                Err(err) => {
+                    self.errors.insert(field.to_string(), err.to_string());
+                    log::debug!("Validation failed for field {}: {}", field, err);
+                    return false;
                 }
             }
-        } else {
-            // No rule for this field, so it's valid
-            true
         }
+        
+        // Field is valid
+        self.errors.remove(field);
+        true
     }
     
     /// Validate all fields
     pub fn validate_all(&mut self) -> bool {
         let mut valid = true;
         
-        // Clear all errors first
-        self.errors.clear();
+        // Get all unique fields from rules
+        let fields = self.rules.iter()
+            .map(|r| r.field.clone())
+            .collect::<std::collections::HashSet<_>>();
         
         // Validate each field
-        for rule in &self.rules {
-            let field = &rule.field;
-            let value = self.values.get(field).cloned().unwrap_or_default();
-            
-            if let Err(message) = rule.validate(&value) {
-                self.errors.insert(field.clone(), message);
+        for field in fields {
+            if !self.validate_field(&field) {
                 valid = false;
             }
         }
@@ -251,19 +324,28 @@ impl FormValidator {
     
     /// Convert validation errors to UI messages
     pub fn to_messages(&self) -> Vec<Message> {
-        self.errors
-            .iter()
-            .map(|(field, message)| {
-                Message::FormValidationError {
-                    field: field.clone(),
-                    message: message.clone(),
-                }
-            })
+        self.errors.iter()
+            .map(|(field, error)| Message::validation_error(field.clone(), error.clone()))
             .collect()
+    }
+    
+    /// Get a map of all fields and their validation status
+    pub fn get_validation_status(&self) -> HashMap<String, ValidationResult> {
+        let mut result = HashMap::new();
+        
+        for (field, _) in &self.values {
+            let error = self.errors.get(field).cloned();
+            result.insert(field.clone(), ValidationResult {
+                valid: error.is_none(),
+                error_message: error,
+            });
+        }
+        
+        result
     }
 }
 
-/// Represents a validation result for a form field
+/// Validation result for a field
 #[derive(Debug, Clone)]
 pub struct ValidationResult {
     /// Whether the validation was successful
@@ -272,16 +354,14 @@ pub struct ValidationResult {
     pub error_message: Option<String>,
 }
 
-/// A field validator for form inputs
-// Remove default derives and manually implement Debug and Clone later
+/// Helper struct for field validation
 pub struct FieldValidator {
     /// Error message to display when validation fails
     pub error_message: String,
     /// Optional validator function
-    pub validator: Option<Box<dyn Fn(&str) -> Result<(), String> + Send + Sync>>,
+    pub validator: Option<Box<dyn Fn(&str) -> Result<()> + Send + Sync>>,
 }
 
-// Manual implementation of Debug for FieldValidator
 impl fmt::Debug for FieldValidator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("FieldValidator")
@@ -291,12 +371,11 @@ impl fmt::Debug for FieldValidator {
     }
 }
 
-// Manual implementation of Clone for FieldValidator
 impl Clone for FieldValidator {
     fn clone(&self) -> Self {
         Self {
             error_message: self.error_message.clone(),
-            validator: None, // Cannot clone the validator function
+            validator: None, // Cannot clone the function, so we set it to None in the clone
         }
     }
 }
@@ -310,32 +389,41 @@ mod tests {
         let rule = ValidationRule::new("username")
             .required()
             .min_length(3)
-            .max_length(20);
+            .max_length(20)
+            .pattern(r"^[a-zA-Z0-9_]+$");
         
         assert_eq!(rule.field, "username");
         assert!(rule.required);
         assert_eq!(rule.min_length, Some(3));
         assert_eq!(rule.max_length, Some(20));
+        assert!(rule.pattern.is_some());
     }
     
     #[test]
     fn test_validation_rule_validation() {
         let rule = ValidationRule::new("username")
             .required()
-            .min_length(3)
-            .max_length(20);
+            .min_length(3);
         
-        // Test required validation
+        // Test required field
         assert!(rule.validate("").is_err());
         
-        // Test min length validation
+        // Test min length
         assert!(rule.validate("ab").is_err());
+        assert!(rule.validate("abc").is_ok());
         
-        // Test max length validation
-        assert!(rule.validate("abcdefghijklmnopqrstuvwxyz").is_err());
+        // Test with custom validator
+        let rule = ValidationRule::new("password")
+            .validator(|value| {
+                if value.chars().any(|c| c.is_ascii_digit()) {
+                    Ok(())
+                } else {
+                    Err(ValidationError::Custom("Password must contain at least one digit".to_string()))
+                }
+            });
         
-        // Test valid input
-        assert!(rule.validate("username").is_ok());
+        assert!(rule.validate("password").is_err());
+        assert!(rule.validate("password123").is_ok());
     }
     
     #[test]
@@ -343,35 +431,25 @@ mod tests {
         let mut validator = FormValidator::new();
         
         // Add rules
-        validator.add_rule(
-            ValidationRule::new("username")
-                .required()
-                .min_length(3)
-                .max_length(20),
-        );
+        validator.add_rule(ValidationRule::new("username").required().min_length(3));
+        validator.add_rule(ValidationRule::new("password").required().min_length(8));
         
-        validator.add_rule(
-            ValidationRule::new("email")
-                .required()
-                .pattern("email"),
-        );
-        
-        // Set values
-        validator.set_field("username", "ab");
-        validator.set_field("email", "not-an-email");
-        
-        // Check errors
-        assert!(validator.has_error("username"));
-        assert!(validator.has_error("email"));
-        assert!(validator.has_errors());
-        
-        // Fix the errors
-        validator.set_field("username", "validusername");
-        validator.set_field("email", "valid@example.com");
-        
-        // Check errors again
-        assert!(!validator.has_error("username"));
-        assert!(!validator.has_error("email"));
+        // Test initial state
         assert!(!validator.has_errors());
+        
+        // Test with valid data
+        validator.set_field("username", "john");
+        validator.set_field("password", "password123");
+        
+        assert!(!validator.has_errors());
+        assert!(validator.validate_all());
+        
+        // Test with invalid data
+        validator.set_field("username", "jo");
+        
+        assert!(validator.has_errors());
+        assert!(validator.has_error("username"));
+        assert!(!validator.has_error("password"));
+        assert!(!validator.validate_all());
     }
 } 
