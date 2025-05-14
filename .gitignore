@@ -61,3 +61,4 @@ dev-debug.log
 # Task files
 tasks.json# Specific files to protect API keys
 .cursor/mcp.json
+build_rs_cov.profraw
