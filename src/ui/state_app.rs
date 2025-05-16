@@ -44,17 +44,19 @@ impl Application for StateApp {
     fn new(flags: Self::Flags) -> (Self, Command<Message>) {
         let state_manager = flags;
         
-        // Get current state
+        // Refresh config
+        let _config = state_manager.get_config();
+        
+        // Get device state
         let _device_state = state_manager.get_device_state();
         let ui_state = state_manager.get_ui_state();
-        let config = state_manager.get_config();
         
         // Create main and settings windows
         let main_window = MainWindow::empty();
-        let settings_window = SettingsWindow::new(config.clone());
+        let settings_window = SettingsWindow::new(_config.clone());
         
         // Create window visibility manager with the current config
-        let visibility_manager = WindowVisibilityManager::new(config.clone())
+        let visibility_manager = WindowVisibilityManager::new(_config.clone())
             .with_state_manager(Arc::clone(&state_manager));
         
         // Create initial command
@@ -82,7 +84,7 @@ impl Application for StateApp {
     }
     
     fn title(&self) -> String {
-        let config = self.state_manager.get_config();
+        let _config = self.state_manager.get_config();
         
         // Show battery percentage in title if available
         let device_state = self.state_manager.get_device_state();
@@ -99,8 +101,8 @@ impl Application for StateApp {
 
     fn theme(&self) -> Self::Theme {
         // Use the theme from config
-        let config = self.state_manager.get_config();
-        match config.ui.theme {
+        let _config = self.state_manager.get_config();
+        match _config.ui.theme {
             crate::config::Theme::Light => Theme::Light,
             crate::config::Theme::Dark => Theme::Dark,
             crate::config::Theme::System => Theme::System,

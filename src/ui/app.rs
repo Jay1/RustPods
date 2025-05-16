@@ -130,7 +130,7 @@ pub fn run_ui() -> iced::Result {
     }
     
     // Create the state manager
-    let state_manager = Arc::new(StateManager::new(sender));
+    let _state_manager = Arc::new(StateManager::new(sender));
     
     // Run the Iced application using state UI
     run_state_ui()

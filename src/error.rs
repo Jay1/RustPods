@@ -818,12 +818,12 @@ impl RustPodsError {
     }
     
     /// Create a UI error with a message and severity
-    pub fn ui(message: impl Into<String>, severity: ErrorSeverity) -> Self {
+    pub fn ui(message: impl Into<String>, _severity: ErrorSeverity) -> Self {
         Self::Ui(message.into())
     }
     
     /// Create a system error with a message and severity
-    pub fn system(message: impl Into<String>, severity: ErrorSeverity) -> Self {
+    pub fn system(message: impl Into<String>, _severity: ErrorSeverity) -> Self {
         Self::System(message.into())
     }
     
@@ -913,7 +913,7 @@ impl std::fmt::Display for BluetoothError {
             BluetoothError::InvalidData(s) => write!(f, "Invalid data received: {}", s),
             BluetoothError::ApiError(e) => write!(f, "Bluetooth API error: {}", e),
             BluetoothError::Timeout(d) => write!(f, "Operation timed out after {:?}", d),
-            BluetoothError::AdapterRefreshFailed { error, recovery, retries } => write!(f, "Failed to refresh adapter: {} ({} retries attempted)", error, retries),
+            BluetoothError::AdapterRefreshFailed { error, recovery: _, retries } => write!(f, "Failed to refresh adapter: {} ({} retries)", error, retries),
             BluetoothError::AdapterNotAvailable { reason, recovery } => write!(f, "Adapter not available: {} (recommended recovery: {})", reason, recovery),
             BluetoothError::AdapterScanFailed { error, recovery } => write!(f, "Adapter scan failed: {} (recommended recovery: {})", error, recovery),
             BluetoothError::Other(s) => write!(f, "Bluetooth error: {}", s),

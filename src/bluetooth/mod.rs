@@ -12,6 +12,7 @@ pub mod battery_monitor;
 
 // Import error types from crate root
 use crate::error::{BluetoothError, RustPodsError, ErrorContext, RecoveryAction};
+use std::fmt::Debug;
 
 // Re-export all necessary types from scanner
 pub use scanner::{
@@ -151,7 +152,7 @@ where
 }
 
 /// Convert a btleplug Error to our custom BluetoothError
-pub fn convert_btleplug_error(error: btleplug::Error, component: &str, operation: &str) -> BluetoothError {
+pub fn convert_btleplug_error(error: btleplug::Error, _component: &str, operation: &str) -> BluetoothError {
     use btleplug::Error as BtlePlugError;
     
     match error {
@@ -178,4 +179,14 @@ pub fn convert_btleplug_error(error: btleplug::Error, component: &str, operation
             format!("Unknown Bluetooth error during {}", operation)
         ),
     }
+}
+
+/// Create a BluetoothError from a btleplug error
+pub fn create_bluetooth_error<E: std::fmt::Display + Debug>(
+    error: E, 
+    _component: &str, 
+    _operation: &str
+) -> BluetoothError {
+    // Convert to string and create a generic error
+    BluetoothError::Other(error.to_string())
 } 

@@ -311,7 +311,11 @@ impl AppStateController {
         state_manager: &Arc<StateManager>,
         airpods_detector: &AirPodsDetector,
     ) {
-        let device_addr = device.address.to_string();
+        log::debug!("Processing device update event: {:?}", device);
+        
+        // Get device address
+        let _device_addr = device.address.to_string();
+        
         let is_airpods = device.is_potential_airpods || 
                          airpods_detector.is_airpods(&device);
         

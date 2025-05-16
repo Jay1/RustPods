@@ -325,10 +325,7 @@ impl TelemetryManager {
         // If we've hit a critical error threshold or high error rate in a short time
         let recent_errors = self.error_queue.len();
         let critical_errors = self.error_queue.iter()
-            .filter(|err| match err.recovery {
-                Some(RecoveryAction::RestartApplication) => true,
-                _ => false,
-            })
+            .filter(|err| matches!(err.recovery, Some(RecoveryAction::RestartApplication)))
             .count();
         
         // Criteria for collecting diagnostics:

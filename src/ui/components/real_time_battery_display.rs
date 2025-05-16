@@ -21,19 +21,19 @@ const MIN_PULSE_OPACITY: f32 = 0.7;
 #[derive(Debug, Clone)]
 pub struct RealTimeBatteryDisplay {
     /// Battery status information
-    battery_status: Option<AirPodsBatteryStatus>,
+    pub battery_status: Option<AirPodsBatteryStatus>,
     /// Current animation progress (0.0-1.0)
-    animation_progress: f32,
+    pub animation_progress: f32,
     /// Time when the component was last updated
     last_update: Option<Instant>,
     /// Show time since last update
-    show_time_since_update: bool,
+    pub show_time_since_update: bool,
     /// Show detailed info (connection time, estimates)
-    show_detailed_info: bool,
+    pub show_detailed_info: bool,
     /// Battery levels from previous update for animation
-    previous_levels: Option<(Option<u8>, Option<u8>, Option<u8>)>,
+    pub previous_levels: Option<(Option<u8>, Option<u8>, Option<u8>)>,
     /// Show compact view
-    compact_view: bool,
+    pub compact_view: bool,
 }
 
 impl Default for RealTimeBatteryDisplay {
@@ -53,15 +53,12 @@ impl Default for RealTimeBatteryDisplay {
 impl RealTimeBatteryDisplay {
     /// Create a new real-time battery display
     pub fn new(battery_status: Option<AirPodsBatteryStatus>) -> Self {
-        // Clone the battery_status before using it
-        let status_clone = battery_status.clone();
-        
         Self {
             battery_status,
             animation_progress: 0.0,
-            last_update: status_clone.as_ref().map(|_| Instant::now()),
+            last_update: Some(Instant::now()),
             show_time_since_update: true,
-            show_detailed_info: true,
+            show_detailed_info: false,
             previous_levels: None,
             compact_view: false,
         }
@@ -75,18 +72,19 @@ impl RealTimeBatteryDisplay {
     
     /// Update the battery status
     pub fn update(&mut self, battery_status: Option<AirPodsBatteryStatus>) {
-        // Store current levels for animation
-        if let Some(status) = &self.battery_status {
+        // Store current levels for animation transition
+        if let Some(current_status) = &self.battery_status {
+            let battery = &current_status.battery;
             self.previous_levels = Some((
-                status.battery.left,
-                status.battery.right,
-                status.battery.case,
+                battery.left,
+                battery.right,
+                battery.case,
             ));
         }
-        
+
         self.battery_status = battery_status;
         self.last_update = Some(Instant::now());
-        self.animation_progress = 0.0;
+        self.animation_progress = 0.0; // Reset animation when updating
     }
     
     /// Set compact view mode
@@ -107,8 +105,13 @@ impl RealTimeBatteryDisplay {
         self
     }
     
+    /// Set the last update time - primarily used for testing
+    pub fn set_last_update(&mut self, time: Option<Instant>) {
+        self.last_update = time;
+    }
+    
     /// Get interpolated battery level for animations
-    fn get_animated_level(&self, current: Option<u8>, previous: Option<u8>) -> Option<u8> {
+    pub fn get_animated_level(&self, current: Option<u8>, previous: Option<u8>) -> Option<u8> {
         match (current, previous) {
             (Some(current), Some(previous)) => {
                 let diff = current as f32 - previous as f32;
@@ -124,8 +127,10 @@ impl RealTimeBatteryDisplay {
         }
     }
     
-    /// Calculate estimated time remaining based on battery level and usage pattern
-    fn calculate_time_remaining(&self) -> Option<u32> {
+    /// Calculate estimated time remaining in minutes based on battery levels
+    /// 
+    /// This is exposed as public for testing purposes.
+    pub fn calculate_time_remaining(&self) -> Option<u32> {
         // This is a simplified estimation model
         // In a real app, you'd use historical battery drain rates
         
@@ -154,8 +159,10 @@ impl RealTimeBatteryDisplay {
         None
     }
     
-    /// Format time remaining in hours and minutes
-    fn format_time_remaining(&self, minutes: u32) -> String {
+    /// Format time remaining in a human-readable format
+    /// 
+    /// This is exposed as public for testing purposes.
+    pub fn format_time_remaining(&self, minutes: u32) -> String {
         let hours = minutes / 60;
         let mins = minutes % 60;
         
@@ -192,10 +199,10 @@ impl RealTimeBatteryDisplay {
         MIN_PULSE_OPACITY + ((1.0 - MIN_PULSE_OPACITY) * pulse)
     }
     
-    /// Determine battery label color based on level and charging
-    fn get_battery_label_color(&self, level: Option<u8>, is_charging: bool) -> Color {
+    /// Get color based on battery level
+    fn get_color_for_level(&self, level: Option<u8>, is_charging: bool) -> Color {
         match level {
-            Some(level) if is_charging => Color::from_rgb(0.2, 0.6, 0.8), // Blue for charging
+            Some(_level) if is_charging => Color::from_rgb(0.2, 0.6, 0.8), // Blue for charging
             Some(level) if level <= 20 => Color::from_rgb(0.8, 0.2, 0.2), // Red for low
             Some(level) if level <= 50 => Color::from_rgb(0.9, 0.6, 0.1), // Orange for medium
             Some(_) => Color::from_rgb(0.2, 0.7, 0.2),                   // Green for good
@@ -215,10 +222,10 @@ impl RealTimeBatteryDisplay {
         let animated_level = self.get_animated_level(current_level, previous_level);
         
         // Determine color based on level and charging status
-        let color = self.get_battery_label_color(current_level, is_charging);
+        let _color = self.get_color_for_level(current_level, is_charging);
         
         // Calculate the pulse effect for charging animation
-        let opacity = if is_charging { self.calculate_pulse_effect() } else { 1.0 };
+        let _opacity = if is_charging { self.calculate_pulse_effect() } else { 1.0 };
         
         let level_text = match current_level {
             Some(level) => format!("{}%", level),

@@ -49,6 +49,9 @@ pub struct BatteryMonitorOptions {
     
     /// Whether to notify on low battery
     pub notify_low_battery: bool,
+    
+    /// Runtime handle to spawn tasks on
+    pub _runtime_handle: Arc<tokio::runtime::Handle>,
 }
 
 impl Default for BatteryMonitorOptions {
@@ -60,6 +63,7 @@ impl Default for BatteryMonitorOptions {
             use_smoothing: true,
             low_battery_threshold: LOW_BATTERY_THRESHOLD,
             notify_low_battery: true,
+            _runtime_handle: Arc::new(tokio::runtime::Handle::current()),
         }
     }
 }
@@ -74,6 +78,7 @@ impl BatteryMonitorOptions {
             use_smoothing: config.battery.smoothing_enabled,
             low_battery_threshold: config.battery.low_threshold,
             notify_low_battery: config.battery.notify_low,
+            _runtime_handle: Arc::new(tokio::runtime::Handle::current()),
         }
     }
 }
@@ -254,7 +259,7 @@ impl BatteryMonitor {
         self,
         device: Arc<Mutex<Option<DetectedAirPods>>>,
         callback: F,
-        runtime_handle: Arc<tokio::runtime::Handle>,
+        _runtime_handle: Arc<tokio::runtime::Handle>,
     ) -> JoinHandle<()>
     where
         F: Fn(AirPodsBatteryStatus, Option<BatteryAlert>) + Send + 'static,
@@ -286,7 +291,7 @@ impl BatteryMonitor {
                     // Check if device has battery info
                     if let Some(battery) = &current_device.battery {
                         // Update the monitor with the new battery reading
-                        let mut alert = None;
+                        let mut _alert_result = None;
                         
                         {
                             let mut monitor_guard = monitor.lock().unwrap();
@@ -326,10 +331,10 @@ impl BatteryMonitor {
                                             
                                             // Check for low battery alerts
                                             if options.notify_low_battery {
-                                                alert = monitor_guard.check_low_battery(&smoothed);
+                                                _alert_result = monitor_guard.check_low_battery(&smoothed);
                                                 
                                                 // Call the callback
-                                                callback(status, alert.clone());
+                                                callback(status, _alert_result.clone());
                                             } else {
                                                 // Call the callback without low battery check
                                                 callback(status, None);
@@ -345,10 +350,10 @@ impl BatteryMonitor {
                                         
                                         // Check for low battery alerts
                                         if options.notify_low_battery {
-                                            alert = monitor_guard.check_low_battery(&smoothed);
+                                            _alert_result = monitor_guard.check_low_battery(&smoothed);
                                             
                                             // Call the callback
-                                            callback(status, alert.clone());
+                                            callback(status, _alert_result.clone());
                                         } else {
                                             // Call the callback without low battery check
                                             callback(status, None);
@@ -389,10 +394,10 @@ impl BatteryMonitor {
                                             
                                             // Check for low battery alerts
                                             if options.notify_low_battery {
-                                                alert = monitor_guard.check_low_battery(battery);
+                                                _alert_result = monitor_guard.check_low_battery(battery);
                                                 
                                                 // Call the callback
-                                                callback(status, alert.clone());
+                                                callback(status, _alert_result.clone());
                                             } else {
                                                 // Call the callback without low battery check
                                                 callback(status, None);
@@ -408,10 +413,10 @@ impl BatteryMonitor {
                                         
                                         // Check for low battery alerts
                                         if options.notify_low_battery {
-                                            alert = monitor_guard.check_low_battery(battery);
+                                            _alert_result = monitor_guard.check_low_battery(battery);
                                             
                                             // Call the callback
-                                            callback(status, alert.clone());
+                                            callback(status, _alert_result.clone());
                                         } else {
                                             // Call the callback without low battery check
                                             callback(status, None);

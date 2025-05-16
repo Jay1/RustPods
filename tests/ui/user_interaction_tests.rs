@@ -7,8 +7,8 @@ use iced::{Event, keyboard, mouse, Rectangle, Point};
 use iced::keyboard::{KeyCode, Modifiers};
 
 use rustpods::ui::keyboard_shortcuts::{KeyboardShortcut, KeyboardShortcutManager, handle_events};
-use rustpods::ui::window_management::{WindowInteraction, DragManager};
-use rustpods::ui::form_validation::{Validator, ValidationResult, FieldValidator};
+use rustpods::ui::window_management::{WindowInteraction, DragRegion};
+use rustpods::ui::form_validation::{ValidationRule, FieldValidator, ValidationResult};
 use rustpods::ui::Message;
 
 #[test]
@@ -16,117 +16,100 @@ fn test_keyboard_shortcut_creation() {
     // Create a keyboard shortcut
     let shortcut = KeyboardShortcut::new(
         KeyCode::S, 
-        Modifiers {
-            control: true,
-            shift: false,
-            alt: false,
-            ..Default::default()
-        },
-        Message::StartScan
+        Modifiers::CTRL
     );
     
     // Verify shortcut properties
     assert_eq!(shortcut.key, KeyCode::S);
-    assert!(shortcut.modifiers.control);
-    assert!(!shortcut.modifiers.shift);
-    assert!(!shortcut.modifiers.alt);
+    assert_eq!(shortcut.modifiers, Modifiers::CTRL);
     
-    // Shortcut should match with Ctrl+S
-    let matching_event = Event::Keyboard(keyboard::Event::KeyPressed {
-        key: KeyCode::S,
-        modifiers: Modifiers {
-            control: true,
-            shift: false,
-            alt: false,
-            ..Default::default()
-        },
-    });
+    // Test matching with key code and modifiers directly
+    let key_code = KeyCode::S;
+    let modifiers = Modifiers::CTRL;
     
-    let non_matching_event = Event::Keyboard(keyboard::Event::KeyPressed {
-        key: KeyCode::S,
-        modifiers: Modifiers {
-            control: false,
-            shift: true,
-            alt: false,
-            ..Default::default()
-        },
-    });
+    assert!(shortcut.matches(key_code, modifiers));
     
-    assert!(shortcut.matches(&matching_event));
-    assert!(!shortcut.matches(&non_matching_event));
+    // Test non-matching
+    let non_matching_modifiers = Modifiers::SHIFT;
+    assert!(!shortcut.matches(key_code, non_matching_modifiers));
 }
 
 #[test]
 fn test_keyboard_shortcut_manager() {
     // Create shortcuts
-    let shortcut1 = KeyboardShortcut::new(
-        KeyCode::S, 
-        Modifiers {
-            control: true,
-            ..Default::default()
-        },
-        Message::StartScan
-    );
-    
-    let shortcut2 = KeyboardShortcut::new(
-        KeyCode::Escape, 
-        Modifiers::default(),
-        Message::Exit
-    );
+    let shortcut1 = KeyboardShortcut::new(KeyCode::S, Modifiers::CTRL);
+    let shortcut2 = KeyboardShortcut::new(KeyCode::Escape, Modifiers::default());
     
     // Create manager
     let mut manager = KeyboardShortcutManager::new();
     
-    // Register shortcuts
-    manager.register(shortcut1);
-    manager.register(shortcut2);
+    // Register shortcuts with messages
+    manager.register(shortcut1, Message::StartScan);
+    manager.register(shortcut2, Message::Exit);
     
     // Should have 2 shortcuts
-    assert_eq!(manager.shortcuts().len(), 2);
+    assert_eq!(manager.get_shortcuts().len(), 2);
     
-    // Test matching events
+    // Test matching events using handle_event method
     let matching_event = Event::Keyboard(keyboard::Event::KeyPressed {
-        key: KeyCode::S,
-        modifiers: Modifiers {
-            control: true,
-            ..Default::default()
-        },
+        key_code: KeyCode::S,
+        modifiers: Modifiers::CTRL,
     });
     
-    let message = manager.process_event(&matching_event);
+    let message = manager.handle_event(&matching_event);
     assert!(message.is_some());
     assert!(matches!(message.unwrap(), Message::StartScan));
     
     // Test non-matching event
     let non_matching_event = Event::Keyboard(keyboard::Event::KeyPressed {
-        key: KeyCode::A,
+        key_code: KeyCode::A,
         modifiers: Modifiers::default(),
     });
     
-    let message = manager.process_event(&non_matching_event);
+    let message = manager.handle_event(&non_matching_event);
     assert!(message.is_none());
 }
 
 #[test]
 fn test_handle_events_function() {
+    // Create a shortcut manager
+    let mut manager = KeyboardShortcutManager::new();
+    
+    // Register a test shortcut
+    manager.register(
+        KeyboardShortcut::new(KeyCode::S, Modifiers::CTRL),
+        Message::StartScan
+    );
+    
     // Create event that doesn't match any shortcut
     let event = Event::Keyboard(keyboard::Event::KeyPressed {
-        key: KeyCode::A,
+        key_code: KeyCode::A,
         modifiers: Modifiers::default(),
     });
     
     // Should return None
-    let result = handle_events(&event);
+    let result = handle_events(event, &manager);
     assert!(result.is_none());
+    
+    // Create event that matches our shortcut
+    let matching_event = Event::Keyboard(keyboard::Event::KeyPressed {
+        key_code: KeyCode::S,
+        modifiers: Modifiers::CTRL,
+    });
+    
+    // Should return Some(Message::StartScan)
+    let result = handle_events(matching_event, &manager);
+    assert!(result.is_some());
+    assert!(matches!(result.unwrap(), Message::StartScan));
 }
 
 #[test]
 fn test_window_drag_manager() {
     // Create drag manager
-    let mut drag_manager = DragManager::default();
+    let mut window_interaction = WindowInteraction::default();
     
     // Initially not dragging
-    assert!(!drag_manager.is_dragging());
+    assert!(!window_interaction.dragging);
     
     // Start drag
     let drag_area = Rectangle {
@@ -139,25 +122,12 @@ fn test_window_drag_manager() {
     let point = Point { x: 50.0, y: 15.0 };
     
     // Point is inside drag area, should start dragging
-    let interaction = drag_manager.process_press(drag_area, point);
-    assert!(matches!(interaction, WindowInteraction::Drag { .. }));
-    assert!(drag_manager.is_dragging());
-    
-    // Test point outside drag area
-    let outside_point = Point { x: 150.0, y: 15.0 };
-    drag_manager = DragManager::default(); // Reset
-    
-    let interaction = drag_manager.process_press(drag_area, outside_point);
-    assert!(matches!(interaction, WindowInteraction::None));
-    assert!(!drag_manager.is_dragging());
+    window_interaction.handle_mouse_press(point, Point::new(0.0, 0.0), DragRegion::TitleBar);
+    assert!(window_interaction.dragging);
     
     // Test drag release
-    drag_manager = DragManager::default();
-    let _ = drag_manager.process_press(drag_area, point);
-    assert!(drag_manager.is_dragging());
-    
-    drag_manager.process_release();
-    assert!(!drag_manager.is_dragging());
+    window_interaction.handle_mouse_release();
+    assert!(!window_interaction.dragging);
 }
 
 #[test]

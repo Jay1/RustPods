@@ -138,7 +138,7 @@ pub fn extract_battery_level(raw_value: u8) -> Option<u8> {
 
 /// Helper function to parse AirPods data from manufacturer data
 pub fn parse_airpods_data(data: &[u8]) -> Result<AirPodsBattery> {
-    let ctx = ErrorContext::new("AirPods", "parse_airpods_data")
+    let _ctx = ErrorContext::new("AirPods", "parse_airpods_data")
         .with_metadata("data_length", data.len().to_string())
         .with_metadata("data_hex", format!("{:02X?}", data));
 

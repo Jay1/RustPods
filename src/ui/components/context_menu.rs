@@ -187,7 +187,7 @@ impl ContextMenu {
     }
     
     /// Check if a point is inside the menu
-    pub fn contains_point(&self, bounds: &Rectangle, point: Point) -> bool {
+    pub fn contains_point(&self, _bounds: &Rectangle, point: Point) -> bool {
         if !self.visible {
             return false;
         }

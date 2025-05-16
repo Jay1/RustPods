@@ -143,6 +143,14 @@ impl MainWindow {
         self
     }
     
+    /// Set battery status and return a new instance
+    pub fn with_battery_status(mut self, battery_status: AirPodsBatteryStatus) -> Self {
+        if let Some(device) = &mut self.selected_device {
+            device.battery = Some(battery_status.battery);
+        }
+        self
+    }
+    
     // Add a helper method to create the header section containing title and connection status
     fn create_header(&self) -> Element<'_, Message, iced::Renderer<Theme>> {
         let title = text("RustPods")

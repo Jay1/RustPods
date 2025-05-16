@@ -183,7 +183,7 @@ impl SettingsWindow {
         };
         
         // Use the accent color for the tab
-        let accent_color = self.tab_accent_color();
+        let _accent_color = self.tab_accent_color();
         
         container(
             scrollable(

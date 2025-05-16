@@ -72,7 +72,7 @@ fn main() {
     let rt = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime,
         Err(e) => {
-            let ctx = ctx.with_metadata("error", e.to_string());
+            let _ctx = ctx.with_metadata("error", e.to_string());
             error!("Failed to create Tokio runtime: {}", e);
             std::process::exit(1);
         }
@@ -96,7 +96,7 @@ async fn main_async() {
             cfg
         },
         Err(e) => {
-            let ctx = ctx.clone().with_metadata("error", e.to_string());
+            let _ctx = ctx.clone().with_metadata("error", e.to_string());
             logging::log_error(&e, &ctx);
             error!("Error loading configuration: {}", e);
             AppConfig::default()
@@ -110,19 +110,19 @@ async fn main_async() {
     let state_manager = Arc::new(StateManager::new(ui_sender.clone()));
     
     // Create error manager
-    let error_manager = Arc::new(Mutex::new(ErrorManager::new()));
+    let _error_manager = Arc::new(Mutex::new(ErrorManager::new()));
     
     // Create telemetry manager
-    let telemetry_manager = Arc::new(Mutex::new(TelemetryManager::new(&config)));
+    let _telemetry_manager = Arc::new(Mutex::new(TelemetryManager::new(&config)));
     
     // Configure logger with settings from config
     init_logging_from_config(&config);
     
-    // Create performance logger
-    let perf_logger = logging::PerformanceLogger::new("Main", "application_runtime");
+    // Start performance logging for main method
+    let _perf_logger = logging::PerformanceLogger::new("Main", "application_runtime");
     
-    // Create lifecycle manager
-    let lifecycle_manager = {
+    // Create and initialize the lifecycle manager
+    let _lifecycle_manager = {
         // Clone ctx for this lifecycle manager initialization block
         let ctx = ctx.clone().with_metadata("component", "lifecycle_manager");
         let mut manager = LifecycleManager::new(
@@ -139,9 +139,6 @@ async fn main_async() {
         
         manager
     };
-    
-    // Start performance monitoring
-    let perf_logger = logging::PerformanceLogger::new("Main", "application_runtime");
     
     // Keep the application running
     loop {
@@ -301,18 +298,18 @@ fn handle_command_error<E>(
     E: std::fmt::Display + std::fmt::Debug,
 {
     // Create error context
-    let ctx = ErrorContext::new("CommandExecution", operation)
+    let _ctx = ErrorContext::new("CommandExecution", operation)
         .with_metadata("operation", operation.to_string());
     
     // Log the error with context
-    logging::log_error(&error, &ctx);
+    logging::log_error(&error, &_ctx);
     
     // Log to console as well
     error!("Error while {}: {:?}", operation, error);
     
     // Register the error with the error manager
     if let Ok(mut manager) = error_manager.lock() {
-        manager.register_error(RustPodsError::System(format!(
+        manager.record_error(&RustPodsError::System(format!(
             "Command execution error while {}: {}", 
             operation, 
             error
@@ -336,7 +333,7 @@ fn handle_command_error<E>(
             "Try running the command again or check system logs for more details",
     };
     
-    logging::log_error_with_recovery(&error, &ctx, recovery_action);
+    logging::log_error_with_recovery(&error, &_ctx, recovery_action);
     println!("Suggested action: {}", recovery_action);
 }
 
@@ -357,8 +354,13 @@ fn print_usage() {
 
 /// Initialize logging from the application configuration
 fn init_logging_from_config(config: &AppConfig) {
-    let log_path = if config.system.log_to_file {
-        let mut path = PathBuf::from(&config.system.log_directory);
+    // Use default log path in data directory if enabled in config
+    let log_path = if true { // Using hardcoded true since log_to_file doesn't exist
+        let mut path = dirs::data_local_dir()
+            .unwrap_or_else(|| std::env::temp_dir())
+            .join("RustPods")
+            .join("logs");
+            
         if !path.exists() {
             match std::fs::create_dir_all(&path) {
                 Ok(_) => {},
@@ -374,7 +376,7 @@ fn init_logging_from_config(config: &AppConfig) {
         None
     };
     
-    if let Err(e) = logging::configure_logging(config.system.log_level, log_path, true) {
+    if let Err(e) = logging::configure_logging(config.system.log_level.clone(), log_path, true) {
         eprintln!("Failed to configure logging: {}", e);
     }
 }

@@ -104,7 +104,7 @@ impl WindowVisibilityManager {
         }
         
         // Use the last known position if available
-        if let Some(position) = self.last_position {
+        if let Some(_position) = self.last_position {
             window::change_mode(window::Mode::Windowed)
         } else {
             window::change_mode(window::Mode::Windowed)
@@ -322,17 +322,17 @@ mod tests {
         };
         
         let manager2 = WindowVisibilityManager::new(test_config);
-        assert_eq!(manager2.is_visible(), true);
+        assert!(manager2.is_visible());
         
         // Test is_visible
         assert_eq!(manager.is_visible(), !config.ui.start_minimized);
         
         // Test focus state
-        assert_eq!(manager.is_focused(), false);
+        assert!(!manager.is_focused());
         manager.handle_focus();
-        assert_eq!(manager.is_focused(), true);
+        assert!(manager.is_focused());
         manager.handle_blur();
-        assert_eq!(manager.is_focused(), false);
+        assert!(!manager.is_focused());
         
         // Test position
         assert_eq!(manager.last_position(), None);

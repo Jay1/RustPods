@@ -5,7 +5,6 @@ use std::sync::Mutex;
 
 use iced::{Command, Element, Subscription, Application, window};
 use tokio::sync::mpsc;
-use tokio_stream::StreamExt;
 
 use crate::ui::SystemTrayController;
 use crate::ui::{MainWindow, SettingsWindow};

@@ -108,7 +108,7 @@ impl ValidationRule {
     /// Validate a field value against this rule
     pub fn validate(&self, value: &str) -> Result<()> {
         // Create error context for logging
-        let ctx = ErrorContext::new("FormValidation", "validate")
+        let _ctx = ErrorContext::new("FormValidation", "validate")
             .with_metadata("field", self.field.clone())
             .with_metadata("value_length", value.len().to_string());
         
@@ -138,10 +138,11 @@ impl ValidationRule {
         if let Some(pattern) = &self.pattern {
             let valid = match pattern.as_str() {
                 "email" => value.contains('@') && value.contains('.'),
-                "number" => value.chars().all(|c| c.is_digit(10) || c == '-' || c == '.'),
-                "integer" => value.chars().all(|c| c.is_digit(10) || c == '-'),
+                "number" => value.chars().all(|c| c.is_ascii_digit() || c == '-' || c == '.'),
+                "integer" => value.chars().all(|c| c.is_ascii_digit() || c == '-'),
+                "alphanumeric" => value.chars().all(|c| c.is_alphanumeric() || c.is_whitespace()),
                 "url" => value.starts_with("http://") || value.starts_with("https://"),
-                "phone" => value.chars().all(|c| c.is_digit(10) || c == '+' || c == '-' || c == '(' || c == ')' || c == ' '),
+                "phone" => value.chars().all(|c| c.is_ascii_digit() || c == '+' || c == '-' || c == '(' || c == ')' || c == ' '),
                 _ => {
                     if let Ok(regex) = regex::Regex::new(pattern) {
                         regex.is_match(value)
@@ -331,17 +332,19 @@ impl FormValidator {
     
     /// Get a map of all fields and their validation status
     pub fn get_validation_status(&self) -> HashMap<String, ValidationResult> {
-        let mut result = HashMap::new();
-        
-        for (field, _) in &self.values {
-            let error = self.errors.get(field).cloned();
-            result.insert(field.clone(), ValidationResult {
-                valid: error.is_none(),
-                error_message: error,
-            });
-        }
-        
-        result
+        self.values
+            .keys()
+            .map(|field| {
+                let error = self.errors.get(field).cloned();
+                (
+                    field.clone(),
+                    ValidationResult {
+                        valid: error.is_none(),
+                        error_message: error,
+                    },
+                )
+            })
+            .collect()
     }
 }
 
@@ -360,6 +363,96 @@ pub struct FieldValidator {
     pub error_message: String,
     /// Optional validator function
     pub validator: Option<Box<dyn Fn(&str) -> Result<()> + Send + Sync>>,
+}
+
+impl FieldValidator {
+    /// Create a required field validator
+    pub fn required(error_message: &str) -> Self {
+        let error_message = error_message.to_string(); // Clone the string to avoid lifetime issues
+        Self {
+            error_message: error_message.clone(),
+            validator: Some(Box::new(move |value: &str| {
+                if value.trim().is_empty() {
+                    Err(ValidationError::Custom(error_message.clone()))
+                } else {
+                    Ok(())
+                }
+            })),
+        }
+    }
+
+    /// Create a number range validator
+    pub fn number_range(min: i32, max: i32, error_message: &str) -> Self {
+        let error_message = error_message.to_string(); // Clone the string to avoid lifetime issues
+        Self {
+            error_message: error_message.clone(),
+            validator: Some(Box::new(move |value: &str| {
+                match value.parse::<i32>() {
+                    Ok(num) if num >= min && num <= max => Ok(()),
+                    Ok(_) => Err(ValidationError::Custom(error_message.clone())),
+                    Err(_) => Err(ValidationError::Custom(format!("Invalid number format: {}", value))),
+                }
+            })),
+        }
+    }
+
+    /// Chain multiple validators into one
+    pub fn chain(validators: Vec<Self>) -> Self {
+        if validators.is_empty() {
+            return Self {
+                error_message: String::new(),
+                validator: None,
+            };
+        }
+
+        let first_error_message = validators[0].error_message.clone();
+        
+        Self {
+            error_message: first_error_message,
+            validator: Some(Box::new(move |value: &str| {
+                for validator in &validators {
+                    if let Some(ref validator_fn) = validator.validator {
+                        validator_fn(value)?;
+                    }
+                }
+                Ok(())
+            })),
+        }
+    }
+
+    /// Validate a value against this validator
+    pub fn validate(&self, value: &str) -> ValidationResult {
+        if let Some(ref validator) = self.validator {
+            if let Err(e) = validator(value) {
+                ValidationResult {
+                    valid: false,
+                    error_message: Some(e.to_string()),
+                }
+            } else {
+                ValidationResult {
+                    valid: true,
+                    error_message: None,
+                }
+            }
+        } else {
+            ValidationResult {
+                valid: true,
+                error_message: None,
+            }
+        }
+    }
+}
+
+impl ValidationResult {
+    /// Check if the validation was successful
+    pub fn is_valid(&self) -> bool {
+        self.valid
+    }
+
+    /// Get the error message if validation failed
+    pub fn error(&self) -> Option<&str> {
+        self.error_message.as_deref()
+    }
 }
 
 impl fmt::Debug for FieldValidator {

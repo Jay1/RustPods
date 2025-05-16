@@ -424,7 +424,7 @@ mod tests {
         let all_filter = airpods_all_models_filter();
         let pro_filter = airpods_pro_filter();
         let nearby_filter = airpods_nearby_filter(-70);
-        let battery_filter = airpods_with_battery_filter();
+        let _battery_filter = airpods_with_battery_filter();
         
         // Create test devices
         let pro_device = create_mock_device(

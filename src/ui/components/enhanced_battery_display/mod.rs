@@ -203,8 +203,9 @@ impl EnhancedBatteryDisplay {
 }
 
 /// Define text color for status text
-fn status_text_color(status: &str) -> iced::theme::Text {
-    match status {
+#[allow(dead_code)]
+fn status_text_color(_level: &str) -> iced::theme::Text {
+    match _level {
         "Charging" => iced::theme::Text::Color(Color::from_rgb(0.2, 0.6, 0.8)),
         "Low Battery" => iced::theme::Text::Color(Color::from_rgb(0.9, 0.3, 0.3)),
         _ => iced::theme::Text::Default,
@@ -212,6 +213,7 @@ fn status_text_color(status: &str) -> iced::theme::Text {
 }
 
 /// Helper function to check if any component has a low battery
+#[allow(dead_code)]
 fn battery_level_low(battery: &AirPodsBattery) -> bool {
     let is_left_low = battery.left.is_some_and(|level| level <= 20);
     let is_right_low = battery.right.is_some_and(|level| level <= 20);

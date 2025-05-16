@@ -113,7 +113,7 @@ pub fn handle_window_events(
     event: &Event,
     window_state: &mut WindowInteraction,
     bounds: &Rectangle,
-    app_config: &AppConfig,
+    _app_config: &AppConfig,
 ) -> Option<Message> {
     match event {
         Event::Mouse(mouse_event) => match mouse_event {
@@ -154,7 +154,7 @@ pub fn handle_window_events(
 /// Create a draggable container widget
 pub fn create_draggable<'a, Message>(
     content: impl Into<iced::Element<'a, Message>>,
-    drag_region: DragRegion,
+    _drag_region: DragRegion,
 ) -> container::Container<'a, Message> {
     let content = content.into();
     

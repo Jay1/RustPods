@@ -123,12 +123,12 @@ impl From<BluetoothError> for BleError {
     fn from(error: BluetoothError) -> Self {
         match error {
             BluetoothError::ConnectionFailed(msg) => BleError::BtlePlugError(format!("Connection failed: {}", msg)),
-            BluetoothError::DeviceNotFound(msg) => BleError::DeviceNotFound,
+            BluetoothError::DeviceNotFound(_msg) => BleError::DeviceNotFound,
             BluetoothError::ScanFailed(msg) => BleError::BtlePlugError(format!("Scan failed: {}", msg)),
             BluetoothError::DeviceDisconnected(msg) => BleError::BtlePlugError(format!("Device disconnected: {}", msg)),
             BluetoothError::NoAdapter => BleError::AdapterNotFound,
             BluetoothError::PermissionDenied(msg) => BleError::BtlePlugError(format!("Permission denied: {}", msg)),
-            BluetoothError::InvalidData(msg) => BleError::InvalidData,
+            BluetoothError::InvalidData(_msg) => BleError::InvalidData,
             BluetoothError::Timeout(_) => BleError::Timeout,
             BluetoothError::ApiError(error) => BleError::BtlePlugError(error.to_string()),
             BluetoothError::AdapterRefreshFailed { error, .. } => BleError::BtlePlugError(format!("Adapter refresh failed: {}", error)),
@@ -209,8 +209,9 @@ mod bdaddr_serde {
 impl DiscoveredDevice {
     /// Create a new discovered device from a peripheral
     pub async fn from_peripheral(peripheral: &Peripheral) -> Result<Self, BluetoothError> {
-        let ctx = ErrorContext::new("BleScanner", "from_peripheral")
-            .with_metadata("address", peripheral.address().to_string());
+        // Create error context
+        let _ctx = ErrorContext::new("BleScanner", "from_peripheral")
+            .with_metadata("peripheral_address", peripheral.address().to_string());
             
         // Use ? operator for error propagation with automatic conversion via From trait
         let properties = peripheral.properties().await
@@ -385,11 +386,11 @@ impl BleScanner {
     
     /// Start scanning for devices
     pub async fn start_scanning(&mut self) -> Result<Receiver<BleEvent>, BluetoothError> {
-        let ctx = ErrorContext::new("BleScanner", "start_scanning");
+        let _ctx = ErrorContext::new("BleScanner", "start_scanning");
         
         // Check if scanning is already in progress
         if self.is_scanning {
-            warn!("{}Scan already in progress, returning existing channel", ctx);
+            warn!("{}Scan already in progress, returning existing channel", _ctx);
             
             // If there's an existing event broker, subscribe to it
             if let Some(event_broker) = &mut self.event_broker {
@@ -404,7 +405,7 @@ impl BleScanner {
         let adapter = self.get_or_init_adapter().await?;
         
         // Create channels
-        let (event_tx, event_rx) = channel(100);
+        let (event_tx, _event_rx) = channel(100);
         let (cancel_tx, cancel_rx) = channel(1);
         
         // Store the transmitters
@@ -446,7 +447,7 @@ impl BleScanner {
     
     /// Get or initialize the Bluetooth adapter with retry logic
     async fn get_or_init_adapter(&mut self) -> Result<Arc<Adapter>, BluetoothError> {
-        let ctx = ErrorContext::new("BleScanner", "get_or_init_adapter");
+        let _ctx = ErrorContext::new("BleScanner", "get_or_init_adapter");
         
         // If we already have an adapter, return it
         if let Some(adapter) = &self.adapter {
@@ -459,23 +460,23 @@ impl BleScanner {
         
         while attempts < max_attempts {
             attempts += 1;
-            debug!("{}Initializing adapter (attempt {}/{})", ctx, attempts, max_attempts);
+            debug!("{}Initializing adapter (attempt {}/{})", _ctx, attempts, max_attempts);
             
             match self.try_initialize().await {
                 Ok(()) => {
                     if let Some(adapter) = &self.adapter {
-                        info!("{}Successfully initialized adapter", ctx);
+                        info!("{}Successfully initialized adapter", _ctx);
                         return Ok(adapter.clone());
                     }
                 },
                 Err(e) => {
                     if self.is_error_retryable(&e) && attempts < max_attempts {
                         warn!("{}Adapter initialization failed with retryable error: {}. Retrying ({}/{})", 
-                            ctx, e, attempts, max_attempts);
+                            _ctx, e, attempts, max_attempts);
                         sleep(self.config.retry_delay).await;
                         continue;
                     } else {
-                        error!("{}Failed to initialize adapter after {} attempts: {}", ctx, attempts, e);
+                        error!("{}Failed to initialize adapter after {} attempts: {}", _ctx, attempts, e);
                         return Err(BluetoothError::AdapterNotAvailable {
                             reason: format!("Failed to initialize adapter: {}", e),
                             recovery: RecoveryAction::SelectDifferentAdapter
@@ -496,9 +497,9 @@ impl BleScanner {
         mut cancel_rx: Receiver<()>,
         adapter: Arc<Adapter>
     ) -> Result<JoinHandle<()>, BluetoothError> {
-        let ctx = ErrorContext::new("BleScanner", "start_scan_task");
+        let _ctx = ErrorContext::new("BleScanner", "start_scan_task");
         
-        debug!("{}Starting scan task with interval {:?}", ctx, self.config.scan_duration);
+        debug!("{}Starting scan task with interval {:?}", _ctx, self.config.scan_duration);
         
         // Get a clone of the devices map
         let devices = self.devices.clone();
@@ -513,7 +514,7 @@ impl BleScanner {
         let event_stream = match adapter.events().await {
             Ok(stream) => stream,
             Err(e) => {
-                error!("{}Failed to get event stream: {}", ctx, e);
+                error!("{}Failed to get event stream: {}", _ctx, e);
                 return Err(BluetoothError::ApiError(format!("Failed to get event stream: {}", e)));
             }
         };
@@ -568,10 +569,10 @@ impl BleScanner {
                 };
                 
                 // Check if the scan started successfully
-                if let Err(e) = scan_result {
-                    error!("{}Failed to start scan: {}", inner_ctx, e);
+                if let Err(_e) = scan_result {
+                    error!("{}Failed to start scan: {}", inner_ctx, _e);
                     // Try to send an error event
-                    let _ = event_tx.send(BleEvent::Error(format!("Failed to start scan: {}", e))).await;
+                    let _ = event_tx.send(BleEvent::Error(format!("Failed to start scan: {}", _e))).await;
                     // Continue with the next scan cycle
                     continue;
                 }
@@ -682,10 +683,10 @@ impl BleScanner {
     
     /// Stop scanning for devices
     pub async fn stop_scanning(&mut self) -> Result<(), BluetoothError> {
-        let ctx = ErrorContext::new("BleScanner", "stop_scanning");
+        let _ctx = ErrorContext::new("BleScanner", "stop_scanning");
         
         if !self.is_scanning {
-            debug!("{}Scan not started, ignoring stop_scanning request", ctx);
+            debug!("{}Scan not started, ignoring stop_scanning request", _ctx);
             return Ok(());
         }
 
@@ -693,19 +694,19 @@ impl BleScanner {
         if let Some(sender) = &self.cancel_sender {
             if sender.send(()).await.is_err() {
                 // The scan task has already terminated
-                debug!("{}Failed to send cancel signal, scan task likely already terminated", ctx);
+                debug!("{}Failed to send cancel signal, scan task likely already terminated", _ctx);
             }
         }
 
         // Wait for the task to complete
         if let Some(task) = self.scan_task.take() {
-            debug!("{}Waiting for scan task to complete", ctx);
+            debug!("{}Waiting for scan task to complete", _ctx);
             match task.await {
                 Ok(_) => {
-                    debug!("{}Scan task completed successfully", ctx);
+                    debug!("{}Scan task completed successfully", _ctx);
                 },
                 Err(e) => {
-                    warn!("{}Error waiting for scan task to complete: {}", ctx, e);
+                    warn!("{}Error waiting for scan task to complete: {}", _ctx, e);
                     // Continue anyway, as we want to clean up
                 }
             }
@@ -719,7 +720,7 @@ impl BleScanner {
         // Publish a scan stopped event
         self.event_broker().publish_event(BleEvent::ScanStopped);
         
-        info!("{}Scan successfully stopped", ctx);
+        info!("{}Scan successfully stopped", _ctx);
         Ok(())
     }
     
@@ -770,14 +771,14 @@ impl BleScanner {
         devices.get(address).cloned()
     }
     
-    /// Process a discovered device
+    /// Process a discovered device (static version)
     async fn process_discovered_device(
         device: &DiscoveredDevice,
         devices: &Arc<tokio::sync::Mutex<HashMap<BDAddr, DiscoveredDevice>>>,
         event_tx: &Sender<BleEvent>,
-        config: &ScanConfig,
+        _config: &ScanConfig,
     ) -> Result<(), BluetoothError> {
-        let ctx = ErrorContext::new("BleScanner", "process_discovered_device")
+        let _ctx = ErrorContext::new("BleScanner", "process_discovered_device")
             .with_metadata("address", device.address.to_string());
         
         // Lock the devices map
@@ -804,7 +805,7 @@ impl BleScanner {
         
         // Send the appropriate event
         if send_event {
-            debug!("{}Sending device event for {}", ctx, device.address);
+            debug!("{}Sending device event for {}", _ctx, device.address);
             if is_new {
                 event_tx.send(BleEvent::DeviceDiscovered(device.clone())).await
                     .map_err(|_| BluetoothError::Other("Failed to send device discovered event".to_string()))?;
@@ -876,21 +877,21 @@ impl BleScanner {
     
     /// Get peripherals by Bluetooth address
     pub async fn get_peripherals_by_address(&self, address: &BDAddr) -> Result<Vec<Peripheral>, BluetoothError> {
-        let ctx = ErrorContext::new("BleScanner", "get_peripherals_by_address")
+        let _ctx = ErrorContext::new("BleScanner", "get_peripherals_by_address")
             .with_metadata("address", address.to_string());
         
         // Make sure we have an adapter
         let adapter = if let Some(adapter) = &self.adapter {
             adapter.clone()
         } else {
-            log::error!("{}No adapter initialized", ctx);
+            log::error!("{}No adapter initialized", _ctx);
             return Err(BluetoothError::NoAdapter);
         };
         
         // Get all peripherals with proper error handling
         let peripherals = adapter.peripherals().await
             .map_err(|e| {
-                log::error!("{}Failed to get peripherals: {}", ctx, e);
+                log::error!("{}Failed to get peripherals: {}", _ctx, e);
                 BluetoothError::from(e)
             })?;
         
@@ -913,11 +914,11 @@ impl BleScanner {
         &mut self,
         config: ScanConfig,
     ) -> Result<Receiver<BleEvent>, BluetoothError> {
-        let ctx = ErrorContext::new("BleScanner", "start_scanning_with_config");
+        let _ctx = ErrorContext::new("BleScanner", "start_scanning_with_config");
         
         // Similar to start_scanning but with custom config
         if self.scan_task.is_some() {
-            log::warn!("{}Scan already in progress", ctx);
+            log::warn!("{}Scan already in progress", _ctx);
             return Err(BluetoothError::ScanFailed("Scan already in progress".to_string()));
         }
         
@@ -926,12 +927,12 @@ impl BleScanner {
             adapter.clone()
         } else {
             // Try to initialize
-            log::info!("{}No adapter available, attempting to initialize", ctx);
+            log::info!("{}No adapter available, attempting to initialize", _ctx);
             self.initialize().await?;
             
             // Get the adapter
             self.adapter.as_ref().ok_or_else(|| {
-                log::error!("{}Failed to initialize adapter", ctx);
+                log::error!("{}Failed to initialize adapter", _ctx);
                 BluetoothError::NoAdapter
             })?.clone()
         };
@@ -952,7 +953,7 @@ impl BleScanner {
         self.scan_task = Some(scan_task);
         self.is_scanning = true;
         
-        log::info!("{}Scanning started successfully with custom configuration", ctx);
+        log::info!("{}Scanning started successfully with custom configuration", _ctx);
         Ok(rx)
     }
     
@@ -972,7 +973,7 @@ impl BleScanner {
     
     /// Initialize the scanner
     pub async fn initialize(&mut self) -> Result<(), BluetoothError> {
-        let ctx = ErrorContext::new("BleScanner", "initialize");
+        let _ctx = ErrorContext::new("BleScanner", "initialize");
         let max_retries = 3; // Default retry count
         let retry_delay = Duration::from_millis(500); // Default delay between retries
         
@@ -1001,7 +1002,7 @@ impl BleScanner {
     
     // Helper method that actually attempts the initialization
     async fn try_initialize(&mut self) -> Result<(), BluetoothError> {
-        let ctx = ErrorContext::new("BleScanner", "try_initialize");
+        let _ctx = ErrorContext::new("BleScanner", "try_initialize");
         
         // Create a manager
         let manager = Manager::new().await

@@ -146,7 +146,7 @@ impl AirPodsScanner {
 
     /// Record an error with context
     fn record_error(&self, error: AirPodsError, context: ErrorContext) {
-        if let Some(manager) = &self.error_manager {
+        if let Some(_manager) = &self.error_manager {
             // Clone the error manager to get around the immutability
             // In a real implementation, this would use interior mutability instead
             // but for now we just log the error instead of mutating the manager
@@ -173,9 +173,9 @@ pub fn create_custom_airpods_filter(
 /// Process a discovered device to determine if it's AirPods and extract information
 pub fn detect_airpods(device: &DiscoveredDevice) -> Result<Option<DetectedAirPods>> {
     // Create context for error reporting
-    let ctx = ErrorContext::new("AirPodsScanner", "detect_airpods")
+    let _ctx = ErrorContext::new("AirPodsScanner", "detect_airpods")
         .with_metadata("device_address", device.address.to_string())
-        .with_metadata("device_name", device.name.clone().unwrap_or_else(|| "unnamed".to_string()))
+        .with_metadata("device_name", device.name.clone().unwrap_or_else(|| "Unknown".to_string()))
         .with_metadata("is_potential_airpods", device.is_potential_airpods.to_string());
     
     // Check if we have Apple manufacturer data
@@ -202,7 +202,7 @@ pub fn detect_airpods(device: &DiscoveredDevice) -> Result<Option<DetectedAirPod
         }
         Err(err) => {
             // Error during identification
-            let err_ctx = ctx
+            let _err_ctx = _ctx
                 .with_metadata("raw_data", format!("{:?}", apple_data))
                 .with_metadata("error", err.to_string());
                 
@@ -246,12 +246,12 @@ pub fn detect_airpods(device: &DiscoveredDevice) -> Result<Option<DetectedAirPod
 /// Identify the type of AirPods from manufacturer data
 pub fn identify_airpods_type(name: &Option<String>, data: &[u8]) -> Result<AirPodsType> {
     // Create error context
-    let mut ctx = ErrorContext::new("AirPodsScanner", "identify_airpods_type")
+    let mut _ctx = ErrorContext::new("AirPodsScanner", "identify_airpods_type")
         .with_metadata("data_length", data.len().to_string())
         .with_metadata("data_hex", format!("{:02X?}", data));
         
     if let Some(name) = name {
-        ctx = ctx.with_metadata("device_name", name);
+        _ctx = _ctx.with_metadata("device_name", name);
     }
     
     // Check data length for validity

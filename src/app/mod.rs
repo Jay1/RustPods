@@ -447,7 +447,7 @@ mod tests {
     
     #[test]
     fn test_app_creation() {
-        // Just a basic compilation test
-        assert!(true);
+        // This test doesn't actually test anything yet
+        // TODO: Add meaningful tests when mocking infrastructure is in place
     }
 } 

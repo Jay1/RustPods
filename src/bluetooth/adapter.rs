@@ -126,7 +126,8 @@ pub struct AdapterManager {
 impl AdapterManager {
     /// Create a new adapter manager
     pub async fn new() -> Result<Self, BluetoothError> {
-        let ctx = ErrorContext::new("AdapterManager", "new");
+        // Create an error context for logging
+        let _ctx = ErrorContext::new("AdapterManager", "new");
         
         // Use enhanced error handling 
         let manager = Arc::new(
@@ -171,7 +172,7 @@ impl AdapterManager {
         // Try to refresh the adapters
         let mut result = self.try_refresh_adapters().await;
         let mut attempt = 1;
-        let mut last_error = None;
+        let mut _last_error = None;
         let max_attempts = 3;
         let retry_delay = Duration::from_millis(500);
         
@@ -181,7 +182,7 @@ impl AdapterManager {
                 Err(e) => {
                     attempt += 1;
                     let error_string = format!("{}", e);
-                    last_error = Some(e);
+                    _last_error = Some(e);
                     
                     if attempt < max_attempts {
                         warn!(
@@ -471,31 +472,21 @@ impl AdapterManager {
     
     /// Check if the adapter supports scanning
     async fn check_scanning_capability(&mut self, adapter: &Adapter) -> Result<bool, BluetoothError> {
-        let ctx = ErrorContext::new("AdapterManager", "check_scanning_capability");
+        let ctx = ErrorContext::new("AdapterManager", "check_scanning_capability")
+            .with_metadata("adapter_id", adapter.id().to_string());
         
-        // First, check if it's possible to start a scan without errors
-        let result = crate::bluetooth::handle_bluetooth_error(
-            adapter.start_scan(ScanFilter::default()).await,
-            "AdapterManager",
-            "check_scanning_capability",
-            Some(RecoveryAction::Retry)
-        );
-
-        // If scan start succeeds, make sure to stop it
-        if result.is_ok() {
-            // Stop the scan and ignore errors since we're just checking capabilities
-            if let Err(err) = adapter.stop_scan().await {
-                log::warn!("{}Failed to stop scan during capability check: {}", ctx, err);
-            }
-            return Ok(true);
-        }
+        // Try to start a scan to check if scanning is supported
+        log::debug!("{}Testing adapter scanning capability", ctx);
+        let result = adapter.start_scan(ScanFilter::default()).await;
         
-        // Check if the error indicates scanning is unsupported or just a temporary failure
+        // Cleanup after the test
+        let _ = adapter.stop_scan().await;
+        
         match result {
             Ok(_) => {
                 // Scan started successfully, so scanning is supported
                 log::debug!("{}Adapter supports scanning", ctx);
-                return Ok(true);
+                Ok(true)
             },
             Err(BluetoothError::ScanFailed(ref msg)) => {
                 // Check message to see if scanning is fundamentally unsupported
@@ -504,26 +495,26 @@ impl AdapterManager {
                 
                 if scanning_unsupported {
                     log::warn!("{}Adapter does not support scanning: {}", ctx, msg);
-                    return Ok(false);
+                    Ok(false)
                 } else {
                     // This might be a temporary error, so assume scanning is supported
                     log::debug!("{}Scan failed but adapter might support scanning: {}", ctx, msg);
-                    return Ok(true);
+                    Ok(true)
                 }
             },
             Err(BluetoothError::NoAdapter) => {
                 log::error!("{}No adapter available for scanning", ctx);
-                return Ok(false);
+                Ok(false)
             },
             Err(BluetoothError::PermissionDenied(_)) => {
                 log::error!("{}Permission denied for scanning", ctx);
                 // Permission issues need to be resolved by the user, but the adapter technically supports scanning
-                return Ok(true);
+                Ok(true)
             },
             Err(e) => {
                 log::warn!("{}Other error during scan test: {}", ctx, e);
                 // For other errors, we assume scanning is supported but there's a temporary issue
-                return Ok(true);
+                Ok(true)
             },
         }
     }

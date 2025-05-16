@@ -455,7 +455,7 @@ impl LifecycleManager {
     pub fn save_recovery_state(&self) -> Result<(), String> {
         // Get necessary state for recovery
         let device_state = self.state_manager.get_device_state();
-        let config = self.state_manager.get_config();
+        let _config = self.state_manager.get_config();
         
         // Create recovery data
         let recovery_data = RecoveryData {
@@ -574,7 +574,7 @@ impl LifecycleManager {
                 
                 // Capture current state for recovery
                 let device_state = state_manager.get_device_state();
-                let config = state_manager.get_config();
+                let _config = state_manager.get_config();
                 
                 // Create recovery data
                 let recovery_data = RecoveryData {
@@ -684,11 +684,10 @@ fn save_recovery_data(data: &RecoveryData) -> Result<(), String> {
         }
     }
     
-    // Serialize data to JSON
+    // Serialize data to JSON and write to file
     let json = serde_json::to_string_pretty(data)
         .map_err(|e| format!("Failed to serialize recovery data: {}", e))?;
     
-    // Write to file
     std::fs::write(&path, json)
         .map_err(|e| format!("Failed to write recovery file: {}", e))?;
     
@@ -708,31 +707,29 @@ fn cleanup_old_recovery_files() -> Result<(), String> {
     }
     
     // Get current time
-    let now = chrono::Utc::now();
+    let _now = chrono::Utc::now();
     
-    // List all files in directory
+    // Read all files in the directory
     let entries = std::fs::read_dir(parent)
         .map_err(|e| format!("Failed to read recovery directory: {}", e))?;
     
-    // Process each file
-    for entry in entries {
-        if let Ok(entry) = entry {
-            let path = entry.path();
-            
-            // Check if it's a recovery file
-            if let Some(extension) = path.extension() {
-                if extension == "json" {
-                    // Check file age
-                    if let Ok(metadata) = std::fs::metadata(&path) {
-                        if let Ok(modified) = metadata.modified() {
-                            if let Ok(age) = modified.elapsed() {
-                                // Delete files older than 7 days
-                                if age > Duration::from_secs(7 * 24 * 60 * 60) {
-                                    if let Err(e) = std::fs::remove_file(&path) {
-                                        log::warn!("Failed to delete old recovery file {:?}: {}", path, e);
-                                    } else {
-                                        log::debug!("Deleted old recovery file: {:?}", path);
-                                    }
+    // Find and delete old recovery files
+    // Use flatten to handle Results in entries directly
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if let Some(extension) = path.extension() {
+            if extension == "recovery" {
+                // Get file metadata
+                if let Ok(metadata) = entry.metadata() {
+                    // Get file creation time
+                    if let Ok(created) = metadata.created() {
+                        // Get elapsed time since creation
+                        if let Ok(duration) = created.elapsed() {
+                            // If the file is older than RECOVERY_FILE_MAX_AGE, delete it
+                            if duration > Duration::from_secs(7 * 24 * 60 * 60) {
+                                log::debug!("Deleting old recovery file: {:?}", path);
+                                if let Err(e) = std::fs::remove_file(&path) {
+                                    log::warn!("Failed to delete recovery file: {}", e);
                                 }
                             }
                         }

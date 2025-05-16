@@ -120,7 +120,8 @@ impl SystemTray {
     /// Create a new system tray
     pub fn new(tx: mpsc::Sender<Message>, config: AppConfig) -> Result<Self, SystemTrayError> {
         // Create error context for this operation
-        let ctx = ErrorContext::new("SystemTray", "new")
+        #[allow(unused_variables)]
+        let _ctx = ErrorContext::new("SystemTray", "new")
             .with_metadata("config", format!("{:?}", config.ui.theme));
         
         log::debug!("Creating system tray with theme: {:?}", config.ui.theme);
@@ -420,7 +421,8 @@ impl SystemTray {
     /// Cleanup resources before exit
     #[cfg(target_os = "windows")]
     pub fn cleanup(&mut self) -> Result<(), SystemTrayError> {
-        let ctx = ErrorContext::new("SystemTray", "cleanup");
+        #[allow(unused_variables)]
+        let _ctx = ErrorContext::new("SystemTray", "cleanup");
         
         log::debug!("Cleaning up system tray resources");
         
@@ -528,7 +530,8 @@ impl SystemTray {
     
     /// Connect the system tray to the state manager
     pub fn connect_state_manager(&mut self, state_manager: Arc<StateManager>) -> Result<(), SystemTrayError> {
-        let ctx = ErrorContext::new("SystemTray", "connect_state_manager");
+        #[allow(unused_variables)]
+        let _ctx = ErrorContext::new("SystemTray", "connect_state_manager");
         
         log::debug!("Connecting system tray to state manager");
         
@@ -609,34 +612,25 @@ impl SystemTray {
         }
     }
 
-    /// Update with new battery status from state manager
+    /// Handle battery status update
     pub fn handle_battery_update(&mut self, status: AirPodsBatteryStatus) -> Result<(), SystemTrayError> {
-        let ctx = ErrorContext::new("SystemTray", "handle_battery_update");
+        #[allow(unused_variables)]
+        let _ctx = ErrorContext::new("SystemTray", "handle_battery_update");
         
-        log::debug!("Handling battery update");
-        
-        // Store the status
+        // Save the battery status
         self.last_battery_status = Some(status.clone());
         
-        // Extract battery levels
+        // Update the tooltip with the battery values
         let left = status.battery.left;
         let right = status.battery.right;
         let case = status.battery.case;
-        
-        // Update tooltip with battery information
         self.update_tooltip_with_battery(left, right, case)?;
-        
-        // Update icon if we have a connection
-        if !self.is_connected {
-            self.is_connected = true;
-            self.update_icon(true)?;
-        }
         
         // Check if we should show low battery notification
         self.check_low_battery_notification(&status);
         
         // Update state manager if available
-        if let Some(state_manager) = &self.state_manager {
+        if let Some(_state_manager) = &self.state_manager {
             // Notify state manager of battery update
             // This is just a placeholder - actual implementation would depend on StateManager API
             log::debug!("Notifying state manager of battery update");
@@ -649,7 +643,7 @@ impl SystemTray {
     pub fn update_config(&mut self, config: AppConfig) -> Result<(), SystemTrayError> {
         // Save old value to compare
         let old_launch_at_startup = self.config.system.launch_at_startup;
-        let old_theme = self.config.ui.theme.clone();
+        let _old_theme = self.config.ui.theme.clone();
         
         // Update the config
         self.config = config;

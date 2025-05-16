@@ -77,12 +77,8 @@ impl UiComponent for DeviceList {
             .width(Length::Fill)
             .on_press(Message::SelectDevice(address));
 
-            // Use a different style based on selection
-            let styled_container = if is_selected {
-                container(btn).padding(5)
-            } else {
-                container(btn).padding(5)
-            };
+            // Add styling if the device is selected
+            let styled_container = container(btn).padding(5);
 
             device_list = device_list.push(styled_container);
         }

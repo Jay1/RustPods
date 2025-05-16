@@ -105,7 +105,7 @@ impl Application for AppState {
     type Executor = executor::Default;
     type Flags = std::sync::Arc<StateManager>;
 
-    fn new(flags: Self::Flags) -> (Self, Command<Message>) {
+    fn new(_flags: Self::Flags) -> (Self, Command<Message>) {
         let state = Self::default();
         
         // Store the state manager reference in some way
@@ -202,7 +202,8 @@ impl Application for AppState {
                 // Update main window with new battery status
                 if let Some(_device) = self.get_selected_device() {
                     self.main_window = MainWindow::new()
-                        .with_animation_progress(self.animation_progress);
+                        .with_animation_progress(self.animation_progress)
+                        .with_battery_status(status_clone.clone());
                 }
                 
                 // Update system tray with battery status if available
@@ -608,7 +609,7 @@ mod tests {
         let state = AppState::default();
         // Since this is not dependent on config in the default constructor,
         // visibility starts as true by default
-        assert_eq!(state.visible, true);
+        assert!(state.visible);
         assert!(!state.is_scanning);
         assert!(state.auto_scan);
         assert!(state.devices.is_empty());
@@ -619,15 +620,15 @@ mod tests {
     fn test_toggle_visibility() {
         let mut state = AppState::default();
         // Default visibility is true
-        assert_eq!(state.visible, true);
+        assert!(state.visible);
         
         // Toggle should flip the visibility
         state.toggle_visibility();
-        assert_eq!(state.visible, false);
+        assert!(!state.visible);
         
         // Toggle again should restore original visibility
         state.toggle_visibility();
-        assert_eq!(state.visible, true);
+        assert!(state.visible);
     }
     
     #[test]

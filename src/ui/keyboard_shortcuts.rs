@@ -6,6 +6,7 @@
 use iced::keyboard::{self, KeyCode, Modifiers};
 use iced::Event;
 use std::collections::HashMap;
+use std::fmt::{self, Display};
 
 use crate::ui::Message;
 
@@ -53,60 +54,74 @@ impl KeyboardShortcut {
     pub fn matches(&self, key_code: KeyCode, modifiers: Modifiers) -> bool {
         self.key == key_code && self.modifiers == modifiers
     }
-    
-    /// Get a human-readable representation of the shortcut
-    pub fn to_string(&self) -> String {
+}
+
+impl Display for KeyboardShortcut {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut parts = Vec::new();
-        
+
         if self.modifiers.contains(Modifiers::CTRL) {
-            parts.push("Ctrl".to_string());
+            parts.push("Ctrl");
         }
-        
         if self.modifiers.contains(Modifiers::SHIFT) {
-            parts.push("Shift".to_string());
+            parts.push("Shift");
         }
-        
         if self.modifiers.contains(Modifiers::ALT) {
-            parts.push("Alt".to_string());
+            parts.push("Alt");
         }
-        
         if self.modifiers.contains(Modifiers::LOGO) {
-            parts.push("Win".to_string());
+            parts.push("Win");
         }
         
         let key_name = match self.key {
-            KeyCode::F1 => "F1".to_string(),
-            KeyCode::F2 => "F2".to_string(),
-            KeyCode::F3 => "F3".to_string(),
-            KeyCode::F4 => "F4".to_string(),
-            KeyCode::F5 => "F5".to_string(),
-            KeyCode::F6 => "F6".to_string(),
-            KeyCode::F7 => "F7".to_string(),
-            KeyCode::F8 => "F8".to_string(),
-            KeyCode::F9 => "F9".to_string(),
-            KeyCode::F10 => "F10".to_string(),
-            KeyCode::F11 => "F11".to_string(),
-            KeyCode::F12 => "F12".to_string(),
-            KeyCode::Escape => "Esc".to_string(),
-            KeyCode::Tab => "Tab".to_string(),
-            KeyCode::Space => "Space".to_string(),
-            KeyCode::Enter => "Enter".to_string(),
-            KeyCode::Backspace => "Backspace".to_string(),
-            KeyCode::Delete => "Delete".to_string(),
-            KeyCode::Home => "Home".to_string(),
-            KeyCode::End => "End".to_string(),
-            KeyCode::PageUp => "Page Up".to_string(),
-            KeyCode::PageDown => "Page Down".to_string(),
-            KeyCode::Left => "←".to_string(),
-            KeyCode::Right => "→".to_string(),
-            KeyCode::Up => "↑".to_string(),
-            KeyCode::Down => "↓".to_string(),
-            _ => format!("{:?}", self.key),
+            KeyCode::A => "A",
+            KeyCode::B => "B",
+            KeyCode::C => "C",
+            KeyCode::D => "D",
+            KeyCode::E => "E",
+            KeyCode::F => "F",
+            KeyCode::G => "G",
+            KeyCode::H => "H",
+            KeyCode::I => "I",
+            KeyCode::J => "J",
+            KeyCode::K => "K",
+            KeyCode::L => "L",
+            KeyCode::M => "M",
+            KeyCode::N => "N",
+            KeyCode::O => "O",
+            KeyCode::P => "P",
+            KeyCode::Q => "Q",
+            KeyCode::R => "R",
+            KeyCode::S => "S",
+            KeyCode::T => "T",
+            KeyCode::U => "U",
+            KeyCode::V => "V",
+            KeyCode::W => "W",
+            KeyCode::X => "X",
+            KeyCode::Y => "Y",
+            KeyCode::Z => "Z",
+            KeyCode::F1 => "F1",
+            KeyCode::F2 => "F2",
+            KeyCode::F3 => "F3",
+            KeyCode::F4 => "F4",
+            KeyCode::F5 => "F5",
+            KeyCode::F6 => "F6",
+            KeyCode::F7 => "F7",
+            KeyCode::F8 => "F8",
+            KeyCode::F9 => "F9",
+            KeyCode::F10 => "F10",
+            KeyCode::F11 => "F11",
+            KeyCode::F12 => "F12",
+            KeyCode::Space => "Space",
+            KeyCode::Escape => "Esc",
+            KeyCode::Tab => "Tab",
+            KeyCode::Enter => "Enter",
+            _ => "Unknown",
         };
         
         parts.push(key_name);
         
-        parts.join("+")
+        write!(f, "{}", parts.join("+"))
     }
 }
 
@@ -202,13 +217,11 @@ pub fn handle_events(
     event: Event,
     shortcut_manager: &KeyboardShortcutManager,
 ) -> Option<Message> {
-    if let Event::Keyboard(keyboard_event) = event {
-        if let keyboard::Event::KeyPressed { key_code, modifiers, .. } = keyboard_event {
-            // Check if this key combination matches any registered shortcut
-            for (shortcut, message) in shortcut_manager.get_shortcuts() {
-                if shortcut.matches(key_code, modifiers) {
-                    return Some(message.clone());
-                }
+    if let Event::Keyboard(keyboard::Event::KeyPressed { key_code, modifiers, .. }) = event {
+        // Check if this key combination matches any registered shortcut
+        for (shortcut, message) in shortcut_manager.get_shortcuts() {
+            if shortcut.matches(key_code, modifiers) {
+                return Some(message.clone());
             }
         }
     }
