@@ -120,46 +120,19 @@ pub async fn receive_with_timeout<T>(rx: &mut Receiver<T>, duration: Duration) -
 
 /// Create a test configuration
 pub fn create_test_config() -> AppConfig {
-    AppConfig {
-        bluetooth: BluetoothConfig {
-            auto_scan_on_startup: true,
-            scan_duration: std::time::Duration::from_secs(5),
-            scan_interval: std::time::Duration::from_secs(30),
-            battery_refresh_interval: 60,
-            min_rssi: Some(-80),
-            auto_reconnect: true,
-            reconnect_attempts: 3,
-            adaptive_polling: true,
-        },
-        ui: UiConfig {
-            show_notifications: true,
-            start_minimized: false,
-            theme: Theme::System,
-            show_percentage_in_tray: true,
-            show_low_battery_warning: true,
-            low_battery_threshold: 20,
-            remember_window_position: true,
-            last_window_position: None,
-            minimize_to_tray_on_close: true,
-            minimize_on_blur: false,
-            auto_hide_timeout: None,
-        },
-        system: SystemConfig {
-            launch_at_startup: true,
-            log_level: LogLevel::Info,
-            enable_telemetry: false,
-            auto_save_interval: None,
-            enable_crash_recovery: true,
-        },
-        settings_path: std::path::PathBuf::new(),
-        battery: BatteryConfig {
-            low_threshold: 20,
-            smoothing_enabled: true,
-            change_threshold: 5,
-            notify_low: true,
-            notify_charged: true,
-        },
-    }
+    let mut config = AppConfig::default();
+    config.bluetooth.scan_interval = Duration::from_secs(30);
+    config.bluetooth.auto_reconnect = true;
+    config.bluetooth.min_rssi = Some(-70);
+    config.ui.theme = Theme::System;
+    config.ui.show_notifications = true;
+    config.system.launch_at_startup = true;
+    config.system.log_level = LogLevel::Info;
+    config.system.enable_telemetry = true;
+    config.system.auto_save_interval = Some(60);
+    config.system.enable_crash_recovery = true;
+    config.battery.low_threshold = 20;
+    config
 }
 
 /// Create a test AppState

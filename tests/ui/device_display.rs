@@ -8,7 +8,7 @@ use iced::Theme;
 
 use rustpods::bluetooth::DiscoveredDevice;
 use rustpods::airpods::{
-    DetectedAirPods, AirPodsType, AirPodsBattery, ChargingStatus
+    DetectedAirPods, AirPodsType, AirPodsBattery, AirPodsChargingState
 };
 use rustpods::ui::Message;
 
@@ -82,6 +82,10 @@ fn create_test_device(
         manufacturer_data: mfg_data,
         is_potential_airpods: is_airpods,
         last_seen: Instant::now(),
+        is_connected: false,
+        service_data: HashMap::new(),
+        services: Vec::new(),
+        tx_power_level: None,
     }
 }
 
@@ -91,18 +95,15 @@ fn create_test_airpods(battery_left: Option<u8>, battery_right: Option<u8>, batt
         address: BDAddr::from([0x01, 0x02, 0x03, 0x04, 0x05, 0x06]),
         name: Some("AirPods Pro".to_string()),
         device_type: AirPodsType::AirPodsPro, 
-        battery: AirPodsBattery {
+        battery: Some(AirPodsBattery {
             left: battery_left,
             right: battery_right,
             case: battery_case,
-            charging: ChargingStatus {
-                left: false,
-                right: false,
-                case: false,
-            }
-        },
+            charging: Some(AirPodsChargingState::LeftCharging),
+        }),
         rssi: Some(-60),
-        raw_data: vec![0x07, 0x19, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06],
+        is_connected: false,
+        last_seen: Instant::now(),
     }
 }
 
@@ -176,21 +177,21 @@ fn test_mock_battery_indicators() {
     let airpods_partial = create_test_airpods(Some(50), None, Some(80));
     
     // Verify the battery values
-    assert_eq!(airpods_full.battery.left, Some(100));
-    assert_eq!(airpods_full.battery.right, Some(100));
-    assert_eq!(airpods_full.battery.case, Some(100));
+    assert_eq!(airpods_full.battery.as_ref().unwrap().left, Some(100));
+    assert_eq!(airpods_full.battery.as_ref().unwrap().right, Some(100));
+    assert_eq!(airpods_full.battery.as_ref().unwrap().case, Some(100));
     
-    assert_eq!(airpods_low.battery.left, Some(15));
-    assert_eq!(airpods_low.battery.right, Some(10));
-    assert_eq!(airpods_low.battery.case, Some(5));
+    assert_eq!(airpods_low.battery.as_ref().unwrap().left, Some(15));
+    assert_eq!(airpods_low.battery.as_ref().unwrap().right, Some(10));
+    assert_eq!(airpods_low.battery.as_ref().unwrap().case, Some(5));
     
-    assert_eq!(airpods_critical.battery.left, Some(5));
-    assert_eq!(airpods_critical.battery.right, Some(3));
-    assert_eq!(airpods_critical.battery.case, Some(0));
+    assert_eq!(airpods_critical.battery.as_ref().unwrap().left, Some(5));
+    assert_eq!(airpods_critical.battery.as_ref().unwrap().right, Some(3));
+    assert_eq!(airpods_critical.battery.as_ref().unwrap().case, Some(0));
     
-    assert_eq!(airpods_partial.battery.left, Some(50));
-    assert_eq!(airpods_partial.battery.right, None);
-    assert_eq!(airpods_partial.battery.case, Some(80));
+    assert_eq!(airpods_partial.battery.as_ref().unwrap().left, Some(50));
+    assert_eq!(airpods_partial.battery.as_ref().unwrap().right, None);
+    assert_eq!(airpods_partial.battery.as_ref().unwrap().case, Some(80));
 }
 
 #[test]
@@ -242,12 +243,18 @@ fn test_app_state_ui_updates() {
     assert!(state.devices.is_empty());
     
     // Add a device and check UI state update
-    let device = create_test_device(
-        [0x01, 0x02, 0x03, 0x04, 0x05, 0x06],
-        Some("Test Device"),
-        Some(-60),
-        false
-    );
+    let device = DiscoveredDevice {
+        address: BDAddr::from([0x01, 0x02, 0x03, 0x04, 0x05, 0x06]),
+        name: Some("Test Device".to_string()),
+        rssi: Some(-60),
+        manufacturer_data: HashMap::new(),
+        is_potential_airpods: false,
+        last_seen: Instant::now(),
+        is_connected: false,
+        service_data: HashMap::new(),
+        services: Vec::new(),
+        tx_power_level: None,
+    };
     
     // Update via the Message system
     let address_str = device.address.to_string();

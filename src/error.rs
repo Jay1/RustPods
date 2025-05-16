@@ -8,7 +8,6 @@
 use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use thiserror::Error;
-use crate::bluetooth::BleError;
 use std::fmt;
 use std::time::Duration;
 
@@ -88,10 +87,6 @@ pub enum RustPodsError {
     /// UI error with no message
     #[error("UI error")]
     UiError,
-    
-    /// Bluetooth API error
-    #[error("Bluetooth API error: {0}")]
-    BluetoothApiError(BleError),
     
     /// Device not found error
     #[error("Device not found")]
@@ -408,7 +403,6 @@ impl ErrorManager {
         // Get the error type as a string
         let error_type = match error {
             RustPodsError::Bluetooth(_) => "bluetooth",
-            RustPodsError::BluetoothApiError(_) => "bluetooth_api",
             RustPodsError::AirPods(_) => "airpods",
             RustPodsError::Ui(_) => "ui",
             RustPodsError::UiError => "ui",
@@ -477,7 +471,6 @@ impl ErrorManager {
         // Get the error type as a string
         let error_type = match &error {
             RustPodsError::Bluetooth(_) => "bluetooth",
-            RustPodsError::BluetoothApiError(_) => "bluetooth_api",
             RustPodsError::AirPods(_) => "airpods",
             RustPodsError::Ui(_) => "ui",
             RustPodsError::UiError => "ui",
@@ -611,7 +604,6 @@ impl RustPodsError {
     pub fn user_message(&self) -> String {
         match self {
             RustPodsError::Bluetooth(msg) => format!("Bluetooth issue: {}", msg),
-            RustPodsError::BluetoothApiError(_) => "Bluetooth API issue. Please check your Bluetooth adapter.".to_string(),
             RustPodsError::AirPods(msg) => format!("AirPods issue: {}", msg),
             RustPodsError::Ui(msg) => format!("User interface issue: {}", msg),
             RustPodsError::UiError => "User interface issue".to_string(),
@@ -645,7 +637,6 @@ impl RustPodsError {
     pub fn is_recoverable(&self) -> bool {
         match self {
             RustPodsError::Bluetooth(_) => true,
-            RustPodsError::BluetoothApiError(_) => true,
             RustPodsError::AirPods(_) => true,
             RustPodsError::Ui(_) => true,
             RustPodsError::UiError => true,
@@ -679,7 +670,6 @@ impl RustPodsError {
     pub fn recovery_action(&self) -> RecoveryAction {
         match self {
             RustPodsError::Bluetooth(_) => RecoveryAction::ReconnectBluetooth,
-            RustPodsError::BluetoothApiError(_) => RecoveryAction::ReconnectBluetooth,
             RustPodsError::AirPods(_) => RecoveryAction::ReconnectBluetooth,
             RustPodsError::Ui(_) => RecoveryAction::Restart,
             RustPodsError::UiError => RecoveryAction::Restart,
@@ -713,7 +703,6 @@ impl RustPodsError {
     pub fn severity(&self) -> ErrorSeverity {
         match self {
             RustPodsError::Bluetooth(_) => ErrorSeverity::Major,
-            RustPodsError::BluetoothApiError(_) => ErrorSeverity::Major,
             RustPodsError::AirPods(_) => ErrorSeverity::Major,
             RustPodsError::Ui(_) => ErrorSeverity::Minor,
             RustPodsError::UiError => ErrorSeverity::Minor,
@@ -747,21 +736,17 @@ impl RustPodsError {
     pub fn get_category(&self) -> &'static str {
         match self {
             RustPodsError::Bluetooth(_) => "bluetooth",
-            RustPodsError::BluetoothApiError(_) => "bluetooth_api",
-            RustPodsError::BluetoothError(_) => "bluetooth_error",
-            RustPodsError::Config(_) => "config",
-            RustPodsError::ConfigError(_) => "config",
+            RustPodsError::AirPods(_) => "airpods",
             RustPodsError::Ui(_) => "ui",
             RustPodsError::UiError => "ui",
-            RustPodsError::System(_) => "system",
-            RustPodsError::State(_) => "state",
-            RustPodsError::Device(_) => "device",
-            RustPodsError::DeviceNotFound => "device",
-            RustPodsError::General(_) => "general",
+            RustPodsError::Config(_) => "config",
+            RustPodsError::ConfigError(_) => "config",
             RustPodsError::Application(_) => "application",
-            RustPodsError::AirPods(_) => "airpods",
+            RustPodsError::DeviceNotFound => "device",
+            RustPodsError::Device(_) => "device",
             RustPodsError::BatteryMonitor(_) => "battery",
             RustPodsError::BatteryMonitorError(_) => "battery",
+            RustPodsError::State(_) => "state",
             RustPodsError::StatePersistence(_) => "state",
             RustPodsError::Lifecycle(_) => "lifecycle",
             RustPodsError::IoError(_) => "file_io",
@@ -774,6 +759,9 @@ impl RustPodsError {
             RustPodsError::Timeout(_) => "timeout",
             RustPodsError::Context { .. } => "context",
             RustPodsError::InvalidData(_) => "invalid_data",
+            RustPodsError::System(_) => "system",
+            RustPodsError::General(_) => "general",
+            RustPodsError::BluetoothError(_) => "bluetooth_error",
         }
     }
     
@@ -781,21 +769,17 @@ impl RustPodsError {
     pub fn get_type(&self) -> &'static str {
         match self {
             RustPodsError::Bluetooth(_) => "bluetooth_generic",
-            RustPodsError::BluetoothApiError(_) => "bluetooth_api",
-            RustPodsError::BluetoothError(_) => "bluetooth_error",
-            RustPodsError::Config(_) => "config_generic",
-            RustPodsError::ConfigError(_) => "config_error",
+            RustPodsError::AirPods(_) => "airpods",
             RustPodsError::Ui(_) => "ui_generic",
             RustPodsError::UiError => "ui_error",
-            RustPodsError::System(_) => "system_generic",
-            RustPodsError::State(_) => "state_generic",
-            RustPodsError::Device(_) => "device_generic",
-            RustPodsError::DeviceNotFound => "device_not_found",
-            RustPodsError::General(_) => "general",
+            RustPodsError::Config(_) => "config_generic",
+            RustPodsError::ConfigError(_) => "config_error",
             RustPodsError::Application(_) => "application",
-            RustPodsError::AirPods(_) => "airpods",
+            RustPodsError::DeviceNotFound => "device_not_found",
+            RustPodsError::Device(_) => "device_generic",
             RustPodsError::BatteryMonitor(_) => "battery_monitor",
             RustPodsError::BatteryMonitorError(_) => "battery_error",
+            RustPodsError::State(_) => "state_generic",
             RustPodsError::StatePersistence(_) => "state",
             RustPodsError::Lifecycle(_) => "lifecycle",
             RustPodsError::IoError(_) => "file_io",
@@ -808,6 +792,9 @@ impl RustPodsError {
             RustPodsError::Timeout(_) => "timeout",
             RustPodsError::Context { .. } => "context",
             RustPodsError::InvalidData(_) => "invalid_data",
+            RustPodsError::System(_) => "system_generic",
+            RustPodsError::General(_) => "general",
+            RustPodsError::BluetoothError(_) => "bluetooth_error",
         }
     }
     
@@ -1098,7 +1085,6 @@ impl Clone for RustPodsError {
     fn clone(&self) -> Self {
         match self {
             Self::Bluetooth(s) => Self::Bluetooth(s.clone()),
-            Self::BluetoothApiError(e) => Self::BluetoothApiError(e.clone()),
             Self::Config(s) => Self::Config(s.clone()),
             Self::ConfigError(s) => Self::ConfigError(s.clone()),
             Self::Ui(s) => Self::Ui(s.clone()),

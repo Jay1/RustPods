@@ -32,6 +32,7 @@ fn create_test_device(
         last_seen: Instant::now(),
         is_connected: false,
         service_data: HashMap::new(),
+        tx_power_level: None,
     }
 }
 
@@ -48,10 +49,11 @@ fn test_error_propagation() {
     assert!(result.is_err());
     
     match result {
-        Err(AirPodsError::InvalidData(_)) => {
-            // Expected error, test passes
+        Err(AirPodsError::DetectionFailed(msg)) => {
+            assert!(msg.contains("Invalid data"), "Error message should mention 'Invalid data'");
+            assert!(msg.contains("too short"), "Error message should mention 'too short'");
         },
-        _ => panic!("Expected InvalidData error but got {:?}", result),
+        _ => panic!("Expected DetectionFailed error but got {:?}", result),
     }
 }
 
@@ -84,7 +86,7 @@ fn test_conversion_to_rustpods_error() {
     
     match rustpods_error {
         RustPodsError::AirPods(msg) => {
-            assert!(msg.contains("parse error"), "Error message should contain 'parse error'");
+            assert!(format!("{}", msg).contains("parse error"), "Error message should contain 'parse error'");
         },
         _ => panic!("Expected RustPodsError::AirPods variant but got {:?}", rustpods_error),
     }
@@ -110,9 +112,9 @@ fn test_error_manager_integration() {
     assert_eq!(history.len(), 1, "Error should be recorded in history");
     
     let error_entry = &history[0];
-    match &error_entry.error {
-        RustPodsError::AirPods(msg) => {
-            assert!(msg.contains("invalid data"), "Error message should contain 'invalid data'");
+    match &error_entry.error_message {
+        msg => {
+            assert!(format!("{}", msg).contains("invalid data"), "Error message should contain 'invalid data'");
         },
         _ => panic!("Expected AirPods error variant but got something else"),
     }

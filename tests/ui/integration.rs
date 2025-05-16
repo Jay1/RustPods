@@ -26,24 +26,32 @@ fn test_state_device_flow() {
     mfg_data.insert(0x004C, vec![1, 2, 3, 4]); // Apple manufacturer ID
     
     let airpods_device = DiscoveredDevice {
-        address: airpods_addr,
+        address: BDAddr::from([0x01, 0x02, 0x03, 0x04, 0x05, 0x06]),
         name: Some("AirPods Pro".to_string()),
-        rssi: Some(-55),
-        manufacturer_data: mfg_data.clone(),
+        rssi: Some(-60),
+        manufacturer_data: HashMap::new(),
         is_potential_airpods: true,
         last_seen: Instant::now(),
+        is_connected: false,
+        service_data: HashMap::new(),
+        services: Vec::new(),
+        tx_power_level: None,
     };
     
     // Create a regular Bluetooth device
     let bt_addr = BDAddr::from([6, 5, 4, 3, 2, 1]);
     let bt_addr_str = bt_addr.to_string();
     let bt_device = DiscoveredDevice {
-        address: bt_addr,
-        name: Some("Regular BT Device".to_string()),
+        address: BDAddr::from([0x11, 0x22, 0x33, 0x44, 0x55, 0x66]),
+        name: Some("Bluetooth Speaker".to_string()),
         rssi: Some(-70),
         manufacturer_data: HashMap::new(),
         is_potential_airpods: false,
         last_seen: Instant::now(),
+        is_connected: false,
+        service_data: HashMap::new(),
+        services: Vec::new(),
+        tx_power_level: None,
     };
     
     // Add devices to state
@@ -65,12 +73,16 @@ fn test_state_device_flow() {
     
     // Update RSSI for the AirPods device
     let updated_airpods = DiscoveredDevice {
-        address: airpods_addr,
+        address: BDAddr::from([0x01, 0x02, 0x03, 0x04, 0x05, 0x06]),
         name: Some("AirPods Pro".to_string()),
-        rssi: Some(-40), // Better signal now
-        manufacturer_data: mfg_data,
+        rssi: Some(-55),
+        manufacturer_data: HashMap::new(),
         is_potential_airpods: true,
         last_seen: Instant::now(),
+        is_connected: false,
+        service_data: HashMap::new(),
+        services: Vec::new(),
+        tx_power_level: None,
     };
     
     state.update_device(updated_airpods);
@@ -78,11 +90,11 @@ fn test_state_device_flow() {
     
     // Verify the update worked
     let updated_device = state.devices.get(&airpods_addr_str).unwrap();
-    assert_eq!(updated_device.rssi, Some(-40));
+    assert_eq!(updated_device.rssi, Some(-55));
     
     // Verify the selected device also reflects the update
     let selected = state.get_selected_device().unwrap();
-    assert_eq!(selected.rssi, Some(-40));
+    assert_eq!(selected.rssi, Some(-55));
 }
 
 /// Test visibility toggling affects the state correctly
@@ -162,6 +174,10 @@ fn create_test_device(address: &str) -> DiscoveredDevice {
         manufacturer_data: HashMap::new(),
         is_potential_airpods: false,
         last_seen: std::time::Instant::now(),
+        is_connected: false,
+        service_data: HashMap::new(),
+        services: Vec::new(),
+        tx_power_level: None,
     }
 }
 

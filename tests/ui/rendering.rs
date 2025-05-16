@@ -47,6 +47,10 @@ fn test_device_list_component() {
         manufacturer_data: HashMap::new(),
         is_potential_airpods: false,
         last_seen: Instant::now(),
+        is_connected: false,
+        service_data: HashMap::new(),
+        services: Vec::new(),
+        tx_power_level: None,
     };
 
     let device2 = DiscoveredDevice {
@@ -56,6 +60,10 @@ fn test_device_list_component() {
         manufacturer_data: HashMap::new(),
         is_potential_airpods: true,
         last_seen: Instant::now(),
+        is_connected: false,
+        service_data: HashMap::new(),
+        services: Vec::new(),
+        tx_power_level: None,
     };
 
     // Create device list with devices
@@ -82,78 +90,6 @@ fn test_header_component() {
     let _element: Element<'_, Message, iced::Renderer<Theme>> = header.view();
 }
 
-// The following tests are commented out because they require a GUI environment
-// They would typically be run in a CI environment with headless testing
-
-/*
-#[test]
-fn test_update_and_view_integration() {
-    use rustpods::ui::{update, view, AppState};
-    
-    // Create a state
-    let mut state = AppState::default();
-    state.visible = true; // Make visible for testing
-    
-    // Create a device
-    let addr = BDAddr::from([1, 2, 3, 4, 5, 6]);
-    let device = DiscoveredDevice {
-        address: addr,
-        name: Some("Test Device".to_string()),
-        rssi: Some(-60),
-        manufacturer_data: HashMap::new(),
-        is_potential_airpods: false,
-        last_seen: Instant::now(),
-    };
-    
-    // Update state with device
-    let message = Message::DeviceDiscovered(device);
-    let cmd = update(&mut state, message);
-    assert!(matches!(cmd, iced::Command::None(_)));
-    
-    // Render the view
-    let element = view(&state);
-    
-    // No real assertions on the element, as it's hard to test rendering
-    // without a proper GUI context
-    assert!(true);
-}
-*/
-
-/*
-#[test]
-fn test_system_tray_integration() {
-    use std::sync::mpsc;
-    use rustpods::ui::{Message, SystemTray};
-    use rustpods::config::AppConfig;
-    
-    // Skip this test in CI environments without a GUI
-    if std::env::var("CI").is_ok() {
-        return;
-    }
-    
-    // Create channel and config
-    let (tx, rx) = mpsc::channel();
-    let config = AppConfig::default();
-    
-    // Create system tray
-    let mut tray = match SystemTray::new(tx, config) {
-        Ok(tray) => tray,
-        Err(_) => {
-            // Skip test if we can't create a tray (no GUI)
-            return;
-        }
-    };
-    
-    // Test that icon can be updated
-    let result = tray.update_icon(true);
-    assert!(result.is_ok());
-    
-    // Commented out as this method is no longer available
-    // let result = tray.update_tooltip("Test tooltip");
-    // assert!(result.is_ok());
-}
-*/
-
 /// Helper to create a test device
 fn create_test_device(
     address: [u8; 6],
@@ -168,7 +104,6 @@ fn create_test_device(
             0x08, 0x07, 0x01, 0x06, // Battery levels and charging status
         ]);
     }
-    
     DiscoveredDevice {
         address: BDAddr::from(address),
         name: name.map(|s| s.to_string()),
@@ -176,6 +111,10 @@ fn create_test_device(
         manufacturer_data,
         is_potential_airpods: is_airpods,
         last_seen: Instant::now(),
+        is_connected: false,
+        service_data: HashMap::new(),
+        services: Vec::new(),
+        tx_power_level: None,
     }
 }
 
@@ -188,19 +127,16 @@ fn create_test_airpods(
     DetectedAirPods {
         address: BDAddr::from(address),
         name: name.map(|s| s.to_string()),
+        rssi,
         device_type: AirPodsType::AirPods1,
-        battery: AirPodsBattery {
+        battery: Some(AirPodsBattery {
             left: Some(80),
             right: Some(75),
             case: Some(90),
-            charging: ChargingStatus {
-                left: false,
-                right: false,
-                case: true,
-            },
-        },
-        rssi,
-        raw_data: vec![1, 2, 3, 4, 5],
+            charging: None,
+        }),
+        last_seen: Instant::now(),
+        is_connected: false,
     }
 }
 

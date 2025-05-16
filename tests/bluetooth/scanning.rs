@@ -43,6 +43,10 @@ fn create_test_device(
         manufacturer_data,
         is_potential_airpods: is_airpods,
         last_seen: Instant::now(),
+        is_connected: false,
+        service_data: HashMap::new(),
+        services: Vec::new(),
+        tx_power_level: None,
     }
 }
 
@@ -192,7 +196,7 @@ async fn test_device_filtering() {
     
     // Test the all models filter
     let filter = airpods_all_models_filter();
-    let filter_fn = filter.create_filter_function();
+    let filter_fn = &filter;
     assert!(filter_fn(&airpods_device));
     assert!(!filter_fn(&regular_device));
     
@@ -213,13 +217,13 @@ async fn test_device_filtering() {
     
     // Test nearby filter
     let near_filter = airpods_nearby_filter(-70);
-    let near_filter_fn = near_filter.create_filter_function();
+    let near_filter_fn = &near_filter;
     assert!(near_filter_fn(&near_device));
     assert!(!near_filter_fn(&far_device));
     
     // Test battery info filter
     let battery_filter = airpods_with_battery_filter();
-    let battery_filter_fn = battery_filter.create_filter_function();
+    let battery_filter_fn = &battery_filter;
     assert!(battery_filter_fn(&airpods_device));
 }
 

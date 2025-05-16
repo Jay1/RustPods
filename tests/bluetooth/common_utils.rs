@@ -5,7 +5,7 @@ use std::time::Instant;
 use btleplug::api::BDAddr;
 
 use rustpods::bluetooth::DiscoveredDevice;
-use rustpods::airpods::{DetectedAirPods, AirPodsType, AirPodsBattery, ChargingStatus, APPLE_COMPANY_ID};
+use rustpods::airpods::{DetectedAirPods, AirPodsType, AirPodsBattery, ChargingStatus, APPLE_COMPANY_ID, AirPodsChargingState};
 
 /// Create a test device with basic properties
 pub fn create_test_device(
@@ -54,6 +54,10 @@ pub fn create_test_device(
         manufacturer_data,
         is_potential_airpods: is_airpods,
         last_seen: Instant::now(),
+        is_connected: false,
+        service_data: HashMap::new(),
+        services: Vec::new(),
+        tx_power_level: None,
     }
 }
 
@@ -64,24 +68,22 @@ pub fn create_test_airpods(
     device_type: AirPodsType,
     left_battery: Option<u8>,
     right_battery: Option<u8>,
-    case_battery: Option<u8>
+    case_battery: Option<u8>,
+    charging: Option<AirPodsChargingState>
 ) -> DetectedAirPods {
     DetectedAirPods {
         address: BDAddr::from(address),
         name: name.map(|s| s.to_string()),
         device_type,
-        battery: AirPodsBattery {
+        battery: Some(AirPodsBattery {
             left: left_battery,
             right: right_battery,
             case: case_battery,
-            charging: ChargingStatus {
-                left: false,
-                right: false,
-                case: false,
-            },
-        },
+            charging,
+        }),
         rssi: Some(-60),
-        raw_data: vec![1, 2, 3, 4, 5],
+        last_seen: Instant::now(),
+        is_connected: false,
     }
 }
 

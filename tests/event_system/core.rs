@@ -21,6 +21,10 @@ fn create_test_device() -> DiscoveredDevice {
         manufacturer_data: HashMap::new(),
         is_potential_airpods: false,
         last_seen: Instant::now(),
+        is_connected: false,
+        service_data: HashMap::new(),
+        services: Vec::new(),
+        tx_power_level: None,
     }
 }
 
@@ -30,18 +34,15 @@ fn create_test_airpods() -> DetectedAirPods {
         address: BDAddr::from([2, 3, 4, 5, 6, 7]),
         name: Some("AirPods".to_string()),
         device_type: AirPodsType::AirPods1,
-        battery: AirPodsBattery {
+        battery: Some(AirPodsBattery {
             left: Some(80),
             right: Some(75),
             case: Some(90),
-            charging: ChargingStatus {
-                left: false,
-                right: false,
-                case: false,
-            },
-        },
+            charging: None,
+        }),
         rssi: Some(-60),
-        raw_data: vec![1, 2, 3, 4, 5],
+        last_seen: Instant::now(),
+        is_connected: false,
     }
 }
 
@@ -122,6 +123,10 @@ async fn test_event_filter_devices() {
         manufacturer_data: HashMap::new(),
         is_potential_airpods: false,
         last_seen: Instant::now(),
+        is_connected: false,
+        service_data: HashMap::new(),
+        services: Vec::new(),
+        tx_power_level: None,
     };
     
     let device2 = DiscoveredDevice {
@@ -131,6 +136,10 @@ async fn test_event_filter_devices() {
         manufacturer_data: HashMap::new(),
         is_potential_airpods: false,
         last_seen: Instant::now(),
+        is_connected: false,
+        service_data: HashMap::new(),
+        services: Vec::new(),
+        tx_power_level: None,
     };
     
     // Events

@@ -4,11 +4,12 @@ use std::time::Duration;
 use tokio::time::timeout;
 
 use rustpods::bluetooth::{
-    AdapterManager, BleScanner, ScanConfig, BleError
+    AdapterManager, BleScanner, ScanConfig,
 };
+use rustpods::error::BluetoothError;
 
 /// Create a mock adapter manager for testing
-async fn create_mock_adapter_manager(_has_adapters: bool) -> Result<AdapterManager, BleError> {
+async fn create_mock_adapter_manager(_has_adapters: bool) -> Result<AdapterManager, BluetoothError> {
     // For testing purposes, we'll create a real adapter manager
     // In a production environment, we'd use a proper mocking framework
     let adapter_manager = AdapterManager::new().await?;

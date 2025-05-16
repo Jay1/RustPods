@@ -15,9 +15,6 @@ You can generate coverage reports locally with:
 cargo install cargo-tarpaulin
 
 # Generate coverage report in terminal
-cargo tarpaulin --verbose
-
-# Generate HTML report
 ./scripts/coverage.sh   # (Unix)
 # On Windows:
 ./scripts/coverage.ps1  # (Windows)
@@ -67,6 +64,19 @@ While UI components cannot always achieve the same level of coverage as core log
 2. **State changes** - Test that components update their state correctly
 3. **Event handlers** - Verify event handlers are connected and working
 4. **Rendering logic** - Test conditional rendering paths
+5. **Toast/notification system** - Test that toasts appear/disappear and show correct messages
+6. **SVG icon color contrast** - Test that icons render with correct color for theme contrast
+7. **Font registration/usage** - Test that the custom font is used throughout the UI
+8. **Save button logic** - Test that the save button is always clickable and shows correct toast feedback
+9. **Bluetooth error surfacing** - Test that Bluetooth errors are surfaced as toast notifications
+
+## Contributor Checklist
+
+- [ ] Add meaningful tests for all new features/components (see above list)
+- [ ] Avoid trivial tests (e.g., only checking struct construction or default values)
+- [ ] Focus on behavior, error handling, and user-visible effects
+- [ ] Remove or merge obsolete or redundant tests
+- [ ] Update this document and test guidelines as needed
 
 ## Integration Components (Tasks 8-10)
 

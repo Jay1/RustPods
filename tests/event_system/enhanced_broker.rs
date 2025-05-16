@@ -10,7 +10,7 @@ use rustpods::bluetooth::{
     DiscoveredDevice, BleEvent, EventBroker, EventFilter, 
     receiver_to_stream, events::EventType
 };
-use rustpods::airpods::{DetectedAirPods, AirPodsType, AirPodsBattery, ChargingStatus};
+use rustpods::airpods::{DetectedAirPods, AirPodsType, AirPodsBattery, ChargingStatus, AirPodsChargingState};
 use crate::common_test_helpers::wait_ms;
 use crate::bluetooth::common_utils::create_test_device;
 
@@ -33,6 +33,10 @@ fn create_test_device_enhanced(
         manufacturer_data: mfg_data,
         is_potential_airpods: is_airpods,
         last_seen: Instant::now(),
+        is_connected: false,
+        service_data: HashMap::new(),
+        services: Vec::new(),
+        tx_power_level: None,
     }
 }
 
@@ -44,23 +48,21 @@ fn create_test_airpods(
     right: Option<u8>,
     case: Option<u8>
 ) -> DetectedAirPods {
-    DetectedAirPods {
+    let airpods = DetectedAirPods {
         address: BDAddr::from(address),
         name: Some("Test AirPods".to_string()),
         device_type: airpods_type,
-        battery: AirPodsBattery {
+        battery: Some(AirPodsBattery {
             left,
             right,
             case,
-            charging: ChargingStatus {
-                left: false,
-                right: false,
-                case: false,
-            }
-        },
+            charging: None,
+        }),
         rssi: Some(-60),
-        raw_data: vec![0x07, 0x19, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06],
-    }
+        last_seen: Instant::now(),
+        is_connected: false,
+    };
+    airpods
 }
 
 /// Helper to ensure broker is properly shut down
@@ -642,21 +644,29 @@ async fn test_event_filter_with_min_rssi() {
     
     // Create events to test against the filter
     let device_with_good_signal = rustpods::bluetooth::DiscoveredDevice {
-        address: BDAddr::default(),
-        name: Some("Test Device".to_string()),
-        rssi: Some(-60),
-        manufacturer_data: std::collections::HashMap::new(),
+        address: BDAddr::from([0x01, 0x02, 0x03, 0x04, 0x05, 0x06]),
+        name: Some("Good Signal Device".to_string()),
+        rssi: Some(-50),
+        manufacturer_data: HashMap::new(),
         is_potential_airpods: false,
-        last_seen: std::time::Instant::now(),
+        last_seen: Instant::now(),
+        is_connected: false,
+        service_data: HashMap::new(),
+        services: Vec::new(),
+        tx_power_level: None,
     };
     
     let device_with_weak_signal = rustpods::bluetooth::DiscoveredDevice {
-        address: BDAddr::default(),
-        name: Some("Test Device".to_string()),
-        rssi: Some(-80),
-        manufacturer_data: std::collections::HashMap::new(),
+        address: BDAddr::from([0x09, 0x08, 0x07, 0x06, 0x05, 0x04]),
+        name: Some("Weak Signal Device".to_string()),
+        rssi: Some(-90),
+        manufacturer_data: HashMap::new(),
         is_potential_airpods: false,
-        last_seen: std::time::Instant::now(),
+        last_seen: Instant::now(),
+        is_connected: false,
+        service_data: HashMap::new(),
+        services: Vec::new(),
+        tx_power_level: None,
     };
     
     // Test the filter

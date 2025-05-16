@@ -19,6 +19,7 @@ use crate::ui::theme;
 use crate::config::AppConfig;
 use crate::ui::UiComponent;
 use crate::ui::components::svg_icons::settings_icon_svg_string;
+use crate::ui::theme::Theme;
 
 /// Main window component
 #[derive(Debug, Clone)]

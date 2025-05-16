@@ -34,9 +34,9 @@ fn test_all_models_filter() {
         false
     );
     
-    // Create the filter and get filter function
+    // Use the filter directly as a function
     let filter = airpods_all_models_filter();
-    let filter_fn = filter.create_filter_function();
+    let filter_fn = &filter;
     
     // Test the filter
     assert!(filter_fn(&airpods_device), "AirPods should match the all models filter");
@@ -73,9 +73,9 @@ fn test_pro_filter() {
         true
     );
     
-    // Create the filter and get filter function
+    // Use the filter directly as a function
     let filter = airpods_pro_filter();
-    let filter_fn = filter.create_filter_function();
+    let filter_fn = &filter;
     
     // Test the filter
     assert!(!filter_fn(&airpods_regular), "Regular AirPods should not match");
@@ -104,6 +104,10 @@ async fn test_battery_filter() {
         ),
         is_potential_airpods: true,
         last_seen: Instant::now(),
+        is_connected: false,
+        service_data: HashMap::new(),
+        services: Vec::new(),
+        tx_power_level: None,
     };
 
     // Create a device without battery (AirPods but empty manufacturer data)
@@ -114,6 +118,10 @@ async fn test_battery_filter() {
         manufacturer_data: HashMap::new(),
         is_potential_airpods: true,
         last_seen: Instant::now(),
+        is_connected: false,
+        service_data: HashMap::new(),
+        services: Vec::new(),
+        tx_power_level: None,
     };
 
     // Add Apple manufacturer data without valid battery info
@@ -133,20 +141,15 @@ async fn test_battery_filter() {
     );
     
     // For device with battery, verify the detected AirPods has battery information
-    let airpods_with_battery = detect_airpods(&device_with_battery);
+    let airpods_with_battery = detect_airpods(&device_with_battery).unwrap();
     assert!(airpods_with_battery.is_some(), "AirPods with battery should be detected");
     let detected = airpods_with_battery.unwrap();
-    
-    // Check battery fields directly
-    assert!(detected.battery.left.is_some(), "Left battery should be present");
-    assert!(detected.battery.right.is_some(), "Right battery should be present");
-    assert!(detected.battery.case.is_some(), "Case battery should be present");
+    assert!(detected.battery.as_ref().unwrap().left.is_some(), "Left battery should be present");
+    assert!(detected.battery.as_ref().unwrap().right.is_some(), "Right battery should be present");
+    assert!(detected.battery.as_ref().unwrap().case.is_some(), "Case battery should be present");
     
     // For device without battery, verify no battery info is detected
-    let airpods_without_battery = detect_airpods(&device_without_battery);
-    
-    // Debug output to understand battery parsing
-    println!("Device without battery manufacturer data: {:?}", device_without_battery.manufacturer_data);
+    let airpods_without_battery = detect_airpods(&device_without_battery).unwrap();
     if airpods_without_battery.is_some() {
         println!("Detected AirPods: {:?}", airpods_without_battery.unwrap());
     } else {
@@ -156,8 +159,8 @@ async fn test_battery_filter() {
     // Create the battery filter
     let filter = airpods_with_battery_filter();
     
-    // Test the filter by using its create_filter_function method
-    let filter_fn = filter.create_filter_function();
+    // Use the filter directly as a function
+    let filter_fn = &filter;
     
     // Test on all device types and print debug info
     println!("\nFilter test results:");
@@ -182,7 +185,6 @@ fn test_nearby_filter() {
         Some(&[0x07, 0x19]),
         true
     );
-    
     let distant_airpods = create_test_device(
         [0x02, 0x03, 0x04, 0x05, 0x06, 0x07],
         Some("AirPods Pro"),
@@ -191,7 +193,6 @@ fn test_nearby_filter() {
         Some(&[0x0E, 0x19]),
         true
     );
-    
     let airpods_no_rssi = create_test_device(
         [0x03, 0x04, 0x05, 0x06, 0x07, 0x08],
         Some("AirPods Max"),
@@ -203,7 +204,7 @@ fn test_nearby_filter() {
     
     // Create the filter and get filter function
     let filter = airpods_nearby_filter(-60); // Filter for RSSI > -60
-    let filter_fn = filter.create_filter_function();
+    let filter_fn = &filter;
     
     // Test the filter
     assert!(filter_fn(&nearby_airpods), "Nearby AirPods should match");
@@ -274,14 +275,8 @@ fn test_combined_filters() {
     let pro_filter = airpods_pro_filter();
     let nearby_filter = airpods_nearby_filter(-60);
     let battery_filter = airpods_with_battery_filter();
-    
-    let pro_filter_fn = pro_filter.create_filter_function();
-    let nearby_filter_fn = nearby_filter.create_filter_function();
-    let battery_filter_fn = battery_filter.create_filter_function();
-    
-    // Test combined filter functions
     let combined_filter = |device: &DiscoveredDevice| {
-        pro_filter_fn(device) && nearby_filter_fn(device) && battery_filter_fn(device)
+        pro_filter(device) && nearby_filter(device) && battery_filter(device)
     };
     
     assert!(combined_filter(&pro_nearby_with_battery), "Nearby AirPods Pro with battery should match all filters");

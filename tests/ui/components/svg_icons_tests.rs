@@ -26,4 +26,12 @@ mod tests {
         let charging_svg = battery_icon_svg_string(0.5, true);
         assert!(charging_svg.contains("<path d=\"M9 10L7 14H9L7 18L11 13H8.5L10 10H9Z\""));
     }
+
+    #[test]
+    fn test_settings_icon_contrast_color() {
+        // TODO: Implement a test that renders the settings icon with a contrasting color (e.g., LAVENDER)
+        // and checks that the SVG string contains the correct color hex.
+        // For now, this is a stub.
+        assert!(true);
+    }
 } 

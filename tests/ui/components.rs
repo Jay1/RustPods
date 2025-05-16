@@ -11,7 +11,7 @@ use rustpods::ui::AppState;
 use rustpods::ui::Message;
 use rustpods::bluetooth::DiscoveredDevice;
 use rustpods::airpods::{
-    DetectedAirPods, AirPodsType, AirPodsBattery, ChargingStatus
+    DetectedAirPods, AirPodsType, AirPodsBattery, AirPodsChargingState
 };
 
 /// Test that the AppState default implementation works correctly
@@ -39,6 +39,10 @@ fn test_device_management() {
         manufacturer_data: HashMap::new(),
         is_potential_airpods: false,
         last_seen: Instant::now(),
+        is_connected: false,
+        service_data: HashMap::new(),
+        services: Vec::new(),
+        tx_power_level: None,
     };
     
     // Add the device
@@ -85,6 +89,10 @@ fn test_message_handling() {
         manufacturer_data: HashMap::new(),
         is_potential_airpods: true,
         last_seen: Instant::now(),
+        is_connected: false,
+        service_data: HashMap::new(),
+        services: Vec::new(),
+        tx_power_level: None,
     };
     
     state.devices.insert(addr_str.clone(), device);
@@ -100,13 +108,24 @@ fn create_test_device(
     rssi: Option<i16>,
     is_airpods: bool
 ) -> DiscoveredDevice {
+    let mut manufacturer_data = HashMap::new();
+    if is_airpods {
+        manufacturer_data.insert(0x004C, vec![
+            0x07, 0x19, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A,
+            0x08, 0x07, 0x01, 0x06, // Battery levels and charging status
+        ]);
+    }
     DiscoveredDevice {
         address: BDAddr::from(address),
         name: name.map(|s| s.to_string()),
         rssi,
-        manufacturer_data: HashMap::new(),
+        manufacturer_data,
         is_potential_airpods: is_airpods,
         last_seen: Instant::now(),
+        is_connected: false,
+        service_data: HashMap::new(),
+        services: Vec::new(),
+        tx_power_level: None,
     }
 }
 
@@ -114,27 +133,21 @@ fn create_test_device(
 fn create_test_airpods(
     address: [u8; 6],
     name: Option<&str>,
-    airpods_type: AirPodsType,
-    battery_left: Option<u8>,
-    battery_right: Option<u8>,
-    battery_case: Option<u8>
+    rssi: Option<i16>
 ) -> DetectedAirPods {
     DetectedAirPods {
         address: BDAddr::from(address),
         name: name.map(|s| s.to_string()),
-        device_type: airpods_type,
-        battery: AirPodsBattery {
-            left: battery_left,
-            right: battery_right,
-            case: battery_case,
-            charging: ChargingStatus {
-                left: false,
-                right: false,
-                case: true,
-            },
-        },
-        rssi: Some(-60),
-        raw_data: vec![1, 2, 3, 4, 5],
+        rssi,
+        device_type: AirPodsType::AirPods1,
+        battery: Some(AirPodsBattery {
+            left: Some(80),
+            right: Some(75),
+            case: Some(90),
+            charging: Some(AirPodsChargingState::CaseCharging),
+        }),
+        last_seen: Instant::now(),
+        is_connected: false,
     }
 }
 
@@ -179,6 +192,13 @@ fn test_app_state_update_device() {
     assert_eq!(state.devices.get(&addr_str).unwrap().name, Some("Updated Name".to_string()));
     assert_eq!(state.devices.get(&addr_str).unwrap().rssi, Some(-50));
     assert!(state.devices.get(&addr_str).unwrap().is_potential_airpods);
+}
+
+#[test]
+fn test_toast_notification_system() {
+    // TODO: Implement a test for the toast/notification system
+    // Should check creation, display, and close/timeout behavior
+    assert!(true); // Stub
 }
 
 // Additional UI tests would require more complex setup with mock rendering

@@ -678,7 +678,7 @@ impl MockEventBroker {
     }
     
     /// Start the event broker
-    pub fn start(&mut self) -> JoinHandle<()> {
+    pub fn start(&mut self) {
         let subscriptions = self.subscriptions.clone();
         let mut receiver: tokio::sync::mpsc::UnboundedReceiver<BleEvent> = mpsc::unbounded_channel().1; // Dummy receiver for initial setup
         std::mem::swap(&mut receiver, &mut mpsc::unbounded_channel().1);
@@ -701,9 +701,7 @@ impl MockEventBroker {
         
         // Store task handle
         self.task_handle = Some(task);
-        
-        // Return the task
-        task
+        // No return value
     }
     
     /// Get the event sender

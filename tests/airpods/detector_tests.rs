@@ -227,11 +227,4 @@ fn test_airpods_battery_default() {
     assert_eq!(battery.charging, None);
     
     // No longer testing Display here since that may have been refactored
-}
-
-/// Test battery display with various values
-#[test]
-fn test_battery_display() {
-    // We'll skip this test for now since the display format may have changed
-    // If Display is still implemented, this test should be updated accordingly
 } 

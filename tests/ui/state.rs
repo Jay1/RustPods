@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use std::time::Instant;
+use std::sync::Arc;
 
 use btleplug::api::BDAddr;
 
@@ -12,6 +13,8 @@ use rustpods::bluetooth::DiscoveredDevice;
 use rustpods::airpods::{
     DetectedAirPods, AirPodsType, AirPodsBattery, ChargingStatus
 };
+use rustpods::ui::state_manager::StateManager;
+use tokio::sync::mpsc::unbounded_channel;
 
 /// Helper to create a test AirPods device
 fn create_test_airpods(device_type: AirPodsType, left: Option<u8>, right: Option<u8>, case: Option<u8>) -> DetectedAirPods {
@@ -19,18 +22,15 @@ fn create_test_airpods(device_type: AirPodsType, left: Option<u8>, right: Option
         address: BDAddr::from([1, 2, 3, 4, 5, 6]),
         name: Some(format!("Test {:?}", device_type)),
         device_type,
-        battery: AirPodsBattery {
+        battery: Some(AirPodsBattery {
             left,
             right,
             case,
-            charging: ChargingStatus {
-                left: false,
-                right: false,
-                case: false,
-            },
-        },
+            charging: None,
+        }),
         rssi: Some(-60),
-        raw_data: vec![1, 2, 3, 4, 5],
+        last_seen: Instant::now(),
+        is_connected: false,
     }
 }
 
@@ -43,6 +43,10 @@ fn create_test_device(address: [u8; 6], name: &str, rssi: i16) -> DiscoveredDevi
         manufacturer_data: HashMap::new(),
         is_potential_airpods: false,
         last_seen: Instant::now(),
+        is_connected: false,
+        service_data: HashMap::new(),
+        services: Vec::new(),
+        tx_power_level: None,
     }
 }
 
@@ -86,7 +90,8 @@ fn test_app_state_visibility() {
 #[test]
 fn test_app_state_update_devices() {
     // Create a new AppState
-    let (mut app_state, _) = AppState::new(());
+    let (tx, _rx) = unbounded_channel();
+    let (mut app_state, _) = AppState::new(Arc::new(StateManager::new(tx)));
     
     // Create test devices
     let device1 = create_test_device([1, 2, 3, 4, 5, 6], "Device 1", -60);
@@ -117,7 +122,8 @@ fn test_app_state_update_devices() {
 #[test]
 fn test_app_state_select_device() {
     // Create a new AppState
-    let (mut app_state, _) = AppState::new(());
+    let (tx, _rx) = unbounded_channel();
+    let (mut app_state, _) = AppState::new(Arc::new(StateManager::new(tx)));
     
     // Create test device
     let device = create_test_device([1, 2, 3, 4, 5, 6], "Device 1", -60);
@@ -140,7 +146,8 @@ fn test_app_state_select_device() {
 #[test]
 fn test_app_state_message_handling() {
     // Create a new AppState
-    let (mut app_state, _) = AppState::new(());
+    let (tx, _rx) = unbounded_channel();
+    let (mut app_state, _) = AppState::new(Arc::new(StateManager::new(tx)));
     
     // Test starting scan message
     let _ = app_state.update(Message::StartScan);

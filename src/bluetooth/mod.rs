@@ -18,20 +18,12 @@ use std::fmt::Debug;
 pub use scanner::{
     BleScanner, 
     DiscoveredDevice,
-    BleErrorCategory,
     BleScannerConfig,
     parse_bdaddr,
 };
 
 // Re-export ScanConfig
 pub use scanner_config::ScanConfig;
-
-// Re-export BleError for backward compatibility (marked deprecated)
-#[deprecated(
-    since = "0.1.0",
-    note = "Use BluetoothError instead"
-)]
-pub use scanner::BleError;
 
 pub use adapter::{
     AdapterManager, AdapterInfo,

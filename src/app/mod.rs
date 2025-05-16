@@ -5,11 +5,11 @@ use std::time::Duration;
 // Remove unused tokio_mpsc import
 // use tokio::sync::mpsc as tokio_mpsc;
 
-use crate::bluetooth::{BleScanner, BleEvent, AirPodsBatteryStatus, BleError};
+use crate::bluetooth::{BleScanner, BleEvent, AirPodsBatteryStatus};
 // Remove unused ScanConfig import
 use crate::config::{AppConfig, ConfigManager};
 use crate::ui::{Message, SystemTray};
-use crate::error::RustPodsError;
+use crate::error::{RustPodsError, BluetoothError};
 use crate::airpods::{DetectedAirPods, detect_airpods};
 use log; // Keep log module but remove specific imports
 use futures::StreamExt;
@@ -156,7 +156,7 @@ impl App {
                         let _ = self.ui_tx.send(Message::Error(format!("Failed to start scanning: {}", e)));
                         
                         // If the adapter was not found, try to reinitialize
-                        if matches!(e, RustPodsError::BluetoothApiError(BleError::AdapterNotFound)) {
+                        if matches!(e, RustPodsError::BluetoothError(BluetoothError::NoAdapter)) {
                             log::info!("Attempting to reinitialize Bluetooth adapter");
                             if let Err(reinit_err) = self.reinitialize_bluetooth().await {
                                 log::error!("Failed to reinitialize Bluetooth: {}", reinit_err);

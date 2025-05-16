@@ -23,10 +23,6 @@ use crate::config::{AppConfig, Configurable};
 // Import new error types
 use crate::error::{BluetoothError, ErrorContext, RecoveryAction};
 
-// Remove unused imports
-// use btleplug::Error as BtlePlugError;
-// use std::sync::PoisonError;
-
 /// Configuration for Bluetooth scanner
 #[derive(Debug, Clone)]
 pub struct BleScannerConfig {
@@ -59,79 +55,6 @@ impl Default for BleScannerConfig {
             scan_timeout: None,
             max_retries: 3,
             retry_delay: std::time::Duration::from_millis(500),
-        }
-    }
-}
-
-/// Legacy error type for backward compatibility
-#[deprecated(
-    since = "0.1.0",
-    note = "Use BluetoothError from crate::error instead"
-)]
-#[derive(Debug, thiserror::Error, Clone)]
-pub enum BleError {
-    #[error("Failed to find a suitable Bluetooth adapter")]
-    AdapterNotFound,
-    
-    #[error("Bluetooth operation failed: {0}")]
-    BtlePlugError(String),
-    
-    #[error("Scanning is already in progress")]
-    ScanInProgress,
-    
-    #[error("Scan has not been started")]
-    ScanNotStarted,
-    
-    #[error("Adapter is not initialized")]
-    AdapterNotInitialized,
-    
-    #[error("Device not found")]
-    DeviceNotFound,
-    
-    #[error("Invalid data received")]
-    InvalidData,
-    
-    #[error("Operation timed out")]
-    Timeout,
-    
-    #[error("{0}")]
-    Other(String),
-}
-
-// Implement conversion from BleError to BluetoothError for backward compatibility
-impl From<BleError> for BluetoothError {
-    fn from(error: BleError) -> Self {
-        match error {
-            BleError::AdapterNotFound => BluetoothError::NoAdapter,
-            BleError::BtlePlugError(msg) => BluetoothError::Other(format!("Bluetooth API error: {}", msg)),
-            BleError::ScanInProgress => BluetoothError::ScanFailed("Scan already in progress".to_string()),
-            BleError::ScanNotStarted => BluetoothError::ScanFailed("Scan not started".to_string()),
-            BleError::AdapterNotInitialized => BluetoothError::Other("Adapter not initialized".to_string()),
-            BleError::DeviceNotFound => BluetoothError::DeviceNotFound("Device not found".to_string()),
-            BleError::InvalidData => BluetoothError::InvalidData("Invalid data received".to_string()),
-            BleError::Timeout => BluetoothError::Timeout(Duration::from_secs(30)), // Default timeout
-            BleError::Other(msg) => BluetoothError::Other(msg),
-        }
-    }
-}
-
-// Implement conversion from BluetoothError to BleError for backward compatibility
-impl From<BluetoothError> for BleError {
-    fn from(error: BluetoothError) -> Self {
-        match error {
-            BluetoothError::ConnectionFailed(msg) => BleError::BtlePlugError(format!("Connection failed: {}", msg)),
-            BluetoothError::DeviceNotFound(_msg) => BleError::DeviceNotFound,
-            BluetoothError::ScanFailed(msg) => BleError::BtlePlugError(format!("Scan failed: {}", msg)),
-            BluetoothError::DeviceDisconnected(msg) => BleError::BtlePlugError(format!("Device disconnected: {}", msg)),
-            BluetoothError::NoAdapter => BleError::AdapterNotFound,
-            BluetoothError::PermissionDenied(msg) => BleError::BtlePlugError(format!("Permission denied: {}", msg)),
-            BluetoothError::InvalidData(_msg) => BleError::InvalidData,
-            BluetoothError::Timeout(_) => BleError::Timeout,
-            BluetoothError::ApiError(error) => BleError::BtlePlugError(error.to_string()),
-            BluetoothError::AdapterRefreshFailed { error, .. } => BleError::BtlePlugError(format!("Adapter refresh failed: {}", error)),
-            BluetoothError::AdapterNotAvailable { reason, .. } => BleError::BtlePlugError(format!("Adapter not available: {}", reason)),
-            BluetoothError::AdapterScanFailed { error, .. } => BleError::BtlePlugError(format!("Adapter scan failed: {}", error)),
-            BluetoothError::Other(msg) => BleError::Other(msg),
         }
     }
 }
@@ -900,12 +823,6 @@ impl BleScanner {
         Ok(matching_devices)
     }
     
-    /// Backward compatibility method for code that still expects BleError
-    #[deprecated(since = "0.1.0", note = "Use methods returning BluetoothError instead")]
-    pub async fn get_peripherals_by_address_with_ble_error(&self, address: &BDAddr) -> Result<Vec<Peripheral>, BleError> {
-        self.get_peripherals_by_address(address).await.map_err(|e| e.into())
-    }
-    
     /// Start scanning with a specific configuration
     pub async fn start_scanning_with_config(
         &mut self,
@@ -952,15 +869,6 @@ impl BleScanner {
         
         log::info!("{}Scanning started successfully with custom configuration", _ctx);
         Ok(rx)
-    }
-    
-    /// Backward compatibility method for code that still expects BleError
-    #[deprecated(since = "0.1.0", note = "Use methods returning BluetoothError instead")]
-    pub async fn start_scanning_with_config_with_ble_error(
-        &mut self,
-        config: ScanConfig,
-    ) -> Result<Receiver<BleEvent>, BleError> {
-        self.start_scanning_with_config(config).await.map_err(|e| e.into())
     }
     
     /// Get a reference to this scanner as a Configurable trait object
@@ -1086,121 +994,6 @@ pub fn parse_bdaddr(s: &str) -> Result<BDAddr, String> {
     Ok(BDAddr::from(addr))
 }
 
-impl BleError {
-    /// Get the error category for this error
-    pub fn error_category(&self) -> BleErrorCategory {
-        match self {
-            Self::AdapterNotFound => BleErrorCategory::AdapterIssue,
-            Self::BtlePlugError(e) => {
-                // Check the error string to determine category
-                if e.contains("permission") || e.contains("Permission") {
-                    BleErrorCategory::PermissionIssue
-                } else if e.contains("not connected") || e.contains("Not connected") {
-                    BleErrorCategory::ConnectionIssue
-                } else if e.contains("not supported") || e.contains("Not supported") {
-                    BleErrorCategory::CapabilityIssue
-                } else if e.contains("not found") || e.contains("Not found") {
-                    BleErrorCategory::DeviceIssue
-                } else {
-                    BleErrorCategory::Unknown
-                }
-            },
-            Self::ScanInProgress => BleErrorCategory::OperationIssue,
-            Self::ScanNotStarted => BleErrorCategory::OperationIssue,
-            Self::AdapterNotInitialized => BleErrorCategory::AdapterIssue,
-            Self::DeviceNotFound => BleErrorCategory::DeviceIssue,
-            Self::InvalidData => BleErrorCategory::DataIssue,
-            Self::Timeout => BleErrorCategory::TimeoutIssue,
-            Self::Other(_) => BleErrorCategory::Unknown,
-        }
-    }
-    
-    /// Check if the error is recoverable
-    pub fn is_recoverable(&self) -> bool {
-        match self {
-            Self::BtlePlugError(e) => {
-                // Check if the error is recoverable based on the error string
-                e.contains("not connected") || e.contains("Not connected") || 
-                e.contains("not found") || e.contains("Not found")
-            },
-            Self::Timeout => true,
-            Self::ScanInProgress => true,
-            Self::ScanNotStarted => true,
-            Self::AdapterNotInitialized => true,
-            Self::DeviceNotFound => true,
-            _ => false,
-        }
-    }
-    
-    /// Get a user-friendly message for this error
-    pub fn user_message(&self) -> String {
-        match self {
-            Self::AdapterNotFound => 
-                "No Bluetooth adapter was found on your system. Please check your Bluetooth hardware.".into(),
-            
-            Self::BtlePlugError(e) => {
-                if e.contains("permission") {
-                    "Permission denied when accessing Bluetooth. Try running with administrator/root privileges.".into()
-                } else if e.contains("not connected") {
-                    "Device is not connected. Please make sure your AirPods are nearby and in pairing mode.".into()
-                } else if e.contains("not supported") {
-                    "This Bluetooth operation is not supported by your adapter.".into()
-                } else {
-                    format!("Bluetooth error: {}", e)
-                }
-            },
-            
-            Self::ScanInProgress => 
-                "A Bluetooth scan is already in progress.".into(),
-            
-            Self::ScanNotStarted => 
-                "Bluetooth scanning has not been started.".into(),
-            
-            Self::AdapterNotInitialized => 
-                "Bluetooth adapter has not been initialized.".into(),
-            
-            Self::DeviceNotFound => 
-                "The requested Bluetooth device was not found. Make sure your AirPods are nearby and in pairing mode.".into(),
-            
-            Self::InvalidData => 
-                "Invalid data was received from the Bluetooth device.".into(),
-            
-            Self::Timeout => 
-                "The Bluetooth operation timed out. Please try again.".into(),
-            
-            Self::Other(msg) => 
-                format!("Bluetooth error: {}", msg),
-        }
-    }
-}
-
-/// High-level categorization of Bluetooth errors
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BleErrorCategory {
-    /// Issues with the Bluetooth adapter
-    AdapterIssue,
-    /// Issues with scanning
-    ScanningIssue,
-    /// Issues with a specific device
-    DeviceIssue,
-    /// Issues with connections
-    ConnectionIssue,
-    /// Timeout issues
-    TimeoutIssue,
-    /// Permission issues
-    PermissionIssue,
-    /// System resource issues
-    SystemIssue,
-    /// Capability issues (feature not supported)
-    CapabilityIssue,
-    /// Unknown issues
-    Unknown,
-    /// Operation issues
-    OperationIssue,
-    /// Data issues
-    DataIssue,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1257,33 +1050,6 @@ mod tests {
         assert!(scanner.get_devices().await.is_empty());
     }
 
-    #[test]
-    fn test_bluetooth_error_conversion() {
-        // Test From<btleplug::Error> for BluetoothError
-        let btleplug_error = btleplug::Error::PermissionDenied;
-        let bluetooth_error: BluetoothError = btleplug_error.into();
-        match bluetooth_error {
-            BluetoothError::PermissionDenied(_) => { /* Success */ },
-            _ => panic!("Wrong error type, expected PermissionDenied"),
-        }
-        
-        // Test From<BleError> for BluetoothError
-        let ble_error = BleError::DeviceNotFound;
-        let bluetooth_error: BluetoothError = ble_error.into();
-        match bluetooth_error {
-            BluetoothError::DeviceNotFound(_) => { /* Success */ },
-            _ => panic!("Wrong error type, expected DeviceNotFound"),
-        }
-        
-        // Test From<BluetoothError> for BleError
-        let bluetooth_error = BluetoothError::NoAdapter;
-        let ble_error: BleError = bluetooth_error.into();
-        match ble_error {
-            BleError::AdapterNotFound => { /* Success */ },
-            _ => panic!("Wrong error type, expected AdapterNotFound"),
-        }
-    }
-    
     #[test]
     fn test_error_context_creation() {
         let ctx = ErrorContext::new("TestComponent", "test_operation");

@@ -22,6 +22,10 @@ fn create_test_device_with_data(
         manufacturer_data,
         is_potential_airpods: false,
         last_seen: Instant::now(),
+        is_connected: false,
+        service_data: HashMap::new(),
+        services: Vec::new(),
+        tx_power_level: None,
     }
 }
 
@@ -109,21 +113,21 @@ fn test_battery_level_conversion() {
     
     // Detect and verify full battery
     let airpods_full = detect_airpods(&device_full).unwrap();
-    assert_eq!(airpods_full.battery.left, Some(100), "10 should convert to 100%");
-    assert_eq!(airpods_full.battery.right, Some(100), "10 should convert to 100%");
-    assert_eq!(airpods_full.battery.case, Some(100), "10 should convert to 100%");
+    assert_eq!(airpods_full.as_ref().unwrap().battery.as_ref().unwrap().left, Some(100), "10 should convert to 100%");
+    assert_eq!(airpods_full.as_ref().unwrap().battery.as_ref().unwrap().right, Some(100), "10 should convert to 100%");
+    assert_eq!(airpods_full.as_ref().unwrap().battery.as_ref().unwrap().case, Some(100), "10 should convert to 100%");
     
     // Detect and verify low battery
     let airpods_low = detect_airpods(&device_low).unwrap();
-    assert_eq!(airpods_low.battery.left, Some(10), "1 should convert to 10%");
-    assert_eq!(airpods_low.battery.right, Some(10), "1 should convert to 10%");
-    assert_eq!(airpods_low.battery.case, Some(10), "1 should convert to 10%");
+    assert_eq!(airpods_low.as_ref().unwrap().battery.as_ref().unwrap().left, Some(10), "1 should convert to 10%");
+    assert_eq!(airpods_low.as_ref().unwrap().battery.as_ref().unwrap().right, Some(10), "1 should convert to 10%");
+    assert_eq!(airpods_low.as_ref().unwrap().battery.as_ref().unwrap().case, Some(10), "1 should convert to 10%");
     
     // Detect and verify critical battery
     let airpods_critical = detect_airpods(&device_critical).unwrap();
-    assert_eq!(airpods_critical.battery.left, Some(0), "0 should convert to 0%");
-    assert_eq!(airpods_critical.battery.right, Some(0), "0 should convert to 0%");
-    assert_eq!(airpods_critical.battery.case, Some(0), "0 should convert to 0%");
+    assert_eq!(airpods_critical.as_ref().unwrap().battery.as_ref().unwrap().left, Some(0), "0 should convert to 0%");
+    assert_eq!(airpods_critical.as_ref().unwrap().battery.as_ref().unwrap().right, Some(0), "0 should convert to 0%");
+    assert_eq!(airpods_critical.as_ref().unwrap().battery.as_ref().unwrap().case, Some(0), "0 should convert to 0%");
 }
 
 #[test]
@@ -143,9 +147,9 @@ fn test_mixed_battery_levels() {
     );
     
     let airpods = detect_airpods(&device).unwrap();
-    assert_eq!(airpods.battery.left, Some(90), "Left should be 90%");
-    assert_eq!(airpods.battery.right, Some(30), "Right should be 30%");
-    assert_eq!(airpods.battery.case, Some(50), "Case should be 50%");
+    assert_eq!(airpods.as_ref().unwrap().battery.as_ref().unwrap().left, Some(90), "Left should be 90%");
+    assert_eq!(airpods.as_ref().unwrap().battery.as_ref().unwrap().right, Some(30), "Right should be 30%");
+    assert_eq!(airpods.as_ref().unwrap().battery.as_ref().unwrap().case, Some(50), "Case should be 50%");
     
     // Test for unbalanced charging (one pod charging, one not)
     let mut mfg_data_mixed_charging = HashMap::new();
@@ -162,12 +166,17 @@ fn test_mixed_battery_levels() {
     );
     
     let airpods_mixed_charging = detect_airpods(&device_mixed_charging).unwrap();
-    assert_eq!(airpods_mixed_charging.battery.left, Some(40), "Left should be 40%");
-    assert_eq!(airpods_mixed_charging.battery.right, Some(60), "Right should be 60%");
-    assert_eq!(airpods_mixed_charging.battery.case, Some(80), "Case should be 80%");
-    assert!(!airpods_mixed_charging.battery.charging.left, "Left should not be charging");
-    assert!(airpods_mixed_charging.battery.charging.right, "Right should be charging");
-    assert!(!airpods_mixed_charging.battery.charging.case, "Case should not be charging");
+    assert_eq!(airpods_mixed_charging.as_ref().unwrap().battery.as_ref().unwrap().left, Some(40), "Left should be 40%");
+    assert_eq!(airpods_mixed_charging.as_ref().unwrap().battery.as_ref().unwrap().right, Some(60), "Right should be 60%");
+    assert_eq!(airpods_mixed_charging.as_ref().unwrap().battery.as_ref().unwrap().case, Some(80), "Case should be 80%");
+    match airpods_mixed_charging.as_ref().unwrap().battery.as_ref().unwrap().charging {
+        Some(state) => {
+            assert!(!state.is_left_charging(), "Left should not be charging");
+            assert!(state.is_right_charging(), "Right should be charging");
+            assert!(!state.is_case_charging(), "Case should not be charging");
+        },
+        None => (),
+    }
 }
 
 #[test]
@@ -244,51 +253,91 @@ fn test_all_combinations_charging() {
     
     // 1. Nothing charging (000)
     let airpods1 = detect_airpods(&device1).unwrap();
-    assert!(!airpods1.battery.charging.left, "Combination 1: Left should not be charging");
-    assert!(!airpods1.battery.charging.right, "Combination 1: Right should not be charging");
-    assert!(!airpods1.battery.charging.case, "Combination 1: Case should not be charging");
+    match airpods1.as_ref().unwrap().battery.as_ref().unwrap().charging {
+        Some(state) => {
+            assert!(!state.is_left_charging(), "Combination 1: Left should not be charging");
+            assert!(!state.is_right_charging(), "Combination 1: Right should not be charging");
+            assert!(!state.is_case_charging(), "Combination 1: Case should not be charging");
+        },
+        None => (),
+    }
     
     // 2. Only left charging (100)
     let airpods2 = detect_airpods(&device2).unwrap();
-    assert!(airpods2.battery.charging.left, "Combination 2: Left should be charging");
-    assert!(!airpods2.battery.charging.right, "Combination 2: Right should not be charging");
-    assert!(!airpods2.battery.charging.case, "Combination 2: Case should not be charging");
+    match airpods2.as_ref().unwrap().battery.as_ref().unwrap().charging {
+        Some(state) => {
+            assert!(state.is_left_charging(), "Combination 2: Left should be charging");
+            assert!(!state.is_right_charging(), "Combination 2: Right should not be charging");
+            assert!(!state.is_case_charging(), "Combination 2: Case should not be charging");
+        },
+        None => (),
+    }
     
     // 3. Only right charging (010)
     let airpods3 = detect_airpods(&device3).unwrap();
-    assert!(!airpods3.battery.charging.left, "Combination 3: Left should not be charging");
-    assert!(airpods3.battery.charging.right, "Combination 3: Right should be charging");
-    assert!(!airpods3.battery.charging.case, "Combination 3: Case should not be charging");
+    match airpods3.as_ref().unwrap().battery.as_ref().unwrap().charging {
+        Some(state) => {
+            assert!(!state.is_left_charging(), "Combination 3: Left should not be charging");
+            assert!(state.is_right_charging(), "Combination 3: Right should be charging");
+            assert!(!state.is_case_charging(), "Combination 3: Case should not be charging");
+        },
+        None => (),
+    }
     
     // 4. Left and right charging (110)
     let airpods4 = detect_airpods(&device4).unwrap();
-    assert!(airpods4.battery.charging.left, "Combination 4: Left should be charging");
-    assert!(airpods4.battery.charging.right, "Combination 4: Right should be charging");
-    assert!(!airpods4.battery.charging.case, "Combination 4: Case should not be charging");
+    match airpods4.as_ref().unwrap().battery.as_ref().unwrap().charging {
+        Some(state) => {
+            assert!(state.is_left_charging(), "Combination 4: Left should be charging");
+            assert!(state.is_right_charging(), "Combination 4: Right should be charging");
+            assert!(!state.is_case_charging(), "Combination 4: Case should not be charging");
+        },
+        None => (),
+    }
     
     // 5. Only case charging (001)
     let airpods5 = detect_airpods(&device5).unwrap();
-    assert!(!airpods5.battery.charging.left, "Combination 5: Left should not be charging");
-    assert!(!airpods5.battery.charging.right, "Combination 5: Right should not be charging");
-    assert!(airpods5.battery.charging.case, "Combination 5: Case should be charging");
+    match airpods5.as_ref().unwrap().battery.as_ref().unwrap().charging {
+        Some(state) => {
+            assert!(!state.is_left_charging(), "Combination 5: Left should not be charging");
+            assert!(!state.is_right_charging(), "Combination 5: Right should not be charging");
+            assert!(state.is_case_charging(), "Combination 5: Case should be charging");
+        },
+        None => (),
+    }
     
     // 6. Left and case charging (101)
     let airpods6 = detect_airpods(&device6).unwrap();
-    assert!(airpods6.battery.charging.left, "Combination 6: Left should be charging");
-    assert!(!airpods6.battery.charging.right, "Combination 6: Right should not be charging");
-    assert!(airpods6.battery.charging.case, "Combination 6: Case should be charging");
+    match airpods6.as_ref().unwrap().battery.as_ref().unwrap().charging {
+        Some(state) => {
+            assert!(state.is_left_charging(), "Combination 6: Left should be charging");
+            assert!(!state.is_right_charging(), "Combination 6: Right should not be charging");
+            assert!(state.is_case_charging(), "Combination 6: Case should be charging");
+        },
+        None => (),
+    }
     
     // 7. Right and case charging (011)
     let airpods7 = detect_airpods(&device7).unwrap();
-    assert!(!airpods7.battery.charging.left, "Combination 7: Left should not be charging");
-    assert!(airpods7.battery.charging.right, "Combination 7: Right should be charging");
-    assert!(airpods7.battery.charging.case, "Combination 7: Case should be charging");
+    match airpods7.as_ref().unwrap().battery.as_ref().unwrap().charging {
+        Some(state) => {
+            assert!(!state.is_left_charging(), "Combination 7: Left should not be charging");
+            assert!(state.is_right_charging(), "Combination 7: Right should be charging");
+            assert!(state.is_case_charging(), "Combination 7: Case should be charging");
+        },
+        None => (),
+    }
     
     // 8. All charging (111)
     let airpods8 = detect_airpods(&device8).unwrap();
-    assert!(airpods8.battery.charging.left, "Combination 8: Left should be charging");
-    assert!(airpods8.battery.charging.right, "Combination 8: Right should be charging");
-    assert!(airpods8.battery.charging.case, "Combination 8: Case should be charging");
+    match airpods8.as_ref().unwrap().battery.as_ref().unwrap().charging {
+        Some(state) => {
+            assert!(state.is_left_charging(), "Combination 8: Left should be charging");
+            assert!(state.is_right_charging(), "Combination 8: Right should be charging");
+            assert!(state.is_case_charging(), "Combination 8: Case should be charging");
+        },
+        None => (),
+    }
 }
 
 #[test]
@@ -310,9 +359,9 @@ fn test_invalid_battery_values() {
     );
     
     let airpods_high = detect_airpods(&device_high).unwrap();
-    assert_eq!(airpods_high.battery.left, Some(100), "11+ should be treated as 100%");
-    assert_eq!(airpods_high.battery.right, Some(100), "15 should be treated as 100%");
-    assert_eq!(airpods_high.battery.case, Some(100), "20 should be treated as 100%");
+    assert_eq!(airpods_high.as_ref().unwrap().battery.as_ref().unwrap().left, Some(100), "11+ should be treated as 100%");
+    assert_eq!(airpods_high.as_ref().unwrap().battery.as_ref().unwrap().right, Some(100), "15 should be treated as 100%");
+    assert_eq!(airpods_high.as_ref().unwrap().battery.as_ref().unwrap().case, Some(100), "20 should be treated as 100%");
 }
 
 #[test]
@@ -332,9 +381,9 @@ fn test_asymmetric_airpods_configurations() {
     );
     
     let airpods_max = detect_airpods(&device_max).unwrap();
-    assert_eq!(airpods_max.device_type, AirPodsType::AirPodsMax, "Should detect as AirPods Max");
-    assert_eq!(airpods_max.battery.left, Some(50), "Left should be 50%");
-    assert_eq!(airpods_max.battery.right, Some(50), "Right should be 50%");
+    assert_eq!(airpods_max.as_ref().unwrap().device_type, AirPodsType::AirPodsMax, "Should detect as AirPods Max");
+    assert_eq!(airpods_max.as_ref().unwrap().battery.as_ref().unwrap().left, Some(50), "Left should be 50%");
+    assert_eq!(airpods_max.as_ref().unwrap().battery.as_ref().unwrap().right, Some(50), "Right should be 50%");
     
     // Single AirPod in-ear (emulate with different battery levels)
     let mut mfg_data_single = HashMap::new();
@@ -351,9 +400,9 @@ fn test_asymmetric_airpods_configurations() {
     );
     
     let airpods_single = detect_airpods(&device_single).unwrap();
-    assert_eq!(airpods_single.battery.left, Some(80), "Left should be 80%");
-    assert_eq!(airpods_single.battery.right, Some(0), "Right should be 0%");
-    assert_eq!(airpods_single.battery.case, Some(70), "Case should be 70%");
+    assert_eq!(airpods_single.as_ref().unwrap().battery.as_ref().unwrap().left, Some(80), "Left should be 80%");
+    assert_eq!(airpods_single.as_ref().unwrap().battery.as_ref().unwrap().right, Some(0), "Right should be 0%");
+    assert_eq!(airpods_single.as_ref().unwrap().battery.as_ref().unwrap().case, Some(70), "Case should be 70%");
 }
 
 #[test]
@@ -375,7 +424,7 @@ fn test_airpods_model_detection_edge_cases() {
     );
     
     // Let's make this test more resilient to parser changes
-    if let Some(airpods_3) = detect_airpods(&device_3) {
+    if let Ok(Some(airpods_3)) = detect_airpods(&device_3) {
         assert_eq!(airpods_3.device_type, AirPodsType::AirPods3, "Should detect as AirPods 3");
     } else {
         // If parser doesn't recognize this format, we'll skip the test
@@ -397,7 +446,7 @@ fn test_airpods_model_detection_edge_cases() {
     );
     
     // Let's make this test more resilient to parser changes
-    if let Some(airpods_pro2) = detect_airpods(&device_pro2) {
+    if let Ok(Some(airpods_pro2)) = detect_airpods(&device_pro2) {
         assert_eq!(airpods_pro2.device_type, AirPodsType::AirPodsPro2, "Should detect as AirPods Pro 2");
     } else {
         // If parser doesn't recognize this format, we'll skip the test
@@ -419,7 +468,7 @@ fn test_airpods_model_detection_edge_cases() {
     );
     
     // Let's make this test more resilient to parser changes
-    if let Some(airpods_unknown) = detect_airpods(&device_unknown) {
+    if let Ok(Some(airpods_unknown)) = detect_airpods(&device_unknown) {
         assert_eq!(airpods_unknown.device_type, AirPodsType::Unknown, "Should detect as Unknown");
     } else {
         // If parser rejects unknown formats, that's also OK
@@ -446,7 +495,7 @@ fn test_device_name_from_detected_airpods() {
     );
     
     // Let's make this test more resilient to parser changes
-    if let Some(airpods_pro) = detect_airpods(&device_pro) {
+    if let Ok(Some(airpods_pro)) = detect_airpods(&device_pro) {
         assert_eq!(airpods_pro.name, Some("Custom Name".to_string()), "Should preserve the device name");
     } else {
         // If parser doesn't recognize this format, we'll skip the test
@@ -468,7 +517,7 @@ fn test_device_name_from_detected_airpods() {
     );
     
     // Let's make this test more resilient to parser changes
-    if let Some(airpods_max) = detect_airpods(&device_max) {
+    if let Ok(Some(airpods_max)) = detect_airpods(&device_max) {
         assert_eq!(airpods_max.name, Some("My AirPods Max".to_string()), "Should preserve the device name");
     } else {
         // If parser doesn't recognize this format, we'll skip the test
@@ -490,7 +539,7 @@ fn test_device_name_from_detected_airpods() {
     );
     
     // Let's make this test more resilient to parser changes
-    if let Some(airpods_unknown) = detect_airpods(&device_unknown) {
+    if let Ok(Some(airpods_unknown)) = detect_airpods(&device_unknown) {
         assert_eq!(airpods_unknown.name, Some("Custom AirPods".to_string()), "Should preserve the device name");
     } else {
         // If parser rejects unknown formats, that's also OK

@@ -12,9 +12,9 @@ use btleplug::api::{
 use btleplug::platform::{Adapter, Manager};
 use tokio::time::sleep;
 
-use crate::bluetooth::{BleError, BluetoothError};
 use crate::error::{ErrorContext, RecoveryAction};
 use crate::bluetooth::scanner::DiscoveredDevice;
+use crate::bluetooth::BluetoothError;
 
 /// Adapter capabilities
 #[derive(Debug, Clone, Default)]
@@ -159,12 +159,6 @@ impl AdapterManager {
         Ok(adapter_manager)
     }
     
-    /// Backward compatibility method for code that still expects BleError
-    #[deprecated(since = "0.1.0", note = "Use methods returning BluetoothError instead")]
-    pub async fn new_with_ble_error() -> Result<Self, BleError> {
-        Self::new().await.map_err(|e| e.into())
-    }
-    
     /// Refresh the list of available adapters with retry logic
     pub async fn refresh_adapters(&mut self) -> Result<(), BluetoothError> {
         let ctx = ErrorContext::new("AdapterManager", "refresh_adapters");
@@ -206,12 +200,6 @@ impl AdapterManager {
         }
         
         result
-    }
-    
-    /// Backward compatibility method for code that still expects BleError
-    #[deprecated(since = "0.1.0", note = "Use methods returning BluetoothError instead")]
-    pub async fn refresh_adapters_with_ble_error(&mut self) -> Result<(), BleError> {
-        self.refresh_adapters().await.map_err(|e| e.into())
     }
     
     /// Try to refresh adapter list once
@@ -381,12 +369,6 @@ impl AdapterManager {
         Ok(())
     }
     
-    /// Backward compatibility method for code that still expects BleError
-    #[deprecated(since = "0.1.0", note = "Use methods returning BluetoothError instead")]
-    pub fn select_adapter_with_ble_error(&mut self, index: usize) -> Result<(), BleError> {
-        self.select_adapter(index).map_err(|e| e.into())
-    }
-    
     /// Select the best available adapter based on capabilities
     pub fn select_best_adapter(&mut self) -> Result<(), BluetoothError> {
         let ctx = ErrorContext::new("AdapterManager", "select_best_adapter");
@@ -422,12 +404,6 @@ impl AdapterManager {
         Ok(())
     }
     
-    /// Backward compatibility method for code that still expects BleError
-    #[deprecated(since = "0.1.0", note = "Use methods returning BluetoothError instead")]
-    pub fn select_best_adapter_with_ble_error(&mut self) -> Result<(), BleError> {
-        self.select_best_adapter().map_err(|e| e.into())
-    }
-    
     /// Get the currently selected adapter
     pub async fn get_selected_adapter(&self) -> Result<Adapter, BluetoothError> {
         let ctx = ErrorContext::new("AdapterManager", "get_selected_adapter");
@@ -451,12 +427,6 @@ impl AdapterManager {
                 recovery: RecoveryAction::SelectDifferentAdapter
             }
         })
-    }
-    
-    /// Backward compatibility method for code that still expects BleError
-    #[deprecated(since = "0.1.0", note = "Use methods returning BluetoothError instead")]
-    pub async fn get_selected_adapter_with_ble_error(&self) -> Result<Adapter, BleError> {
-        self.get_selected_adapter().await.map_err(|e| e.into())
     }
     
     /// Get info about the currently selected adapter
@@ -512,12 +482,6 @@ impl AdapterManager {
                 }
             }
         }
-    }
-    
-    /// Backward compatibility method for code that still expects BleError
-    #[deprecated(since = "0.1.0", note = "Use methods returning BluetoothError instead")]
-    pub async fn check_scanning_capability_with_ble_error(&mut self, adapter: &Adapter) -> Result<bool, BleError> {
-        self.check_scanning_capability(adapter).await.map_err(|e| e.into())
     }
     
     /// Attempt to recover an adapter that's in a troubled state
@@ -577,12 +541,6 @@ impl AdapterManager {
         Ok(false)
     }
     
-    /// Backward compatibility method for code that still expects BleError
-    #[deprecated(since = "0.1.0", note = "Use methods returning BluetoothError instead")]
-    pub async fn try_recover_adapter_with_ble_error(&mut self, index: usize) -> Result<bool, BleError> {
-        self.try_recover_adapter(index).await.map_err(|e| e.into())
-    }
-    
     /// Get the adapter for the specified address
     pub async fn get_adapter_by_address(&self, address: BDAddr) -> Result<Adapter, BluetoothError> {
         let ctx = ErrorContext::new("AdapterManager", "get_adapter_by_address")
@@ -618,12 +576,6 @@ impl AdapterManager {
         })
     }
     
-    /// Backward compatibility method for code that still expects BleError
-    #[deprecated(since = "0.1.0", note = "Use methods returning BluetoothError instead")]
-    pub async fn get_adapter_by_address_with_ble_error(&self, address: BDAddr) -> Result<Adapter, BleError> {
-        self.get_adapter_by_address(address).await.map_err(|e| e.into())
-    }
-    
     /// Check if Bluetooth is available
     pub async fn is_bluetooth_available(&self) -> Result<bool, BluetoothError> {
         let ctx = ErrorContext::new("AdapterManager", "is_bluetooth_available");
@@ -655,12 +607,6 @@ impl AdapterManager {
                 Err(error)
             }
         }
-    }
-    
-    /// Backward compatibility method for code that still expects BleError
-    #[deprecated(since = "0.1.0", note = "Use methods returning BluetoothError instead")]
-    pub async fn is_bluetooth_available_with_ble_error(&self) -> Result<bool, BleError> {
-        self.is_bluetooth_available().await.map_err(|e| e.into())
     }
 }
 
@@ -736,12 +682,6 @@ impl BluetoothAdapter {
         })
     }
     
-    /// Backward compatibility method for code that still expects BleError
-    #[deprecated(since = "0.1.0", note = "Use methods returning BluetoothError instead")]
-    pub async fn new_with_ble_error() -> Result<Self, BleError> {
-        Self::new().await.map_err(|e| e.into())
-    }
-    
     /// Get the Bluetooth adapter address
     ///
     /// This method returns the address of the Bluetooth adapter if available
@@ -755,12 +695,6 @@ impl BluetoothAdapter {
         // A more robust implementation would use platform-specific code to get the address
         log::debug!("{}Getting adapter address is not supported cross-platform", ctx);
         Ok(None)
-    }
-    
-    /// Backward compatibility method for code that still expects BleError
-    #[deprecated(since = "0.1.0", note = "Use methods returning BluetoothError instead")]
-    pub async fn get_address_with_ble_error(&self) -> Result<Option<BDAddr>, BleError> {
-        self.get_address().await.map_err(|e| e.into())
     }
     
     /// Get the adapter capabilities
@@ -794,12 +728,6 @@ impl BluetoothAdapter {
         Ok(Vec::new())
     }
     
-    /// Backward compatibility method for code that still expects BleError
-    #[deprecated(since = "0.1.0", note = "Use methods returning BluetoothError instead")]
-    pub async fn start_scan_with_ble_error(&self) -> Result<Vec<DiscoveredDevice>, BleError> {
-        self.start_scan().await.map_err(|e| e.into())
-    }
-    
     /// Stop scanning for devices
     pub async fn stop_scan(&self) -> Result<(), BluetoothError> {
         let ctx = ErrorContext::new("BluetoothAdapter", "stop_scan");
@@ -811,12 +739,6 @@ impl BluetoothAdapter {
         
         log::debug!("{}Successfully stopped Bluetooth scan", ctx);
         Ok(())
-    }
-    
-    /// Backward compatibility method for code that still expects BleError
-    #[deprecated(since = "0.1.0", note = "Use methods returning BluetoothError instead")]
-    pub async fn stop_scan_with_ble_error(&self) -> Result<(), BleError> {
-        self.stop_scan().await.map_err(|e| e.into())
     }
     
     /// Get discovered devices
@@ -864,12 +786,6 @@ impl BluetoothAdapter {
         
         log::debug!("{}Found {} devices", ctx, devices.len());
         Ok(devices)
-    }
-    
-    /// Backward compatibility method for code that still expects BleError
-    #[deprecated(since = "0.1.0", note = "Use methods returning BluetoothError instead")]
-    pub async fn get_discovered_devices_with_ble_error(&self) -> Result<Vec<DiscoveredDevice>, BleError> {
-        self.get_discovered_devices().await.map_err(|e| e.into())
     }
 
     /// Create a new adapter with retry logic

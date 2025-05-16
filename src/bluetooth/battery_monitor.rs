@@ -699,8 +699,8 @@ mod tests {
         assert_eq!(buffer.get_average_case(), Some(75));
     }
     
-    #[test]
-    fn test_battery_validation() {
+    #[tokio::test]
+    async fn test_battery_validation() {
         let monitor = BatteryMonitor::new();
         
         // Valid battery
@@ -734,8 +734,8 @@ mod tests {
         assert!(!monitor.is_valid_battery(&out_of_range));
     }
     
-    #[test]
-    fn test_significant_change_detection() {
+    #[tokio::test]
+    async fn test_significant_change_detection() {
         let options = BatteryMonitorOptions {
             change_threshold: 5,
             ..Default::default()
@@ -782,8 +782,8 @@ mod tests {
         assert!(monitor.has_significant_change(&battery1, &battery4));
     }
     
-    #[test]
-    fn test_adaptive_interval() {
+    #[tokio::test]
+    async fn test_adaptive_interval() {
         let options = BatteryMonitorOptions {
             polling_interval: 10,
             adaptive_polling: true,

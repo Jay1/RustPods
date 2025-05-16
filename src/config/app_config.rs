@@ -5,6 +5,13 @@ use serde::{Serialize, Deserialize};
 use crate::bluetooth::ScanConfig;
 
 /// Application configuration
+///
+/// The configuration file is always stored in the OS-standard config directory:
+/// - Windows: %APPDATA%/rustpods/settings.json
+/// - macOS: ~/Library/Application Support/rustpods/settings.json
+/// - Linux: ~/.config/rustpods/settings.json
+///
+/// The `settings_path` field is used internally at runtime and is not persisted or user-configurable.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AppConfig {
     /// Bluetooth scanning configuration
@@ -23,9 +30,9 @@ pub struct AppConfig {
     #[serde(default)]
     pub battery: BatteryConfig,
     
-    /// Path to save settings (not serialized)
+    /// Path to save settings (runtime only, not serialized)
     #[serde(skip)]
-    pub settings_path: PathBuf,
+    pub(crate) settings_path: PathBuf,
 }
 
 /// Bluetooth scanning and connection configuration
@@ -365,6 +372,7 @@ impl AppConfig {
     /// Result containing the loaded configuration or an error
     pub fn load() -> Result<Self, ConfigError> {
         let config_path = default_settings_path();
+        log::info!("Loading configuration from: {}", config_path.display());
         
         // If the default config file doesn't exist, return the default configuration
         if !config_path.exists() {
@@ -698,6 +706,11 @@ impl From<ConfigError> for crate::error::RustPodsError {
 }
 
 /// Get the default settings path
+///
+/// Returns the OS-standard config directory for RustPods:
+/// - Windows: %APPDATA%/rustpods/settings.json
+/// - macOS: ~/Library/Application Support/rustpods/settings.json
+/// - Linux: ~/.config/rustpods/settings.json
 fn default_settings_path() -> PathBuf {
     let path = dirs_next::config_dir()
         .map(|config_dir| {

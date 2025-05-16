@@ -86,9 +86,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if let BleEvent::AirPodsDetected(airpods) = &event {
                 println!("[AIRPODS] Detected: {:?} with battery L:{}% R:{}% Case:{}%", 
                          airpods.device_type,
-                         airpods.battery.left.unwrap_or(0),
-                         airpods.battery.right.unwrap_or(0),
-                         airpods.battery.case.unwrap_or(0));
+                         airpods.battery.as_ref().unwrap().left.unwrap_or(0),
+                         airpods.battery.as_ref().unwrap().right.unwrap_or(0),
+                         airpods.battery.as_ref().unwrap().case.unwrap_or(0));
             }
         }
     });

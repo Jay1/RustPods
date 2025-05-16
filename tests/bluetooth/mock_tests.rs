@@ -8,7 +8,7 @@ use tokio::time::timeout;
 use futures::StreamExt;
 
 use rustpods::bluetooth::{
-    AdapterStatus, AdapterCapabilities, BleError, BleAdapterEvent,
+    AdapterStatus, AdapterCapabilities, BleAdapterEvent,
     DiscoveredDevice, ScanConfig, AirPodsBatteryStatus
 };
 use rustpods::airpods::{
@@ -18,7 +18,7 @@ use rustpods::airpods::{
 use rustpods::ui::Message;
 use rustpods::config::AppConfig;
 use rustpods::ui::state_manager::{StateManager, Action};
-use rustpods::error::BluetoothError;
+use rustpods::error::{BluetoothError, RecoveryAction};
 
 use crate::bluetooth::mocks::{
     MockBluetoothAdapter, MockBluetoothAdapterBuilder,
@@ -138,10 +138,10 @@ async fn test_adapter_failure_handling() {
     // Verify we get the expected error
     assert!(result.is_err());
     match result {
-        Err(BleError::ScanInProgress) => {
+        Err(BluetoothError::ScanFailed(ref msg)) if msg == "Scan already in progress" => {
             println!("✅ Expected error received");
         },
-        _ => panic!("Expected ScanInProgress error"),
+        _ => panic!("Expected ScanFailed error"),
     }
     
     // Create a mock adapter configured to fail on device discovery
@@ -152,7 +152,13 @@ async fn test_adapter_failure_handling() {
     // Attempt to discover devices
     let result = mock_adapter.discover_devices().await;
     
-        // Verify we get the expected error    assert!(result.is_err());    match result {        Err(BleError::AdapterNotInitialized) => {            println!("✅ Expected error received");        },        _ => panic!("Expected AdapterNotInitialized error"),    }
+    assert!(result.is_err());
+    match result {
+        Err(BluetoothError::AdapterNotAvailable { ref reason, .. }) if reason == "Adapter not initialized" => {
+            println!("✅ Expected error received");
+        },
+        _ => panic!("Expected AdapterNotAvailable error"),
+    }
 }
 
 /// Test scanner behavior with mocks
@@ -236,10 +242,10 @@ async fn test_scanner_failure_handling() {
     // Verify we get the expected error
     assert!(result.is_err());
     match result {
-        Err(BleError::AdapterNotFound) => {
+        Err(BluetoothError::NoAdapter) => {
             println!("✅ Expected error received");
         },
-        _ => panic!("Expected AdapterNotFound error"),
+        _ => panic!("Expected NoAdapter error"),
     }
     
     // Create a mock scanner configured to fail on scanning
@@ -253,10 +259,10 @@ async fn test_scanner_failure_handling() {
     // Verify we get the expected error
     assert!(result.is_err());
     match result {
-        Err(BleError::ScanInProgress) => {
+        Err(BluetoothError::ScanFailed(ref msg)) if msg == "Scan already in progress" => {
             println!("✅ Expected error received");
         },
-        _ => panic!("Expected ScanInProgress error"),
+        _ => panic!("Expected ScanFailed error"),
     }
 }
 
@@ -412,10 +418,10 @@ async fn test_adapter_failure_handling_new() {
     // Verify we get the expected error
     assert!(result.is_err());
     match result {
-        Err(BleError::ScanInProgress) => {
+        Err(BluetoothError::ScanFailed(ref msg)) if msg == "Scan already in progress" => {
             println!("✅ Expected error received");
         },
-        _ => panic!("Expected ScanInProgress error"),
+        _ => panic!("Expected ScanFailed error"),
     }
     
     // Create a mock adapter configured to fail on device discovery
@@ -429,10 +435,10 @@ async fn test_adapter_failure_handling_new() {
     // Verify we get the expected error
     assert!(result.is_err());
     match result {
-        Err(BleError::AdapterNotInitialized) => {
+        Err(BluetoothError::AdapterNotAvailable { ref reason, .. }) if reason == "Adapter not initialized" => {
             println!("✅ Expected error received");
         },
-        _ => panic!("Expected AdapterNotInitialized error"),
+        _ => panic!("Expected AdapterNotAvailable error"),
     }
 }
 

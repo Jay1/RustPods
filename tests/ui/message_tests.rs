@@ -79,4 +79,18 @@ mod tests {
         assert!(bt_error_msg.is_error());
         assert!(!status_msg.is_error());
     }
+
+    #[test]
+    fn test_bluetooth_error_toast() {
+        use rustpods::ui::Message;
+        let error_message = "Bluetooth connection failed".to_string();
+        let msg = Message::Error(error_message.clone());
+        // TODO: Simulate message handling and assert that a toast is triggered
+        // For now, just check the message variant
+        if let Message::Error(e) = msg {
+            assert_eq!(e, error_message);
+        } else {
+            panic!("Expected Message::Error");
+        }
+    }
 } 

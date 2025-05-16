@@ -178,7 +178,6 @@ impl TelemetryManager {
         // Update local error stats
         match error {
             RustPodsError::Bluetooth(_) => self.error_stats.bluetooth_errors += 1,
-            RustPodsError::BluetoothApiError(_) => self.error_stats.bluetooth_errors += 1,
             RustPodsError::BluetoothError(_) => self.error_stats.bluetooth_errors += 1,
             RustPodsError::AirPods(_) => self.error_stats.airpods_errors += 1,
             RustPodsError::Ui(_) => self.error_stats.ui_errors += 1,

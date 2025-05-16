@@ -21,29 +21,31 @@ fn create_test_device(address: [u8; 6], name: Option<&str>, rssi: Option<i16>) -
         manufacturer_data: HashMap::new(),
         is_potential_airpods: false,
         last_seen: Instant::now(),
+        is_connected: false,
+        service_data: HashMap::new(),
+        services: Vec::new(),
+        tx_power_level: None,
     }
 }
 
 // Helper to create a test AirPods
 fn create_test_airpods(address: [u8; 6], name: Option<&str>) -> rustpods::airpods::DetectedAirPods {
-    use rustpods::airpods::{AirPodsType, AirPodsBattery, ChargingStatus};
+    use rustpods::airpods::{AirPodsType, AirPodsBattery};
+    use std::time::Instant;
     
     rustpods::airpods::DetectedAirPods {
         address: BDAddr::from(address),
         name: name.map(|s| s.to_string()),
         device_type: AirPodsType::AirPods1,
-        battery: AirPodsBattery {
+        battery: Some(AirPodsBattery {
             left: Some(80),
             right: Some(75),
             case: Some(90),
-            charging: ChargingStatus {
-                left: false,
-                right: false,
-                case: false,
-            },
-        },
+            charging: None,
+        }),
         rssi: Some(-60),
-        raw_data: vec![1, 2, 3, 4, 5],
+        last_seen: Instant::now(),
+        is_connected: false,
     }
 }
 

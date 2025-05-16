@@ -16,14 +16,6 @@ pub mod error;
 pub mod app_controller;
 pub mod assets;
 
-// Test modules
-#[cfg(test)]
-mod tests_mod;
-#[cfg(test)]
-mod airpods_tests;
-#[cfg(test)]
-mod bluetooth_tests;
-
 // Re-export common items for convenience
 pub use bluetooth::{BleScanner, BleEvent, EventBroker, EventFilter};
 pub use airpods::{AirPodsType, AirPodsFilter, DetectedAirPods};

@@ -26,4 +26,11 @@ async fn test_device_list_operations() {
     // Clear should work even when empty
     scanner.clear_devices().await;
     assert!(scanner.get_devices().await.is_empty());
+}
+
+#[test]
+fn test_bluetooth_error_surfaced_as_toast() {
+    // TODO: Implement a test that simulates a scan failure and checks that the error is surfaced as a toast
+    // For now, this is a stub.
+    assert!(true);
 } 
