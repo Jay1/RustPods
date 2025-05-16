@@ -49,7 +49,7 @@ impl UiComponent for DeviceList {
         // Add each device to the list
         for device in &sorted_devices {
             let address = device.address.to_string();
-            let is_selected = self
+            let _is_selected = self
                 .selected
                 .as_ref() == Some(&address);
 

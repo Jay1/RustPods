@@ -17,8 +17,8 @@ These warnings indicate variables that are declared but never used in the code:
 - [x] `ctx` in `src/ui/system_tray.rs:614`
 - [x] `state_manager` in `src/ui/system_tray.rs:639`
 - [x] `old_theme` in `src/ui/system_tray.rs:649`
-- [ ] `battery_filter` in `src/airpods/filter.rs:427`
-- [ ] `accent_color` in `src/ui/settings_window.rs:186`
+- [x] `battery_filter` in `src/airpods/filter.rs:427`
+- [x] `accent_color` in `src/ui/settings_window.rs:186`
 - [ ] `app_config` in `src/ui/window_management.rs:116`
 - [ ] `drag_region` in `src/ui/window_management.rs:157`
 - [ ] `position` in `src/ui/window_visibility.rs:107`
@@ -32,7 +32,7 @@ These warnings indicate variables that are declared but never used in the code:
 - [ ] `severity` in `src/error.rs:821`
 - [ ] `severity` in `src/error.rs:826`
 - [ ] `recovery` in `src/error.rs:916`
-- [ ] `is_selected` in `src/ui/components/device_list.rs:52`
+- [x] `is_selected` in `src/ui/components/device_list.rs:52`
 - [x] `mut scan_timeout` in `src/bluetooth/scanner.rs:522` (should not be mutable)
 
 ## 2. Unused Imports (41 instances)
@@ -51,8 +51,8 @@ These warnings indicate imports that are not used in the code:
 - [x] `battery_display_row` in `src/ui/main_window.rs`
 - [x] `battery_with_label` in `src/ui/main_window.rs`
 - [ ] `RustPodsError` in `src/bluetooth/mod.rs`
-- [ ] `ErrorSeverity` in `src/ui/system_tray.rs`
-- [ ] `RecoveryAction` in `src/ui/system_tray.rs`
+- [x] `ErrorSeverity` in `src/ui/system_tray.rs`
+- [x] `RecoveryAction` in `src/ui/system_tray.rs`
 - [ ] `Instant` in `src/ui/test_helpers.rs`
 - [ ] `Instant` in `src/airpods/detector.rs`
 - [ ] `std::path::PathBuf` in `src/error.rs`
@@ -101,52 +101,52 @@ These warnings indicate issues with the structure or organization of the code:
 
 ## 6. Performance Issues (3 instances)
 
-1. Use of `char::is_digit(10)` instead of `is_ascii_digit()` in `src/ui/form_validation.rs:141`
-2. Use of `char::is_digit(10)` instead of `is_ascii_digit()` in `src/ui/form_validation.rs:142`
-3. Use of `char::is_digit(10)` instead of `is_ascii_digit()` in `src/ui/form_validation.rs:144`
+1. [x] Use of `char::is_digit(10)` instead of `is_ascii_digit()` in `src/ui/form_validation.rs:141`
+2. [x] Use of `char::is_digit(10)` instead of `is_ascii_digit()` in `src/ui/form_validation.rs:142`
+3. [x] Use of `char::is_digit(10)` instead of `is_ascii_digit()` in `src/ui/form_validation.rs:144`
 
 ## 7. Concurrency Issues (5 instances)
 
-1. MutexGuard held across await point in `src/bluetooth/scanner.rs:1355`
-2. Arc with non Send/Sync type in `src/telemetry.rs:423`
-3. Do not `unwrap` in async function in `src/bluetooth/scanner.rs:633`
-4. Do not `unwrap` in async function in `src/bluetooth/scanner.rs:725`
-5. Do not `unwrap` in async function in `src/bluetooth/scanner.rs:728`
+1. [ ] MutexGuard held across await point in `src/bluetooth/scanner.rs:1355`
+2. [ ] Arc with non Send/Sync type in `src/telemetry.rs:423`
+3. [ ] Do not `unwrap` in async function in `src/bluetooth/scanner.rs:633`
+4. [ ] Do not `unwrap` in async function in `src/bluetooth/scanner.rs:725`
+5. [ ] Do not `unwrap` in async function in `src/bluetooth/scanner.rs:728`
 
 ## 8. Test Assertion Issues (14 instances)
 
-1. `assert_eq!(state.visible, true)` should be `assert!(state.visible)` in `src/ui/state.rs:612`
-2. `assert_eq!(state.visible, true)` should be `assert!(state.visible)` in `src/ui/state.rs:623`
-3. `assert_eq!(state.visible, false)` should be `assert!(!state.visible)` in `src/ui/state.rs:627`
-4. `assert_eq!(state.visible, true)` should be `assert!(state.visible)` in `src/ui/state.rs:631`
-5. `assert_eq!(manager2.is_visible(), true)` should be `assert!(manager2.is_visible())` in `src/ui/window_visibility.rs:325`
-6. `assert_eq!(manager.is_focused(), false)` should be `assert!(!manager.is_focused())` in `src/ui/window_visibility.rs:331`
-7. `assert_eq!(manager.is_focused(), true)` should be `assert!(manager.is_focused())` in `src/ui/window_visibility.rs:333`
-8. `assert_eq!(manager.is_focused(), false)` should be `assert!(!manager.is_focused())` in `src/ui/window_visibility.rs:335`
-9. `assert!(true)` will be optimized out in `src/app/mod.rs:451`
-10. Use of `assert_eq!(x, true)` in `src/ui/state.rs:618`
-11. Use of `assert_eq!(x, false)` in `src/ui/state.rs:624`
-12. Use of `assert_eq!(x, true)` in `src/ui/window_visibility.rs:348`
-13. Use of `assert_eq!(x, false)` in `src/ui/window_visibility.rs:352`
+1. [x] `assert_eq!(state.visible, true)` should be `assert!(state.visible)` in `src/ui/state.rs:612`
+2. [x] `assert_eq!(state.visible, true)` should be `assert!(state.visible)` in `src/ui/state.rs:623`
+3. [x] `assert_eq!(state.visible, false)` should be `assert!(!state.visible)` in `src/ui/state.rs:627`
+4. [x] `assert_eq!(state.visible, true)` should be `assert!(state.visible)` in `src/ui/state.rs:631`
+5. [x] `assert_eq!(manager2.is_visible(), true)` should be `assert!(manager2.is_visible())` in `src/ui/window_visibility.rs:325`
+6. [x] `assert_eq!(manager.is_focused(), false)` should be `assert!(!manager.is_focused())` in `src/ui/window_visibility.rs:331`
+7. [x] `assert_eq!(manager.is_focused(), true)` should be `assert!(manager.is_focused())` in `src/ui/window_visibility.rs:333`
+8. [x] `assert_eq!(manager.is_focused(), false)` should be `assert!(!manager.is_focused())` in `src/ui/window_visibility.rs:335`
+9. [x] `assert!(true)` will be optimized out in `src/app/mod.rs:451`
+10. [x] Use of `assert_eq!(x, true)` in `src/ui/state.rs:618`
+11. [x] Use of `assert_eq!(x, false)` in `src/ui/state.rs:624`
+12. [x] Use of `assert_eq!(x, true)` in `src/ui/window_visibility.rs:348`
+13. [x] Use of `assert_eq!(x, false)` in `src/ui/window_visibility.rs:352`
 
 ## 9. API Design Issues (10 instances)
 
-1. Iterating on map keys in `src/ui/form_validation.rs:336`
-2. Type complexity in `src/ui/form_validation.rs:362`
-3. Block can be rewritten with `?` operator in `src/ui/form_validation.rs:412-414`
-4. Unnecessary `if let` since only `Ok` variant is used in `src/lifecycle_manager.rs:718-743`
-5. Type complexity in `src/telemetry.rs:51`
-6. Block can be rewritten with `?` operator in `src/lifecycle_manager.rs:793`
-7. Block can be rewritten with `?` operator in `src/ui/form_validation.rs:440`
-8. Iterating on map keys in `src/ui/form_validation.rs:341`
-9. Assertions with debug formatting in `src/ui/components/enhanced_battery_display/waterfall.rs:203`
-10. Boolean comparison in `src/ui/components/enhanced_battery_display/charging_indicator.rs:187`
+1. [x] Iterating on map keys in `src/ui/form_validation.rs:336`
+2. [ ] Type complexity in `src/ui/form_validation.rs:362`
+3. [x] Block can be rewritten with `?` operator in `src/ui/form_validation.rs:412-414`
+4. [x] Unnecessary `if let` since only `Ok` variant is used in `src/lifecycle_manager.rs:718-743`
+5. [ ] Type complexity in `src/telemetry.rs:51`
+6. [ ] Block can be rewritten with `?` operator in `src/lifecycle_manager.rs:793`
+7. [ ] Block can be rewritten with `?` operator in `src/ui/form_validation.rs:440`
+8. [ ] Iterating on map keys in `src/ui/form_validation.rs:341`
+9. [ ] Assertions with debug formatting in `src/ui/components/enhanced_battery_display/waterfall.rs:203`
+10. [ ] Boolean comparison in `src/ui/components/enhanced_battery_display/charging_indicator.rs:187`
 
 ## 10. Pattern Recognition Issues (3 instances)
 
-1. Match expression looks like `matches!` macro in `src/telemetry.rs:328-331`
-2. Writing `&mut Vec` instead of `&mut [_]` in `src/diagnostics.rs:495`
-3. Writing `&mut Vec` instead of `&mut [_]` in `src/diagnostics.rs:496`
+1. [ ] Match expression looks like `matches!` macro in `src/telemetry.rs:328-331`
+2. [ ] Writing `&mut Vec` instead of `&mut [_]` in `src/diagnostics.rs:495`
+3. [ ] Writing `&mut Vec` instead of `&mut [_]` in `src/diagnostics.rs:496`
 
 ## 11. Deprecated BleError Usage (54 instances)
 
@@ -167,15 +167,15 @@ The latest scan shows many usages of deprecated `BleError`. We need to replace t
 
 ## Progress Summary
 
-- Total issues fixed: 36/115 issues (31.3%)
-- Unused Variables: 12/26 fixed (46.2%)
-- Unused Imports: 11/41 fixed (26.8%)
+- Total issues fixed: 47/115 issues (40.9%)
+- Unused Variables: 16/26 fixed (61.5%)
+- Unused Imports: 13/41 fixed (31.7%)
 - Dead Code: 3/7 fixed (42.9%)
 - Visibility/Privacy Issues: 0/2 fixed (0%)
 - Code Structure Issues: 0/13 fixed (0%)
 - Performance Issues: 3/3 fixed (100%)
 - Concurrency Issues: 0/5 fixed (0%)
-- Test Assertion Issues: 4/14 fixed (28.6%)
+- Test Assertion Issues: 12/14 fixed (85.7%)
 - API Design Issues: 3/10 fixed (30%)
 - Deprecated BleError Usage: 0/54 fixed (0%)
 
@@ -187,11 +187,12 @@ The latest scan shows many usages of deprecated `BleError`. We need to replace t
 4. ✅ Remove needless return statements
 5. ✅ Update assertions to use proper patterns
 6. ✅ Improve API design according to suggestions
-7. [ ] Address the remaining unused variables and imports
-8. [ ] Address remaining dead code
-9. [ ] Fix visibility/privacy issues by making `ErrorRecord` public or adjusting method signatures
-10. [ ] Address remaining code structure issues
-11. [ ] Fix concurrency issues
-12. [ ] Fix pattern recognition issues
-13. [ ] Replace all deprecated BleError usages with BluetoothError (major effort)
-14. [ ] Fix new compiler errors and warnings 
+7. ✅ Address most unused variables and imports
+8. [ ] Address remaining unused variables and imports
+9. [ ] Address remaining dead code
+10. [ ] Fix visibility/privacy issues by making `ErrorRecord` public or adjusting method signatures
+11. [ ] Address remaining code structure issues
+12. [ ] Fix concurrency issues
+13. [ ] Fix pattern recognition issues
+14. [ ] Replace all deprecated BleError usages with BluetoothError (major effort)
+15. [ ] Fix new compiler errors and warnings 

@@ -6,7 +6,7 @@ use crate::ui::Message;
 use crate::config::{AppConfig, Theme as ConfigTheme};
 use crate::ui::state_manager::StateManager;
 use crate::bluetooth::AirPodsBatteryStatus;
-use crate::error::{RustPodsError, ErrorContext, ErrorSeverity, RecoveryAction};
+use crate::error::{RustPodsError, ErrorContext};
 use std::sync::Arc;
 
 /// Menu item information for system tray
