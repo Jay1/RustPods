@@ -5,12 +5,12 @@
 use iced::alignment;
 use iced::widget::{column, container, progress_bar, row, text};
 use iced::{Color, Element, Length};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use crate::ui::{Message, UiComponent};
 use crate::ui::theme::Theme;
 use crate::bluetooth::AirPodsBatteryStatus;
-use crate::airpods::{AirPodsBattery, AirPodsChargingState};
+use crate::airpods::AirPodsBattery;
 
 // Constants for animation
 const ANIMATION_DURATION_MS: u64 = 1000;

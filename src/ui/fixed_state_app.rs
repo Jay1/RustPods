@@ -9,7 +9,6 @@ use tokio::sync::mpsc;
 use crate::ui::SystemTrayController;
 use crate::ui::{MainWindow, SettingsWindow};
 use crate::ui::message::Message;
-use crate::ui::state::{self, AppState};
 use crate::ui::state_manager::StateManager;
 use crate::ui::WindowPosition;
 use crate::ui::theme::Theme;

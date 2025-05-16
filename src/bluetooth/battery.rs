@@ -1,7 +1,7 @@
 //! Bluetooth battery status monitoring for AirPods devices
 
 use std::fmt;
-use std::time::{Instant, Duration};
+use std::time::Instant;
 use btleplug::platform::Peripheral;
 use btleplug::api::Peripheral as _;  // Import the Peripheral trait
 use serde::{Serialize, Deserialize, Serializer, Deserializer};

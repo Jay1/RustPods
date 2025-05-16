@@ -4,7 +4,7 @@
 
 use iced::{
     widget::{button, column, container, row, text, scrollable},
-    Element, Length, Command, Alignment
+    Element, Length, Command
 };
 use iced::alignment::Horizontal;
 
@@ -295,7 +295,7 @@ impl MainWindow {
         container(
             column(rows)
                 .spacing(10)
-                .align_items(Alignment::Center)
+                .align_items(iced::Alignment::Center)
         )
         .width(Length::Fill)
         .height(Length::Fill)
@@ -387,7 +387,7 @@ impl MainWindow {
                 connect_button,
             ]
             .spacing(10)
-            .align_items(Alignment::Center)
+            .align_items(iced::Alignment::Center)
         )
         .padding(10)
         .width(Length::Fill)

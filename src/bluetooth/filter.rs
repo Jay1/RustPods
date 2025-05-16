@@ -3,8 +3,6 @@
 //! Provides filters for Bluetooth scanning to identify specific devices
 
 use std::collections::HashSet;
-use std::collections::HashMap;
-use std::time::Instant;
 use btleplug::api::BDAddr;
 
 use crate::bluetooth::DiscoveredDevice;
