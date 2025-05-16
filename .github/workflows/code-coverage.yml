@@ -44,6 +44,12 @@ jobs:
         run: |
           cargo tarpaulin --verbose --workspace --timeout 120 --out Xml --output-dir ./coverage
       
+      - name: List coverage directory contents
+        run: ls -l ./coverage
+      
+      - name: Set up Python (required for Codecov)
+        uses: actions/setup-python@v4
+      
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v3
         with:
@@ -55,4 +61,5 @@ jobs:
         with:
           name: code-coverage-report
           path: ./coverage
-          retention-days: 30 
+          retention-days: 30
+        continue-on-error: true 

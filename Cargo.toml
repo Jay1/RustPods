@@ -2,6 +2,7 @@
 name = "rustpods"
 version = "0.1.0"
 edition = "2021"
+default-run = "ui_app"
 
 [dependencies]
 btleplug = "0.10"
@@ -10,7 +11,7 @@ tokio-stream = "0.1"
 thiserror = "1.0"
 log = "0.4"
 env_logger = "0.10"
-iced = { version = "0.10", features = ["tokio", "debug", "advanced"] }
+iced = { version = "0.10", features = ["tokio", "debug", "advanced", "svg"] }
 dirs-next = "2.0"
 tray-item = "0.7"
 serde = { version = "1.0", features = ["derive"] }

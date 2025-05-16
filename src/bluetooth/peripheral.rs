@@ -22,6 +22,7 @@ use crate::error::{BluetoothError, ErrorContext};
 const MAX_CONNECTION_ATTEMPTS: u8 = 3;
 
 /// Connection timeout in seconds
+#[allow(dead_code)]
 const CONNECTION_TIMEOUT_SECS: u64 = 10;
 
 /// Notification handler function type

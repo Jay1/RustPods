@@ -115,24 +115,25 @@ impl ConfigManager {
     /// Save configuration to file
     pub fn save(&self) -> Result<(), ConfigError> {
         debug!("Saving configuration to {}", self.config_path.display());
+        // Extra debug log for parent directory
+        if let Some(parent) = self.config_path.parent() {
+            debug!("Config parent directory: {}", parent.display());
+            if !parent.exists() {
+                debug!("Parent directory does not exist, attempting to create: {}", parent.display());
+                if let Err(e) = fs::create_dir_all(parent) {
+                    error!("Failed to create configuration directory {}: {}", parent.display(), e);
+                    return Err(ConfigError::IoError(e));
+                }
+            }
+        } else {
+            error!("No parent directory for config path: {}", self.config_path.display());
+        }
         
         // Get the configuration
         let config = self.get_config();
         
         // Validate the configuration
         config.validate()?;
-        
-        // Create the directory if it doesn't exist
-        if let Some(parent) = self.config_path.parent() {
-            if !parent.exists() {
-                debug!("Creating configuration directory: {}", parent.display());
-                fs::create_dir_all(parent)
-                    .map_err(|e| {
-                        error!("Failed to create configuration directory: {}", e);
-                        ConfigError::IoError(e)
-                    })?;
-            }
-        }
         
         // Serialize the configuration
         let json = serde_json::to_string_pretty(&config)

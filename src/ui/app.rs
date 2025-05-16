@@ -74,7 +74,7 @@ pub fn create_app_settings(state_manager: Arc<StateManager>) -> Settings<Arc<Sta
             platform_specific: Default::default(),
         },
         flags: state_manager,
-        default_font: iced::Font::DEFAULT,
+        default_font: iced::Font::with_name("SpaceMono Nerd Font"),
         default_text_size: 16.0,
         antialiasing: true,
         exit_on_close_request: false,
@@ -130,7 +130,23 @@ pub fn run_ui() -> iced::Result {
     }
     
     // Create the state manager
-    let _state_manager = Arc::new(StateManager::new(sender));
+    let state_manager = Arc::new(StateManager::new(sender));
+    
+    // Create a main application Tokio runtime for UI and lifecycle management
+    let main_rt = match tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(4)
+        .enable_all()
+        .thread_name("rustpods-ui-thread")
+        .build() {
+            Ok(rt) => rt,
+            Err(e) => {
+                eprintln!("Failed to create main UI Tokio runtime: {}", e);
+                return Err(iced::Error::WindowCreationFailed(Box::new(e)));
+            }
+    };
+    
+    // Enter the runtime context to set the thread-local runtime for any async code
+    let _guard = main_rt.enter();
     
     // Run the Iced application using state UI
     run_state_ui()

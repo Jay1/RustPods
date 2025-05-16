@@ -1,3 +1,5 @@
+//! To run the main UI: cargo run
+//! To run the state-managed UI: cargo run --bin rustpods stateui
 // Module exports for project structure
 pub mod bluetooth;
 pub mod airpods;

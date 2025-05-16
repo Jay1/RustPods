@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 #[cfg(test)]
 use std::time::Instant;
-use iced::{Subscription, Application, Command};
+use iced::{Subscription, Application, Command, Length, Alignment};
+use iced::widget::{container, text, Column};
 use std::convert::TryInto;
 use iced::executor;
 use std::sync::mpsc;
@@ -62,6 +63,9 @@ pub struct AppState {
     
     /// System tray component
     pub system_tray: Option<SystemTray>,
+    
+    /// Current toast/notification message
+    pub toast_message: Option<String>,
 }
 
 impl Default for AppState {
@@ -95,6 +99,7 @@ impl Default for AppState {
             settings_window,
             settings_error: None,
             system_tray: None,
+            toast_message: None,
         }
     }
 }
@@ -148,6 +153,7 @@ impl Application for AppState {
                 std::process::exit(0);
             }
             Message::DeviceDiscovered(device) => {
+                log::debug!("[UI] Device discovered: {:?}", device);
                 self.update_device(device);
             }
             Message::DeviceUpdated(device) => {
@@ -157,12 +163,13 @@ impl Application for AppState {
                 self.select_device(address);
             }
             Message::StartScan => {
+                log::debug!("[UI] StartScan received");
                 self.is_scanning = true;
-                // Reset animation progress
                 self.animation_progress = 0.0;
                 // AppController will handle the actual scanning
             }
             Message::StopScan => {
+                log::debug!("[UI] StopScan received");
                 self.is_scanning = false;
                 // AppController will handle the actual scanning
             }
@@ -240,7 +247,7 @@ impl Application for AppState {
                 eprintln!("Error: {}", error);
             }
             Message::Status(status) => {
-                println!("Status: {}", status);
+                self.toast_message = Some(status);
             }
             Message::RetryConnection => {
                 // Retry connection with selected device
@@ -341,6 +348,16 @@ impl Application for AppState {
                 // Update settings window
                 self.settings_window.update_config(config);
             }
+            Message::ShowToast(msg) => {
+                self.toast_message = Some(msg);
+            }
+            Message::BluetoothError(error) => {
+                if error == "Scan failed or no Bluetooth adapter found" {
+                    self.toast_message = Some("Scan failed or no Bluetooth adapter found".to_string());
+                } else {
+                    self.toast_message = Some(format!("Bluetooth error: {}", error));
+                }
+            }
             // Add wildcard pattern to handle all other Message variants
             _ => {
                 // Other message types can be ignored or logged
@@ -352,7 +369,54 @@ impl Application for AppState {
     }
 
     fn view(&self) -> iced::Element<'_, Message, iced::Renderer<crate::ui::theme::Theme>> {
-        crate::ui::app::view(self)
+        if !self.visible {
+            println!("[DEBUG] AppState::view: not visible");
+            iced::widget::text("").into()
+        } else if self.show_settings {
+            println!("[DEBUG] AppState::view: show_settings branch");
+            let mut root = crate::ui::UiComponent::view(&self.settings_window);
+
+            // If a toast message is present, overlay it at the bottom
+            if let Some(ref toast) = self.toast_message {
+                let toast_element = container(
+                    text(toast)
+                        .size(16)
+                        .style(crate::ui::theme::MAUVE)
+                )
+                .padding(16)
+                .width(Length::Shrink)
+                .center_x()
+                .style(crate::ui::theme::Container::Box);
+                root = Column::new()
+                    .push(root)
+                    .push(toast_element)
+                    .align_items(Alignment::End)
+                    .into();
+            }
+            root
+        } else {
+            println!("[DEBUG] AppState::view: main_window branch");
+            let mut root = crate::ui::UiComponent::view(&self.main_window);
+
+            // If a toast message is present, overlay it at the bottom
+            if let Some(ref toast) = self.toast_message {
+                let toast_element = container(
+                    text(toast)
+                        .size(16)
+                        .style(crate::ui::theme::MAUVE)
+                )
+                .padding(16)
+                .width(Length::Shrink)
+                .center_x()
+                .style(crate::ui::theme::Container::Box);
+                root = Column::new()
+                    .push(root)
+                    .push(toast_element)
+                    .align_items(Alignment::End)
+                    .into();
+            }
+            root
+        }
     }
     
     fn subscription(&self) -> Subscription<Message> {
@@ -566,7 +630,7 @@ impl AppState {
                 self.config.ui.start_minimized = value;
             }
             UiSetting::Theme(value) => {
-                self.config.ui.theme = value;
+                self.config.ui.theme = value.into();
             }
             UiSetting::ShowPercentageInTray(value) => {
                 self.config.ui.show_percentage_in_tray = value;
@@ -596,139 +660,5 @@ impl AppState {
                 self.config.system.enable_telemetry = value;
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use btleplug::api::BDAddr;
-    
-    #[test]
-    fn test_default_state() {
-        let state = AppState::default();
-        // Since this is not dependent on config in the default constructor,
-        // visibility starts as true by default
-        assert!(state.visible);
-        assert!(!state.is_scanning);
-        assert!(state.auto_scan);
-        assert!(state.devices.is_empty());
-        assert_eq!(state.selected_device, None);
-    }
-    
-    #[test]
-    fn test_toggle_visibility() {
-        let mut state = AppState::default();
-        // Default visibility is true
-        assert!(state.visible);
-        
-        // Toggle should flip the visibility
-        state.toggle_visibility();
-        assert!(!state.visible);
-        
-        // Toggle again should restore original visibility
-        state.toggle_visibility();
-        assert!(state.visible);
-    }
-    
-    #[test]
-    fn test_update_device() {
-        let mut state = AppState::default();
-        assert!(state.devices.is_empty());
-        
-        let addr = BDAddr::from([1, 2, 3, 4, 5, 6]);
-        let addr_str = addr.to_string();
-        
-        let device = DiscoveredDevice {
-            address: addr,
-            name: Some("Test Device".to_string()),
-            rssi: Some(-60),
-            manufacturer_data: HashMap::new(),
-            is_potential_airpods: false,
-            last_seen: Instant::now(),
-            is_connected: false,
-            service_data: HashMap::new(),
-            services: Vec::new(),
-            tx_power_level: None,
-        };
-        
-        state.update_device(device.clone());
-        assert_eq!(state.devices.len(), 1);
-        assert!(state.devices.contains_key(&addr_str));
-        
-        // Update existing device
-        let updated_device = DiscoveredDevice {
-            rssi: Some(-50),
-            ..device
-        };
-        
-        state.update_device(updated_device);
-        assert_eq!(state.devices.len(), 1);
-        assert_eq!(state.devices.get(&addr_str).unwrap().rssi, Some(-50));
-    }
-    
-    #[test]
-    fn test_select_device() {
-        let mut state = AppState::default();
-        let addr = BDAddr::from([1, 2, 3, 4, 5, 6]);
-        let addr_str = addr.to_string();
-        
-        // Add the device first
-        let device = DiscoveredDevice {
-            address: addr,
-            name: Some("Test Device".to_string()),
-            rssi: Some(-60),
-            manufacturer_data: HashMap::new(),
-            is_potential_airpods: false,
-            last_seen: Instant::now(),
-            is_connected: false,
-            service_data: HashMap::new(),
-            services: Vec::new(),
-            tx_power_level: None,
-        };
-        
-        state.update_device(device);
-        
-        // Now select it - should work because it exists
-        state.select_device(addr_str.clone());
-        assert_eq!(state.selected_device, Some(addr_str.clone()));
-        
-        // Try to select a non-existent device
-        let non_existent = "non:ex:is:te:nt:00";
-        state.select_device(non_existent.to_string());
-        // Selection should not change to the non-existent device
-        assert_eq!(state.selected_device, Some(addr_str));
-    }
-    
-    #[test]
-    fn test_get_selected_device() {
-        let mut state = AppState::default();
-        let addr = BDAddr::from([1, 2, 3, 4, 5, 6]);
-        let addr_str = addr.to_string();
-        
-        // No selected device
-        assert!(state.get_selected_device().is_none());
-        
-        // Add a device
-        let device = DiscoveredDevice {
-            address: addr,
-            name: Some("Test Device".to_string()),
-            rssi: Some(-60),
-            manufacturer_data: HashMap::new(),
-            is_potential_airpods: false,
-            last_seen: Instant::now(),
-            is_connected: false,
-            service_data: HashMap::new(),
-            services: Vec::new(),
-            tx_power_level: None,
-        };
-        
-        state.update_device(device.clone());
-        state.select_device(addr_str);
-        
-        // Get the selected device
-        let selected = state.get_selected_device();
-        assert!(selected.is_some());
-        assert_eq!(selected.unwrap().name, Some("Test Device".to_string()));
     }
 } 

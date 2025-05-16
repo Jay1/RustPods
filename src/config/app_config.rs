@@ -438,18 +438,22 @@ impl AppConfig {
     pub fn save_to_path<P: AsRef<std::path::Path>>(&self, path: P) -> Result<(), ConfigError> {
         let path = path.as_ref();
         
+        // Extra debug log for parent directory
+        if let Some(parent) = path.parent() {
+            log::debug!("AppConfig save: parent directory: {}", parent.display());
+            if !parent.exists() {
+                log::debug!("AppConfig save: parent directory does not exist, attempting to create: {}", parent.display());
+                if let Err(e) = std::fs::create_dir_all(parent) {
+                    log::error!("AppConfig save: failed to create directory {}: {}", parent.display(), e);
+                    return Err(ConfigError::IoError(e));
+                }
+            }
+        } else {
+            log::error!("AppConfig save: no parent directory for config path: {}", path.display());
+        }
+        
         // Validate before saving
         self.validate()?;
-        
-        // Create parent directories if they don't exist
-        if let Some(parent) = path.parent() {
-            if !parent.exists() {
-                std::fs::create_dir_all(parent).map_err(|e| match e.kind() {
-                    std::io::ErrorKind::PermissionDenied => ConfigError::PermissionDenied(parent.to_path_buf()),
-                    _ => ConfigError::FileSystemError(format!("Failed to create directory {}: {}", parent.display(), e))
-                })?;
-            }
-        }
         
         // Convert to JSON
         let json = serde_json::to_string_pretty(self)

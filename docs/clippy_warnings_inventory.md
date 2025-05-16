@@ -32,7 +32,7 @@ These warnings indicate variables that are declared but never used in the code:
 - [ ] `severity` in `src/error.rs:821`
 - [ ] `severity` in `src/error.rs:826`
 - [ ] `recovery` in `src/error.rs:916`
-- [x] `is_selected` in `src/ui/components/device_list.rs:52`
+- [x] `is_selected` in `src/ui/components/device_list.rs:52` (removed)
 - [x] `mut scan_timeout` in `src/bluetooth/scanner.rs:522` (should not be mutable)
 
 ## 2. Unused Imports (41 instances)
@@ -53,8 +53,8 @@ These warnings indicate imports that are not used in the code:
 - [ ] `RustPodsError` in `src/bluetooth/mod.rs`
 - [x] `ErrorSeverity` in `src/ui/system_tray.rs`
 - [x] `RecoveryAction` in `src/ui/system_tray.rs`
-- [ ] `Instant` in `src/ui/test_helpers.rs`
-- [ ] `Instant` in `src/airpods/detector.rs`
+- [x] `Instant` in `src/ui/test_helpers.rs` (usage is correct, no unused import)
+- [x] `Instant` in `src/airpods/detector.rs` (usage is correct, no unused import)
 - [ ] `std::path::PathBuf` in `src/error.rs`
 - [ ] `std::io` in `src/error.rs`
 - [ ] `std::sync::PoisonError` in `src/error.rs`
@@ -87,8 +87,8 @@ These warnings indicate issues with the structure or organization of the code:
 
 - [ ] Redundant closure in `src/config/app_config.rs:456`
 - [ ] `default()` function should implement the `Default` trait in `src/config/mod.rs:53`
-- [ ] Field assignment outside initializer in `src/bluetooth/adapter.rs:280`
-- [ ] Field assignment outside initializer in `src/bluetooth/adapter.rs:737`
+- [x] Field assignment outside initializer in `src/bluetooth/adapter.rs:280`
+- [x] Field assignment outside initializer in `src/bluetooth/adapter.rs:737`
 - [ ] Unnecessary `map_or` in `src/bluetooth/battery_monitor.rs:442`
 - [ ] Unnecessary `map_or` in `src/bluetooth/battery_monitor.rs:443`
 - [ ] Unnecessary `map_or` in `src/bluetooth/battery_monitor.rs:444`
@@ -167,12 +167,12 @@ The latest scan shows many usages of deprecated `BleError`. We need to replace t
 
 ## Progress Summary
 
-- Total issues fixed: 47/115 issues (40.9%)
+- Total issues fixed: 49/115 issues (42.6%)
 - Unused Variables: 16/26 fixed (61.5%)
 - Unused Imports: 13/41 fixed (31.7%)
 - Dead Code: 3/7 fixed (42.9%)
 - Visibility/Privacy Issues: 0/2 fixed (0%)
-- Code Structure Issues: 0/13 fixed (0%)
+- Code Structure Issues: 2/13 fixed (15.4%) - Fixed field assignments outside initializer in adapter.rs
 - Performance Issues: 3/3 fixed (100%)
 - Concurrency Issues: 0/5 fixed (0%)
 - Test Assertion Issues: 12/14 fixed (85.7%)

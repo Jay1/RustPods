@@ -8,6 +8,12 @@
 //! theming across the application.
 
 use iced::{Color, application, widget::{button, container, text_input, text, rule, scrollable, progress_bar}};
+use iced::widget::{checkbox, slider, pick_list};
+use iced::overlay::menu;
+use iced::widget::svg;
+use std::fmt;
+
+pub use iced::theme::{Button, Container, Scrollable};
 
 // Catppuccin Mocha Palette - using static instead of const due to Color::from_rgb8 not being const
 pub static ROSEWATER: Color = Color::from_rgb(0xf5 as f32 / 255.0, 0xe0 as f32 / 255.0, 0xdc as f32 / 255.0);
@@ -98,7 +104,7 @@ impl button::StyleSheet for Theme {
                 ..Default::default()
             },
             (_, iced::theme::Button::Primary) => button::Appearance {
-                background: Some(BLUE.into()),
+                background: Some(MAUVE.into()),
                 border_radius: 2.0.into(),
                 border_width: 1.0,
                 border_color: OVERLAY0,
@@ -106,7 +112,7 @@ impl button::StyleSheet for Theme {
                 ..Default::default()
             },
             (_, iced::theme::Button::Secondary) => button::Appearance {
-                background: Some(SURFACE0.into()),
+                background: Some(OVERLAY1.into()),
                 border_radius: 2.0.into(),
                 border_width: 1.0,
                 border_color: OVERLAY0,
@@ -281,12 +287,15 @@ impl text_input::StyleSheet for Theme {
     }
 }
 
+pub static FONT_FAMILY: &str = "SpaceMono Nerd Font";
+
 impl text::StyleSheet for Theme {
     type Style = iced::Color;
 
     fn appearance(&self, style: Self::Style) -> text::Appearance {
         text::Appearance {
             color: Some(style),
+            // NOTE: To use SpaceMono Nerd Font, set the default font in main.rs using Iced's font API.
         }
     }
 }
@@ -406,4 +415,149 @@ impl progress_bar::StyleSheet for Theme {
             },
         }
     }
-} 
+}
+
+// Implement Display and ToString for Theme (for PickList)
+impl fmt::Display for Theme {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            Theme::Light => "Light",
+            Theme::Dark => "Dark",
+            Theme::System => "System",
+            Theme::CatppuccinMocha => "Catppuccin Mocha",
+        };
+        write!(f, "{}", s)
+    }
+}
+
+// Checkbox StyleSheet
+impl checkbox::StyleSheet for Theme {
+    type Style = ();
+    fn active(&self, _style: &Self::Style, is_checked: bool) -> checkbox::Appearance {
+        let (bg, icon, text) = if is_checked {
+            (BLUE, TEXT, TEXT)
+        } else {
+            (SURFACE1, OVERLAY1, TEXT)
+        };
+        checkbox::Appearance {
+            background: iced::Background::Color(bg),
+            icon_color: icon,
+            text_color: Some(text),
+            border_radius: 4.0.into(),
+            border_width: 1.0,
+            border_color: OVERLAY0,
+        }
+    }
+    fn hovered(&self, style: &Self::Style, is_checked: bool) -> checkbox::Appearance {
+        let mut active = self.active(style, is_checked);
+        // Slightly darken the background for hover
+        active.background = match active.background {
+            iced::Background::Color(mut c) => {
+                c.a = 0.95;
+                iced::Background::Color(c)
+            },
+            b => b,
+        };
+        active
+    }
+}
+
+// Slider StyleSheet
+impl slider::StyleSheet for Theme {
+    type Style = ();
+    fn active(&self, _style: &Self::Style) -> slider::Appearance {
+        slider::Appearance {
+            rail: slider::Rail {
+                colors: (OVERLAY1, OVERLAY1),
+                width: 4.0,
+                border_radius: 4.0.into(),
+            },
+            handle: slider::Handle {
+                shape: slider::HandleShape::Circle { radius: 8.0 },
+                color: BLUE,
+                border_width: 1.0,
+                border_color: OVERLAY0,
+            },
+        }
+    }
+    fn hovered(&self, style: &Self::Style) -> slider::Appearance {
+        let mut active = self.active(style);
+        active.handle.color = LAVENDER;
+        active
+    }
+    fn dragging(&self, style: &Self::Style) -> slider::Appearance {
+        let mut active = self.active(style);
+        active.handle.color = MAUVE;
+        active
+    }
+}
+
+// PickList StyleSheet
+impl pick_list::StyleSheet for Theme {
+    type Style = ();
+    fn active(&self, _style: &Self::Style) -> pick_list::Appearance {
+        pick_list::Appearance {
+            background: SURFACE0.into(),
+            border_radius: 4.0.into(),
+            border_width: 1.0,
+            border_color: OVERLAY0,
+            text_color: TEXT,
+            placeholder_color: OVERLAY1,
+            handle_color: BLUE,
+        }
+    }
+    fn hovered(&self, style: &Self::Style) -> pick_list::Appearance {
+        let mut active = self.active(style);
+        active.background = LAVENDER.into();
+        active
+    }
+}
+
+// Menu StyleSheet for PickList dropdown
+impl menu::StyleSheet for Theme {
+    type Style = ();
+    fn appearance(&self, _style: &Self::Style) -> menu::Appearance {
+        menu::Appearance {
+            text_color: TEXT,
+            background: SURFACE1.into(),
+            border_width: 1.0,
+            border_color: OVERLAY0,
+            selected_background: BLUE.into(),
+            selected_text_color: SURFACE0,
+            border_radius: 4.0.into(),
+        }
+    }
+}
+
+// SVG icon theming for Catppuccin Mocha
+impl svg::StyleSheet for Theme {
+    type Style = ();
+
+    fn appearance(&self, _style: &Self::Style) -> svg::Appearance {
+        svg::Appearance {
+            color: Some(MAUVE),
+        }
+    }
+}
+
+impl From<crate::config::Theme> for Theme {
+    fn from(theme: crate::config::Theme) -> Self {
+        match theme {
+            crate::config::Theme::Light => Theme::Light,
+            crate::config::Theme::Dark => Theme::Dark,
+            crate::config::Theme::System => Theme::System,
+        }
+    }
+}
+
+impl From<Theme> for crate::config::Theme {
+    fn from(theme: Theme) -> Self {
+        match theme {
+            Theme::Light => crate::config::Theme::Light,
+            Theme::Dark => crate::config::Theme::Dark,
+            Theme::System | Theme::CatppuccinMocha => crate::config::Theme::System,
+        }
+    }
+}
+
+// NOTE: To use SpaceMono Nerd Font, ensure the font file is included in your assets and registered in main.rs or the application entry point using iced::font::Family or similar. 

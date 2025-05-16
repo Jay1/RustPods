@@ -4,7 +4,6 @@
 
 use std::sync::Arc;
 use std::collections::HashMap;
-use std::time::Instant;
 
 use crate::ui::message::Message;
 use crate::ui::state_manager::StateManager;

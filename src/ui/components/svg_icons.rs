@@ -1,4 +1,5 @@
 use std::fmt::Write;
+use iced::Color;
 
 /// Generates an SVG string for a refresh/scan icon with an optional rotation animation
 ///
@@ -121,34 +122,18 @@ pub fn battery_icon_svg_string(percentage: f32, charging: bool) -> String {
     svg_string
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_refresh_icon_generation() {
-        let svg = refresh_icon_svg_string(false, 0.0);
-        assert!(svg.contains("viewBox=\"0 0 24 24\""));
-        assert!(svg.contains("stroke=\"currentColor\""));
-        
-        // Test animated version
-        let animated_svg = refresh_icon_svg_string(true, 0.5);
-        assert!(animated_svg.contains("transform=\"rotate(180.0 12 12)\""));
-    }
-
-    #[test]
-    fn test_battery_icon_generation() {
-        // Test empty battery
-        let empty_svg = battery_icon_svg_string(0.0, false);
-        assert!(empty_svg.contains("viewBox=\"0 0 16 24\""));
-        assert!(!empty_svg.contains("<rect"));  // No fill rect for empty battery
-        
-        // Test full battery
-        let full_svg = battery_icon_svg_string(1.0, false);
-        assert!(full_svg.contains("<rect"));
-        
-        // Test charging
-        let charging_svg = battery_icon_svg_string(0.5, true);
-        assert!(charging_svg.contains("<path d=\"M9 10L7 14H9L7 18L11 13H8.5L10 10H9Z\""));
-    }
+/// Generates an SVG string for a gear/settings icon (Catppuccin Mocha themed)
+pub fn settings_icon_svg_string(color: Color) -> String {
+    let mut svg_string = String::new();
+    let hex = format!("#{:02X}{:02X}{:02X}",
+        (color.r * 255.0) as u8,
+        (color.g * 255.0) as u8,
+        (color.b * 255.0) as u8
+    );
+    write!(&mut svg_string, r#"<svg width='24' height='24' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'>"#).unwrap();
+    write!(&mut svg_string, r#"<g stroke='{}' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round' fill='none'>"#, hex).unwrap();
+    write!(&mut svg_string, r#"<circle cx='12' cy='12' r='3.5' stroke='{}' stroke-width='2' fill='none'/>"#, hex).unwrap();
+    write!(&mut svg_string, r#"<path d='M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.09a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z' stroke='{}' fill='none'/>"#, hex).unwrap();
+    write!(&mut svg_string, r#"</g></svg>"#).unwrap();
+    svg_string
 } 

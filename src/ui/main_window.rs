@@ -3,10 +3,11 @@
 //! Implements the main UI window component with device list and battery status display.
 
 use iced::{
-    widget::{button, column, container, row, text, scrollable},
+    widget::{button, column, container, row, text, scrollable, Svg},
     Element, Length, Command
 };
 use iced::alignment::Horizontal;
+use iced::widget::svg::Handle;
 
 use crate::bluetooth::DiscoveredDevice;
 use crate::bluetooth::AirPodsBatteryStatus;
@@ -14,9 +15,10 @@ use crate::airpods::{DetectedAirPods, AirPodsBattery};
 use crate::ui::components::{battery_display_row, battery_with_label};
 use crate::ui::components::ConnectionStatusWrapper;
 use crate::ui::Message;
-use crate::ui::theme::Theme;
+use crate::ui::theme;
 use crate::config::AppConfig;
 use crate::ui::UiComponent;
+use crate::ui::components::svg_icons::settings_icon_svg_string;
 
 /// Main window component
 #[derive(Debug, Clone)]
@@ -155,14 +157,26 @@ impl MainWindow {
     fn create_header(&self) -> Element<'_, Message, iced::Renderer<Theme>> {
         let title = text("RustPods")
             .size(30)
-            .horizontal_alignment(Horizontal::Center);
+            .horizontal_alignment(Horizontal::Center)
+            .style(crate::ui::theme::TEXT);
         
-        column![
+        // SVG settings icon
+        let svg_data = settings_icon_svg_string(theme::LAVENDER).into_bytes();
+        let svg_icon = Svg::new(Handle::from_memory(svg_data))
+            .width(24)
+            .height(24);
+        let settings_button = button(svg_icon)
+            .padding(8)
+            .on_press(Message::OpenSettings);
+        
+        row![
             title,
-            iced::widget::Space::new(Length::Fill, Length::Fixed(10.0)),
+            iced::widget::Space::with_width(Length::Fill),
+            settings_button
         ]
         .width(Length::Fill)
         .align_items(iced::Alignment::Center)
+        .padding(10)
         .into()
     }
     
@@ -217,10 +231,12 @@ impl UiComponent for MainWindow {
 impl MainWindow {
     fn render_connected_device(&self, device: &DetectedAirPods) -> Element<Message, iced::Renderer<Theme>> {
         let device_name = text(device.name.as_ref().unwrap_or(&"Unknown Device".to_string()))
-            .size(24);
+            .size(24)
+            .style(crate::ui::theme::TEXT);
             
         let device_type = text(format!("Type: {:?}", device.device_type))
-            .size(16);
+            .size(16)
+            .style(crate::ui::theme::TEXT);
             
         // Battery status rows - handle Option<AirPodsBattery> properly
         let mut rows = vec![];
@@ -241,7 +257,7 @@ impl MainWindow {
                     left,
                     if left_charging { "(Charging)" } else { "" }
                 );
-                rows.push(text(left_status).size(16).into());
+                rows.push(text(left_status).size(16).style(crate::ui::theme::TEXT).into());
             }
             
             // Right earbud
@@ -255,7 +271,7 @@ impl MainWindow {
                     right,
                     if right_charging { "(Charging)" } else { "" }
                 );
-                rows.push(text(right_status).size(16).into());
+                rows.push(text(right_status).size(16).style(crate::ui::theme::TEXT).into());
             }
             
             // Case
@@ -269,21 +285,22 @@ impl MainWindow {
                     case,
                     if case_charging { "(Charging)" } else { "" }
                 );
-                rows.push(text(case_status).size(16).into());
+                rows.push(text(case_status).size(16).style(crate::ui::theme::TEXT).into());
             }
         } else {
             // No battery information available
-            rows.push(text("Battery information not available").size(16).into());
+            rows.push(text("Battery information not available").size(16).style(crate::ui::theme::TEXT).into());
         }
         
         // Add address at the bottom
-        rows.push(text(format!("Address: {}", device.address)).size(12).into());
+        rows.push(text(format!("Address: {}", device.address)).size(12).style(crate::ui::theme::TEXT).into());
         
         // Disconnect button at the bottom
         let disconnect_button = button(
             text("Disconnect")
                 .horizontal_alignment(iced::alignment::Horizontal::Center)
-                .size(16),
+                .size(16)
+                .style(crate::ui::theme::TEXT)
         )
         .padding(10)
         .width(Length::Fixed(120.0))
@@ -311,6 +328,7 @@ impl MainWindow {
             // No devices found message
             let empty_message: Element<Message, iced::Renderer<Theme>> = text("No devices found. Press Scan to search for devices.")
                 .size(16)
+                .style(crate::ui::theme::TEXT)
                 .into();
                 
             empty_message
@@ -330,6 +348,7 @@ impl MainWindow {
         // Scan button
         let scan_button = button(
             text(if self.is_scanning { "Stop Scan" } else { "Scan for Devices" })
+                .style(crate::ui::theme::TEXT)
         )
         .on_press(
             if self.is_scanning { 
@@ -341,7 +360,8 @@ impl MainWindow {
         
         column![
             text("Available Devices")
-                .size(20),
+                .size(20)
+                .style(crate::ui::theme::TEXT),
             iced::widget::Space::new(Length::Fill, Length::Fixed(10.0)),
             devices_list,
             iced::widget::Space::new(Length::Fill, Length::Fixed(20.0)),
@@ -362,8 +382,8 @@ impl MainWindow {
         
         // Device name and address
         let device_info = column![
-            text(&device_name).size(16),
-            text(&address).size(12),
+            text(&device_name).size(16).style(crate::ui::theme::TEXT),
+            text(&address).size(12).style(crate::ui::theme::TEXT),
         ]
         .spacing(5)
         .width(Length::Fill);
@@ -373,10 +393,10 @@ impl MainWindow {
             Some(rssi) => format!("{}dBm", rssi),
             None => "Unknown".to_string(),
         };
-        let rssi = text(rssi_text).size(14);
+        let rssi = text(rssi_text).size(14).style(crate::ui::theme::TEXT);
         
         // Connect button
-        let connect_button = button(text("Connect"))
+        let connect_button = button(text("Connect").style(crate::ui::theme::TEXT))
             .on_press(Message::SelectDevice(address.clone()));
         
         // Combine elements

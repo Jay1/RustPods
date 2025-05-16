@@ -74,7 +74,7 @@ pub fn create_app_settings(state_manager: Arc<StateManager>) -> Settings<Arc<Sta
             platform_specific: Default::default(),
         },
         flags: state_manager,
-        default_font: iced::Font::DEFAULT,
+        default_font: iced::Font::with_name("SpaceMono Nerd Font"),
         default_text_size: 16.0,
         antialiasing: true,
         exit_on_close_request: false,

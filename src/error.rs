@@ -9,13 +9,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use thiserror::Error;
 use crate::bluetooth::BleError;
-use std::path::PathBuf;
-use std::io;
 use std::fmt;
-use std::sync::PoisonError;
-use std::num::ParseIntError;
-use btleplug::Error as BtlePlugError;
-use std::sync::Mutex;
 use std::time::Duration;
 
 /// Maximum number of errors to keep in history

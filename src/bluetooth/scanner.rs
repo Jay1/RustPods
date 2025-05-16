@@ -1,5 +1,5 @@
-use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::collections::{HashMap};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use log::{debug, error, warn, info};
 use std::fmt;
@@ -23,12 +23,9 @@ use crate::config::{AppConfig, Configurable};
 // Import new error types
 use crate::error::{BluetoothError, ErrorContext, RecoveryAction};
 
-// Add missing imports
-use btleplug::Error as BtlePlugError;
-use std::sync::PoisonError;
-
-// AirPodsFilter is already imported at the crate level
-// This avoids the duplicate import error
+// Remove unused imports
+// use btleplug::Error as BtlePlugError;
+// use std::sync::PoisonError;
 
 /// Configuration for Bluetooth scanner
 #[derive(Debug, Clone)]

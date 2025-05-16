@@ -1,8 +1,10 @@
-use crate::config::{AppConfig, Theme, LogLevel};
+use crate::config::{AppConfig, LogLevel};
 use crate::ui::Message;
 use iced::{widget::{Column, Row, Text, Container, Checkbox, Slider, PickList}, Element};
 use iced::{Length};
 use std::convert::TryInto;
+use crate::ui::theme as ui_theme;
+use iced::Renderer;
 
 /// Settings view component
 #[derive(Debug, Clone)]
@@ -54,10 +56,10 @@ impl SettingsView {
     }
 
     /// Bluetooth settings section
-    pub fn bluetooth_settings(&self) -> Element<Message> {
+    pub fn bluetooth_settings(&self) -> Element<'_, Message, Renderer<ui_theme::Theme>> {
         let title = Text::new("Bluetooth")
             .size(20)
-            .style(iced::Color::from_rgb(0.2, 0.2, 0.8));
+            .style(ui_theme::TEXT);
             
         let auto_scan = Checkbox::new(
             "Auto scan on startup",
@@ -70,7 +72,7 @@ impl SettingsView {
         let scan_duration_seconds = self.config.bluetooth.scan_duration.as_secs() as i32;
         let scan_duration = Column::new()
             .spacing(5)
-            .push(Text::new("Scan duration (seconds)"))
+            .push(Text::new("Scan duration (seconds)").style(ui_theme::TEXT))
             .push(
                 Row::new()
                     .spacing(10)
@@ -84,13 +86,13 @@ impl SettingsView {
                         )
                         .width(Length::Fill)
                     )
-                    .push(Text::new(scan_duration_seconds.to_string()))
+                    .push(Text::new(scan_duration_seconds.to_string()).style(ui_theme::TEXT))
             );
             
         let scan_interval_seconds = self.config.bluetooth.scan_interval.as_secs() as i32;
         let scan_interval = Column::new()
             .spacing(5)
-            .push(Text::new("Scan interval (seconds)"))
+            .push(Text::new("Scan interval (seconds)").style(ui_theme::TEXT))
             .push(
                 Row::new()
                     .spacing(10)
@@ -104,13 +106,13 @@ impl SettingsView {
                         )
                         .width(Length::Fill)
                     )
-                    .push(Text::new(scan_interval_seconds.to_string()))
+                    .push(Text::new(scan_interval_seconds.to_string()).style(ui_theme::TEXT))
             );
             
         let battery_refresh_seconds = self.config.bluetooth.battery_refresh_interval as i32;
         let battery_refresh = Column::new()
             .spacing(5)
-            .push(Text::new("Battery refresh interval (seconds)"))
+            .push(Text::new("Battery refresh interval (seconds)").style(ui_theme::TEXT))
             .push(
                 Row::new()
                     .spacing(10)
@@ -124,13 +126,13 @@ impl SettingsView {
                         )
                         .width(Length::Fill)
                     )
-                    .push(Text::new(battery_refresh_seconds.to_string()))
+                    .push(Text::new(battery_refresh_seconds.to_string()).style(ui_theme::TEXT))
             );
             
         let min_rssi_value = self.config.bluetooth.min_rssi.unwrap_or(-70) as i32;
         let min_rssi = Column::new()
             .spacing(5)
-            .push(Text::new("Minimum RSSI (signal strength)"))
+            .push(Text::new("Minimum RSSI (signal strength)").style(ui_theme::TEXT))
             .push(
                 Row::new()
                     .spacing(10)
@@ -144,7 +146,7 @@ impl SettingsView {
                         )
                         .width(Length::Fill)
                     )
-                    .push(Text::new(format!("{} dBm", min_rssi_value)))
+                    .push(Text::new(format!("{} dBm", min_rssi_value)).style(ui_theme::TEXT))
             );
             
         let auto_reconnect = Checkbox::new(
@@ -157,7 +159,7 @@ impl SettingsView {
         
         let reconnect_attempts = Column::new()
             .spacing(5)
-            .push(Text::new("Reconnect attempts"))
+            .push(Text::new("Reconnect attempts").style(ui_theme::TEXT))
             .push(
                 Row::new()
                     .spacing(10)
@@ -171,7 +173,7 @@ impl SettingsView {
                         )
                         .width(Length::Fill)
                     )
-                    .push(Text::new(self.config.bluetooth.reconnect_attempts.to_string()))
+                    .push(Text::new(self.config.bluetooth.reconnect_attempts.to_string()).style(ui_theme::TEXT))
             );
             
         Container::new(
@@ -192,24 +194,24 @@ impl SettingsView {
     }
     
     /// UI settings section
-    pub fn ui_settings(&self) -> Element<Message> {
+    pub fn ui_settings(&self) -> Element<'_, Message, Renderer<ui_theme::Theme>> {
         let title = Text::new("User Interface")
             .size(20)
-            .style(iced::Color::from_rgb(0.2, 0.8, 0.2));
+            .style(ui_theme::TEXT);
             
         // Clone the themes to avoid reference issues
-        let theme_light = Theme::Light;
-        let theme_dark = Theme::Dark;
-        let theme_system = Theme::System;
+        let theme_light = ui_theme::Theme::Light;
+        let theme_dark = ui_theme::Theme::Dark;
+        let theme_system = ui_theme::Theme::System;
         let theme_options = vec![theme_light, theme_dark, theme_system];
             
         let theme_picker = Row::new()
             .spacing(10)
-            .push(Text::new("Theme:").width(Length::Fill))
+            .push(Text::new("Theme:").width(Length::Fill).style(ui_theme::TEXT))
             .push(
                 PickList::new(
                     theme_options,
-                    Some(self.config.ui.theme.clone()),
+                    Some(ui_theme::Theme::from(self.config.ui.theme.clone())),
                     |theme| Message::UpdateUiSetting(UiSetting::Theme(theme))
                 )
                 .width(Length::FillPortion(2))
@@ -241,7 +243,7 @@ impl SettingsView {
         
         let battery_threshold = Column::new()
             .spacing(5)
-            .push(Text::new("Low battery threshold (%)"))
+            .push(Text::new("Low battery threshold (%)").style(ui_theme::TEXT))
             .push(
                 Row::new()
                     .spacing(10)
@@ -255,7 +257,7 @@ impl SettingsView {
                         )
                         .width(Length::Fill)
                     )
-                    .push(Text::new(format!("{}%", self.config.ui.low_battery_threshold)))
+                    .push(Text::new(format!("{}%", self.config.ui.low_battery_threshold)).style(ui_theme::TEXT))
             );
         
         Container::new(
@@ -275,10 +277,10 @@ impl SettingsView {
     }
     
     /// System settings section
-    pub fn system_settings(&self) -> Element<Message> {
+    pub fn system_settings(&self) -> Element<'_, Message, Renderer<ui_theme::Theme>> {
         let title = Text::new("System")
             .size(20)
-            .style(iced::Color::from_rgb(0.8, 0.2, 0.2));
+            .style(ui_theme::TEXT);
             
         let startup_option = Checkbox::new(
             "Start on system startup",
@@ -303,7 +305,7 @@ impl SettingsView {
         
         let log_level_picker = Row::new()
             .spacing(10)
-            .push(Text::new("Log Level:").width(Length::Fill))
+            .push(Text::new("Log Level:").width(Length::Fill).style(ui_theme::TEXT))
             .push(
                 PickList::new(
                     log_options,
@@ -322,7 +324,7 @@ impl SettingsView {
         // Information text about telemetry
         let telemetry_info = Text::new(
             "Anonymous usage data helps improve the application.\nNo personal information is collected."
-        ).size(12);
+        ).size(12).style(ui_theme::TEXT);
         
         Container::new(
             Column::new()
@@ -363,7 +365,7 @@ pub enum BluetoothSetting {
 #[derive(Debug, Clone, PartialEq)]
 pub enum UiSetting {
     /// Theme
-    Theme(Theme),
+    Theme(ui_theme::Theme),
     /// Show notifications
     ShowNotifications(bool),
     /// Start minimized

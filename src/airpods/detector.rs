@@ -328,7 +328,6 @@ mod tests {
     use crate::bluetooth::scanner::DiscoveredDevice;
     use btleplug::api::BDAddr;
     use std::collections::HashMap;
-    use std::time::Instant;
 
     // Add helper functions for tests
     fn create_test_manufacturer_data(device_type_bytes: &[u8]) -> HashMap<u16, Vec<u8>> {

@@ -62,3 +62,7 @@ dev-debug.log
 tasks.json# Specific files to protect API keys
 .cursor/mcp.json
 build_rs_cov.profraw
+
+# Ignore Windows binaries and debug symbols
+*.exe
+*.pdb

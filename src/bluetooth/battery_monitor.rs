@@ -166,6 +166,7 @@ impl BatteryBuffer {
     }
     
     /// Clear the buffer
+    #[allow(dead_code)]
     pub fn clear(&mut self) {
         self.left_buffer.clear();
         self.right_buffer.clear();
@@ -224,6 +225,7 @@ pub struct BatteryMonitor {
     current_interval: Duration,
     
     /// Whether any low battery notifications have been sent
+    #[allow(dead_code)]
     low_battery_notified: bool,
     
     /// Last notification time for each component

@@ -18,7 +18,9 @@ cargo install cargo-tarpaulin
 cargo tarpaulin --verbose
 
 # Generate HTML report
-cargo tarpaulin --verbose --out Html --output-dir ./coverage
+./scripts/coverage.sh   # (Unix)
+# On Windows:
+./scripts/coverage.ps1  # (Windows)
 ```
 
 ## Coverage Goals

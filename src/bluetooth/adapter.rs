@@ -3,7 +3,7 @@ use std::fmt;
 use std::default::Default;
 use std::collections::HashMap;
 use std::time::Duration;
-use log::{debug, warn, error, info};
+use log::{debug, warn, error};
 
 use btleplug::api::{
     BDAddr, Central, Manager as _, 
@@ -274,40 +274,39 @@ impl AdapterManager {
         Ok(())
     }
     
-    /// Check adapter capabilities
+    /// Check adapter capabilities    
     async fn check_adapter_capabilities(&mut self, adapter: &Adapter, adapter_id: &str) -> AdapterCapabilities {
         let now = std::time::Instant::now();
-        let mut caps = AdapterCapabilities::default();
-        caps.last_checked = Some(now);
-        
+                
         // Check if scanning is supported
         let scanning_supported = self.check_scanning_capability(adapter).await.unwrap_or(false);
-        caps.supports_scanning = scanning_supported;
-        
+                
         // Check if connecting is supported by trying to get a list of connected peripherals
-        match adapter.peripherals().await {
-            Ok(_) => caps.supports_connecting = true,
-            Err(_) => caps.supports_connecting = false,
-        }
-        
-        // Try to determine power state (this is platform-dependent)
-        caps.is_powered_on = true; // Assume powered on since we got this far
-        
+        let supports_connecting = adapter.peripherals().await.is_ok();
+                
         // Determine adapter status based on capabilities
-        let status = if !caps.supports_scanning {
+        let status = if !scanning_supported {
             AdapterStatus::Error
-        } else if !caps.is_powered_on {
-            AdapterStatus::Disabled
         } else {
+            // Assume powered on since we got this far
             AdapterStatus::Normal
         };
-        
-        caps.status = status;
-        
+                
         // Update adapter history
         self.update_adapter_history(adapter_id, status, now);
-        
-        caps
+                
+        // Create and return capabilities with all properties set in the initializer
+        AdapterCapabilities {
+            supports_scanning: scanning_supported,
+            supports_central_role: true, // Assume central role support
+            supports_advertising: false, // Not using advertising for now
+            supports_connecting,
+            is_powered_on: true, // Assume powered on since we got this far
+            max_connections: 5, // Default value
+            last_checked: Some(now),
+            status,
+            adapter_info: format!("Adapter {}", adapter_id),
+        }
     }
     
     /// Update adapter status history
@@ -473,7 +472,7 @@ impl AdapterManager {
     /// Check if the adapter supports scanning
     async fn check_scanning_capability(&mut self, adapter: &Adapter) -> Result<bool, BluetoothError> {
         let ctx = ErrorContext::new("AdapterManager", "check_scanning_capability")
-            .with_metadata("adapter_id", adapter.id().to_string());
+            .with_metadata("adapter_index", format!("{:p}", adapter));
         
         // Try to start a scan to check if scanning is supported
         log::debug!("{}Testing adapter scanning capability", ctx);
@@ -488,34 +487,30 @@ impl AdapterManager {
                 log::debug!("{}Adapter supports scanning", ctx);
                 Ok(true)
             },
-            Err(BluetoothError::ScanFailed(ref msg)) => {
+            Err(e) => {
+                // Convert error to string for analysis
+                let err_str = e.to_string().to_lowercase();
+                
                 // Check message to see if scanning is fundamentally unsupported
-                let scanning_unsupported = msg.to_lowercase().contains("not supported") ||
-                                           msg.to_lowercase().contains("unsupported");
+                let scanning_unsupported = err_str.contains("not supported") || 
+                                          err_str.contains("unsupported");
                 
                 if scanning_unsupported {
-                    log::warn!("{}Adapter does not support scanning: {}", ctx, msg);
+                    log::warn!("{}Adapter does not support scanning: {}", ctx, err_str);
                     Ok(false)
+                } else if err_str.contains("no adapter") || err_str.contains("not found") {
+                    log::error!("{}No adapter available for scanning", ctx);
+                    Ok(false)
+                } else if err_str.contains("permission") {
+                    log::error!("{}Permission denied for scanning", ctx);
+                    // Permission issues need to be resolved by the user, but the adapter technically supports scanning
+                    Ok(true)
                 } else {
-                    // This might be a temporary error, so assume scanning is supported
-                    log::debug!("{}Scan failed but adapter might support scanning: {}", ctx, msg);
+                    log::warn!("{}Other error during scan test: {}", ctx, err_str);
+                    // For other errors, we assume scanning is supported but there's a temporary issue
                     Ok(true)
                 }
-            },
-            Err(BluetoothError::NoAdapter) => {
-                log::error!("{}No adapter available for scanning", ctx);
-                Ok(false)
-            },
-            Err(BluetoothError::PermissionDenied(_)) => {
-                log::error!("{}Permission denied for scanning", ctx);
-                // Permission issues need to be resolved by the user, but the adapter technically supports scanning
-                Ok(true)
-            },
-            Err(e) => {
-                log::warn!("{}Other error during scan test: {}", ctx, e);
-                // For other errors, we assume scanning is supported but there's a temporary issue
-                Ok(true)
-            },
+            }
         }
     }
     
@@ -721,19 +716,18 @@ impl BluetoothAdapter {
         
         log::debug!("{}Successfully found Bluetooth adapter", ctx);
         
-        // Check if scanning is supported
-        let mut capabilities = AdapterCapabilities::default();
-        
-        // Set capabilities (async scanning check is not ideal but we keep it simple)
-        capabilities.supports_scanning = true; // Assume it supports scanning
-        capabilities.supports_central_role = true;
-        capabilities.supports_advertising = false; // Not using advertising for now
-        capabilities.supports_connecting = true;
-        capabilities.is_powered_on = true;
-        capabilities.max_connections = 5; // Default value
-        capabilities.last_checked = Some(std::time::Instant::now());
-        capabilities.status = AdapterStatus::Normal;
-        capabilities.adapter_info = format!("{:?}", adapter);
+        // Create capabilities with all properties set in the initializer
+        let capabilities = AdapterCapabilities {
+            supports_scanning: true, // Assume it supports scanning
+            supports_central_role: true,
+            supports_advertising: false, // Not using advertising for now
+            supports_connecting: true,
+            is_powered_on: true,
+            max_connections: 5, // Default value
+            last_checked: Some(std::time::Instant::now()),
+            status: AdapterStatus::Normal,
+            adapter_info: format!("{:?}", adapter),
+        };
         
         Ok(Self {
             adapter: Arc::new(adapter),

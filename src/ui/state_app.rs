@@ -207,15 +207,12 @@ impl Application for StateApp {
     
     fn view(&self) -> Element<'_, Message, iced::Renderer<Theme>> {
         if !self.visibility_manager.is_visible() {
-            // Return an empty container when not visible
             iced::widget::container::Container::new(
                 iced::widget::text("")
             ).into()
         } else if self.state_manager.get_ui_state().show_settings {
-            // Show settings window
             self.settings_window.view()
         } else {
-            // Show main window
             self.main_window.view()
         }
     }
@@ -239,28 +236,27 @@ pub fn run_state_ui() -> Result<(), iced::Error> {
     if env_logger::try_init().is_err() {
         // Logging already initialized
     }
-    
     log::info!("Starting RustPods UI with state management");
-    
+
     // Create a channel to communicate between the UI and state manager
     let (sender, _receiver) = mpsc::unbounded_channel();
     let sender_clone = sender.clone(); // Clone it before first use
-    
+
     // Create state manager
     let state_manager = Arc::new(StateManager::new(sender));
-    
+
     // Create lifecycle manager with appropriate auto-save interval based on config
     let config = state_manager.get_config();
     let auto_save_interval = match config.system.auto_save_interval {
         Some(seconds) if seconds >= 60 => Duration::from_secs(seconds),
         _ => Duration::from_secs(300), // Default 5 minutes
     };
-    
+
     let mut lifecycle_manager = crate::lifecycle_manager::LifecycleManager::new(
         Arc::clone(&state_manager),
         sender_clone.clone()
     ).with_auto_save_interval(auto_save_interval);
-    
+
     // Start lifecycle manager with proper error handling
     match lifecycle_manager.start() {
         Ok(_) => {
@@ -271,10 +267,10 @@ pub fn run_state_ui() -> Result<(), iced::Error> {
             // Continue without full lifecycle management, but still try basic features
         }
     }
-    
+
     // Create a separate thread for the AppStateController
     let _state_manager_clone = Arc::clone(&state_manager);
-    let controller_thread = thread::spawn(move || {
+    let controller_thread = std::thread::spawn(move || {
         // Create a tokio runtime for the controller
         let runtime = match tokio::runtime::Runtime::new() {
             Ok(rt) => rt,
@@ -283,10 +279,8 @@ pub fn run_state_ui() -> Result<(), iced::Error> {
                 return;
             }
         };
-        
         // Run the controller with the state manager
         let mut controller = crate::app_state_controller::AppStateController::new(sender_clone);
-        
         log::info!("Starting app state controller");
         // Use the runtime to run the controller
         runtime.block_on(async {
@@ -294,11 +288,9 @@ pub fn run_state_ui() -> Result<(), iced::Error> {
                 log::error!("Failed to initialize app state controller: {}", e);
                 return;
             }
-            
             if let Err(e) = controller.start().await {
                 log::error!("Failed to start app state controller: {}", e);
             }
-            
             // Keep the controller running until shutdown
             loop {
                 tokio::time::sleep(Duration::from_secs(1)).await;
@@ -306,30 +298,37 @@ pub fn run_state_ui() -> Result<(), iced::Error> {
             }
         });
     });
-    
-    // Run the Iced application with the state manager
-    let result = StateApp::run(iced::Settings {
-        id: Some("rustpods".to_string()),
-        window: iced::window::Settings {
-            size: (800, 600),
-            position: iced::window::Position::Default,
-            min_size: Some((400, 300)),
-            max_size: None,
-            visible: true,
-            resizable: true,
-            decorations: true,
-            transparent: false,
-            icon: None,
-            level: iced::window::Level::Normal,
-            platform_specific: Default::default(),
-        },
-        flags: state_manager,
-        default_font: iced::Font::DEFAULT,
-        default_text_size: 16.0,
-        antialiasing: true,
-        exit_on_close_request: true,
+
+    // --- FIX: Wrap the UI in a Tokio runtime ---
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("Failed to create tokio runtime for UI thread");
+
+    let result = rt.block_on(async {
+        StateApp::run(iced::Settings {
+            id: Some("rustpods".to_string()),
+            window: iced::window::Settings {
+                size: (800, 600),
+                position: iced::window::Position::Default,
+                min_size: Some((400, 300)),
+                max_size: None,
+                visible: true,
+                resizable: true,
+                decorations: true,
+                transparent: false,
+                icon: None,
+                level: iced::window::Level::Normal,
+                platform_specific: Default::default(),
+            },
+            flags: state_manager,
+            default_font: iced::Font::with_name("SpaceMono Nerd Font"),
+            default_text_size: 16.0,
+            antialiasing: true,
+            exit_on_close_request: true,
+        })
     });
-    
+
     // Join controller thread (will only happen if UI has exited)
     if controller_thread.is_finished() {
         if let Err(_e) = controller_thread.join() {
@@ -338,6 +337,6 @@ pub fn run_state_ui() -> Result<(), iced::Error> {
     } else {
         log::warn!("Controller thread is still running after UI exit");
     }
-    
+
     result
 } 

@@ -288,4 +288,127 @@ fn create_test_airpods() -> DetectedAirPods {
         }),
         false
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use btleplug::api::BDAddr;
+    use crate::ui::state::AppState;
+    use crate::bluetooth::DiscoveredDevice;
+    use std::collections::HashMap;
+    use std::time::Instant;
+
+    #[test]
+    fn test_default_state() {
+        let state = AppState::default();
+        // Since this is not dependent on config in the default constructor,
+        // visibility starts as true by default
+        assert!(state.visible);
+        assert!(!state.is_scanning);
+        assert!(state.auto_scan);
+        assert!(state.devices.is_empty());
+        assert_eq!(state.selected_device, None);
+    }
+
+    #[test]
+    fn test_toggle_visibility() {
+        let mut state = AppState::default();
+        // Default visibility is true
+        assert!(state.visible);
+        // Toggle should flip the visibility
+        state.toggle_visibility();
+        assert!(!state.visible);
+        // Toggle again should restore original visibility
+        state.toggle_visibility();
+        assert!(state.visible);
+    }
+
+    #[test]
+    fn test_update_device() {
+        let mut state = AppState::default();
+        assert!(state.devices.is_empty());
+        let addr = BDAddr::from([1, 2, 3, 4, 5, 6]);
+        let addr_str = addr.to_string();
+        let device = DiscoveredDevice {
+            address: addr,
+            name: Some("Test Device".to_string()),
+            rssi: Some(-60),
+            manufacturer_data: HashMap::new(),
+            is_potential_airpods: false,
+            last_seen: Instant::now(),
+            is_connected: false,
+            service_data: HashMap::new(),
+            services: Vec::new(),
+            tx_power_level: None,
+        };
+        state.update_device(device.clone());
+        assert_eq!(state.devices.len(), 1);
+        assert!(state.devices.contains_key(&addr_str));
+        // Update existing device
+        let updated_device = DiscoveredDevice {
+            rssi: Some(-50),
+            ..device
+        };
+        state.update_device(updated_device);
+        assert_eq!(state.devices.len(), 1);
+        assert_eq!(state.devices.get(&addr_str).unwrap().rssi, Some(-50));
+    }
+
+    #[test]
+    fn test_select_device() {
+        let mut state = AppState::default();
+        let addr = BDAddr::from([1, 2, 3, 4, 5, 6]);
+        let addr_str = addr.to_string();
+        // Add the device first
+        let device = DiscoveredDevice {
+            address: addr,
+            name: Some("Test Device".to_string()),
+            rssi: Some(-60),
+            manufacturer_data: HashMap::new(),
+            is_potential_airpods: false,
+            last_seen: Instant::now(),
+            is_connected: false,
+            service_data: HashMap::new(),
+            services: Vec::new(),
+            tx_power_level: None,
+        };
+        state.update_device(device);
+        // Now select it - should work because it exists
+        state.select_device(addr_str.clone());
+        assert_eq!(state.selected_device, Some(addr_str.clone()));
+        // Try to select a non-existent device
+        let non_existent = "non:ex:is:te:nt:00";
+        state.select_device(non_existent.to_string());
+        // Selection should not change to the non-existent device
+        assert_eq!(state.selected_device, Some(addr_str));
+    }
+
+    #[test]
+    fn test_get_selected_device() {
+        let mut state = AppState::default();
+        let addr = BDAddr::from([1, 2, 3, 4, 5, 6]);
+        let addr_str = addr.to_string();
+        // No selected device
+        assert!(state.get_selected_device().is_none());
+        // Add a device
+        let device = DiscoveredDevice {
+            address: addr,
+            name: Some("Test Device".to_string()),
+            rssi: Some(-60),
+            manufacturer_data: HashMap::new(),
+            is_potential_airpods: false,
+            last_seen: Instant::now(),
+            is_connected: false,
+            service_data: HashMap::new(),
+            services: Vec::new(),
+            tx_power_level: None,
+        };
+        state.update_device(device.clone());
+        state.select_device(addr_str);
+        // Get the selected device
+        let selected = state.get_selected_device();
+        assert!(selected.is_some());
+        assert_eq!(selected.unwrap().name, Some("Test Device".to_string()));
+    }
 } 
