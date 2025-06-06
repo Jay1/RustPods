@@ -91,6 +91,16 @@ async fn main_async() {
     let ctx = ErrorContext::new("Main", "main_async")
         .with_metadata("runtime", "tokio");
     
+    // Parse command line arguments
+    let command = match parse_args() {
+        Ok(cmd) => cmd,
+        Err(e) => {
+            eprintln!("Error parsing arguments: {}", e);
+            print_usage();
+            std::process::exit(1);
+        }
+    };
+    
     // Load or create a configuration file
     let config = match config::load_or_create_config() {
         Ok(cfg) => {
@@ -105,6 +115,33 @@ async fn main_async() {
         }
     };
     
+    // Handle special commands first
+    match command {
+        AppCommand::Help => {
+            print_usage();
+            return;
+        },
+        AppCommand::UI => {
+            info!("Launching UI...");
+            if let Err(e) = ui::run_ui() {
+                error!("Failed to run UI: {}", e);
+                std::process::exit(1);
+            }
+            return;
+        },
+        AppCommand::StateUI => {
+            info!("Launching State UI...");
+            if let Err(e) = ui::run_state_ui() {
+                error!("Failed to run State UI: {}", e);
+                std::process::exit(1);
+            }
+            return;
+        },
+        _ => {
+            // Handle other commands with the existing system
+        }
+    }
+    
     // Create UI message channel
     let (ui_sender, _ui_receiver) = mpsc::unbounded_channel::<Message>();
     
@@ -112,43 +149,19 @@ async fn main_async() {
     let state_manager = Arc::new(StateManager::new(ui_sender.clone()));
     
     // Create error manager
-    let _error_manager = Arc::new(Mutex::new(ErrorManager::new()));
+    let error_manager = Arc::new(Mutex::new(ErrorManager::new()));
     
     // Create telemetry manager
-    let _telemetry_manager = Arc::new(Mutex::new(TelemetryManager::new(&config)));
+    let telemetry_manager = Arc::new(Mutex::new(TelemetryManager::new(&config)));
     
     // Configure logger with settings from config
     init_logging_from_config(&config);
     
-    // Start performance logging for main method
-    let _perf_logger = logging::PerformanceLogger::new("Main", "application_runtime");
-    
-    // Create and initialize the lifecycle manager
-    let _lifecycle_manager = {
-        // Clone ctx for this lifecycle manager initialization block
-        let ctx = ctx.clone().with_metadata("component", "lifecycle_manager");
-        let mut manager = LifecycleManager::new(
-            state_manager.clone(),
-            ui_sender.clone()
-        );
-
-        // Start manager tasks
-        if let Err(e) = manager.start() {
-            logging::log_error(&e, &ctx);
-            error!("Failed to start lifecycle manager: {}", e);
-            panic!("Critical error: {}", e);
-        }
-        
-        manager
-    };
-    
-    // Keep the application running
-    loop {
-        tokio::time::sleep(Duration::from_secs(1)).await;
+    // Execute the remaining commands
+    let config = Arc::new(Mutex::new(config));
+    if let Err(exit_code) = execute_command(command, config, error_manager, telemetry_manager).await {
+        std::process::exit(exit_code);
     }
-    
-    // This code is unreachable but shows we would log performance metrics
-    // perf_logger.finish();
 }
 
 fn parse_args() -> Result<AppCommand, String> {

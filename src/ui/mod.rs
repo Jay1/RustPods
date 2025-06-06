@@ -20,7 +20,7 @@ pub mod form_validation;
 pub mod test_helpers;
 
 // Re-exports for easier access
-pub use app::{run_ui, view, subscription};
+pub use app::run_ui;
 pub use fixed_state_app::{StateApp, run_state_ui};
 pub use state::AppState;
 pub use message::Message;

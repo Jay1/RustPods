@@ -3,7 +3,7 @@ use std::default::Default;
 // use std::collections::HashMap;
 
 use crate::bluetooth::scanner::DiscoveredDevice;
-use crate::error::{AirPodsError, RustPodsError, ErrorContext, ErrorManager, RecoveryAction};
+use crate::error::{AirPodsError, ErrorContext, ErrorManager};
 use super::{AirPodsType, AirPodsBattery, parse_airpods_data, Result};
 
 /// A simple detector for AirPods devices

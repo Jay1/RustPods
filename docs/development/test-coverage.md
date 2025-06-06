@@ -37,14 +37,15 @@ The following components are considered critical paths and require high test cov
 
 ### Bluetooth Core (`src/bluetooth/`)
 
-- `scanner.rs` - Core scanning functionality
 - `adapter.rs` - Bluetooth adapter management
-- `scanner_config.rs` - Scanning configuration
+- `battery.rs` - Battery information handling
+- `battery_monitor.rs` - Battery monitoring functionality
+- (Native BLE scanning and AirPods battery info are handled by the C++ helper in scripts/airpods_battery_helper)
 
 ### AirPods Detection (`src/airpods/`)
 
-- `detector.rs` - AirPods detection from advertisements
-- `battery.rs` - Battery status extraction
+- `detector.rs` - AirPods detection from helper output
+- `battery.rs` - Battery status extraction and parsing
 
 ### Configuration (`src/config/`)
 

@@ -6,6 +6,7 @@ use crate::ui::components::{BluetoothSetting, UiSetting, SystemSetting};
 use crate::ui::settings_window::SettingsTab;
 use crate::ui::state_manager::ConnectionState;
 use iced::Point;
+use crate::ui::state::MergedBluetoothDevice;
 
 /// Messages that can be sent to update the UI state
 #[derive(Debug, Clone)]
@@ -24,27 +25,6 @@ pub enum Message {
     
     /// Select a device to connect to
     SelectDevice(String),
-    
-    /// Start scanning for devices
-    StartScan,
-    
-    /// Stop scanning for devices
-    StopScan,
-    
-    /// Scan completed
-    ScanCompleted,
-    
-    /// Scan started
-    ScanStarted,
-    
-    /// Scan stopped
-    ScanStopped,
-    
-    /// Scan progress update
-    ScanProgress(usize),
-    
-    /// Toggle automatic scanning
-    ToggleAutoScan(bool),
     
     /// Tick event for periodic updates
     Tick,
@@ -76,29 +56,14 @@ pub enum Message {
     /// Battery status updated
     BatteryStatusUpdated(AirPodsBatteryStatus),
     
-    /// Battery update failed
-    BatteryUpdateFailed(String),
+    /// Show a toast/notification message
+    ShowToast(String),
     
-    /// Low battery warning for a component
-    LowBatteryWarning(String, u8),
+    /// Merged scan result (paired + BLE)
+    MergedScanResult(Vec<MergedBluetoothDevice>),
     
-    /// Generic error message
-    Error(String),
-    
-    /// Clear the current error message
-    ClearError,
-    
-    /// Status message for information (non-error)
-    Status(String),
-    
-    /// Clear the current status message
-    ClearStatus,
-    
-    /// Retry connection to a device
-    RetryConnection,
-    
-    /// Bluetooth adapter changed
-    AdapterChanged(String),
+    /// Settings changed
+    SettingsChanged(AppConfig),
     
     /// Update a Bluetooth setting
     UpdateBluetoothSetting(BluetoothSetting),
@@ -109,166 +74,81 @@ pub enum Message {
     /// Update a system setting
     UpdateSystemSetting(SystemSetting),
     
-    /// Settings have been changed
-    SettingsChanged(AppConfig),
-    
-    /// Open the settings view
+    /// Open the settings window
     OpenSettings,
     
-    /// Save the current settings
-    SaveSettings,
-    
-    /// Reset settings to defaults
-    ResetSettings,
-    
-    /// Close the settings view
+    /// Close the settings window
     CloseSettings,
+    
+    /// Save settings
+    SaveSettings,
     
     /// Select a settings tab
     SelectSettingsTab(SettingsTab),
     
-    /// Animation tick specifically for battery animations
-    BatteryAnimationTick,
+    /// Window drag started
+    WindowDragStart(Point),
     
-    /// Move the window to a new position
-    WindowMove(Point),
+    /// Window drag ended
+    WindowDragEnd,
     
-    /// Form validation error
-    FormValidationError { field: String, message: String },
+    /// Window drag moved
+    WindowDragMove(Point),
     
-    /// Right-click for context menu
-    ContextMenu(Point),
+    /// Window position changed
+    WindowPositionChanged(Point),
     
-    /// Context menu item selected
-    ContextMenuItemSelected(String),
-    
-    /// Double-click event
-    DoubleClick,
-    
-    /// Drag-and-drop operation started
-    DragStarted { id: String, position: Point },
-    
-    /// Drag-and-drop operation ongoing
-    DragMoved { id: String, position: Point },
-    
-    /// Drag-and-drop operation ended
-    DragEnded { id: String, position: Point },
-    
-    /// Raw event from the iced event system
-    RawEvent(iced::Event),
-    
-    /// Window focus gained
-    WindowFocused,
-    
-    /// Window focus lost
-    WindowBlurred,
+    /// Window bounds changed
+    WindowBoundsChanged(iced::Rectangle),
     
     /// Window close requested
     WindowCloseRequested,
     
-    /// Initialize system tray with message sender
-    InitializeSystemTray(std::sync::mpsc::Sender<Message>),
+    /// Window minimized
+    WindowMinimized,
     
-    /// Show window
+    /// Window restored
+    WindowRestored,
+    
+    /// Window maximized
+    WindowMaximized,
+    
+    /// Window unmaximized
+    WindowUnmaximized,
+    
+    /// Window focused
+    WindowFocused,
+    
+    /// Window unfocused
+    WindowUnfocused,
+    
+    /// Show the application window
     ShowWindow,
     
-    /// Hide window
+    /// Hide the application window
     HideWindow,
     
-    /// Window needs updating
-    WindowUpdate,
+    /// Start scanning for devices
+    StartScan,
     
-    /// Toggle between simple and advanced display mode
-    ToggleDisplayMode,
+    /// Stop scanning for devices
+    StopScan,
     
-    /// System sleep event
-    SystemSleep,
+    /// Battery update failed with error message
+    BatteryUpdateFailed(String),
     
-    /// System wake event
-    SystemWake,
-    
-    /// Application is starting up
-    AppStarting,
-    
-    /// Application initialization has completed
-    AppInitialized,
-    
-    /// Application going to background mode
-    AppBackground,
-    
-    /// Application coming to foreground
-    AppForeground,
-    
-    /// Force save application state
-    SaveState,
-    
-    /// Load application state from disk
-    LoadState,
-    
-    /// Restore previous device connection
-    RestoreConnection(String),
-    
-    /// Show a toast/notification message
-    ShowToast(String),
-}
-
-impl Message {
-    /// Create a new error message
-    pub fn error<S: Into<String>>(message: S) -> Self {
-        Self::Error(message.into())
-    }
-    
-    /// Create a new connection error message
-    pub fn connection_error<S: Into<String>>(message: S) -> Self {
-        Self::ConnectionError(message.into())
-    }
-    
-    /// Create a new bluetooth error message
-    pub fn bluetooth_error<S: Into<String>>(message: S) -> Self {
-        Self::BluetoothError(message.into())
-    }
-    
-    /// Create a new low battery warning message
-    pub fn low_battery<S: Into<String>>(component: S, level: u8) -> Self {
-        Self::LowBatteryWarning(component.into(), level)
-    }
-    
-    /// Create a new form validation error
-    pub fn validation_error<S: Into<String>, T: Into<String>>(field: S, message: T) -> Self {
-        Self::FormValidationError {
-            field: field.into(),
-            message: message.into(),
-        }
-    }
-    
-    /// Check if this message is an error message
-    pub fn is_error(&self) -> bool {
-        matches!(self, 
-            Self::Error(_) | 
-            Self::ConnectionError(_) | 
-            Self::BluetoothError(_) |
-            Self::BatteryUpdateFailed(_) |
-            Self::FormValidationError { .. }
-        )
-    }
+    /// Toggle auto scan setting
+    ToggleAutoScan(bool),
 }
 
 impl PartialEq for Message {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            // Standard variants that can be directly compared
             (Self::ToggleVisibility, Self::ToggleVisibility) => true,
             (Self::Exit, Self::Exit) => true,
             (Self::DeviceDiscovered(a), Self::DeviceDiscovered(b)) => a == b,
             (Self::DeviceUpdated(a), Self::DeviceUpdated(b)) => a == b,
             (Self::SelectDevice(a), Self::SelectDevice(b)) => a == b,
-            (Self::StartScan, Self::StartScan) => true,
-            (Self::StopScan, Self::StopScan) => true,
-            (Self::ScanCompleted, Self::ScanCompleted) => true,
-            (Self::ScanStarted, Self::ScanStarted) => true,
-            (Self::ScanStopped, Self::ScanStopped) => true,
-            (Self::ScanProgress(a), Self::ScanProgress(b)) => a == b,
-            (Self::ToggleAutoScan(a), Self::ToggleAutoScan(b)) => a == b,
             (Self::Tick, Self::Tick) => true,
             (Self::AnimationTick, Self::AnimationTick) => true,
             (Self::AnimationProgress(a), Self::AnimationProgress(b)) => a == b,
@@ -279,58 +159,34 @@ impl PartialEq for Message {
             (Self::ConnectionError(a), Self::ConnectionError(b)) => a == b,
             (Self::BluetoothError(a), Self::BluetoothError(b)) => a == b,
             (Self::BatteryStatusUpdated(a), Self::BatteryStatusUpdated(b)) => a == b,
-            (Self::BatteryUpdateFailed(a), Self::BatteryUpdateFailed(b)) => a == b,
-            (Self::LowBatteryWarning(a, c), Self::LowBatteryWarning(b, d)) => a == b && c == d,
-            (Self::Error(a), Self::Error(b)) => a == b,
-            (Self::ClearError, Self::ClearError) => true,
-            (Self::Status(a), Self::Status(b)) => a == b,
-            (Self::ClearStatus, Self::ClearStatus) => true,
-            (Self::RetryConnection, Self::RetryConnection) => true,
-            (Self::AdapterChanged(a), Self::AdapterChanged(b)) => a == b,
+            (Self::ShowToast(a), Self::ShowToast(b)) => a == b,
+            (Self::MergedScanResult(a), Self::MergedScanResult(b)) => a.len() == b.len(),
+            (Self::SettingsChanged(a), Self::SettingsChanged(b)) => a == b,
             (Self::UpdateBluetoothSetting(a), Self::UpdateBluetoothSetting(b)) => a == b,
             (Self::UpdateUiSetting(a), Self::UpdateUiSetting(b)) => a == b,
             (Self::UpdateSystemSetting(a), Self::UpdateSystemSetting(b)) => a == b,
-            (Self::SettingsChanged(a), Self::SettingsChanged(b)) => a == b,
             (Self::OpenSettings, Self::OpenSettings) => true,
             (Self::SaveSettings, Self::SaveSettings) => true,
-            (Self::ResetSettings, Self::ResetSettings) => true,
             (Self::CloseSettings, Self::CloseSettings) => true,
             (Self::SelectSettingsTab(a), Self::SelectSettingsTab(b)) => a == b,
-            (Self::BatteryAnimationTick, Self::BatteryAnimationTick) => true,
-            (Self::WindowMove(a), Self::WindowMove(b)) => a == b,
-            (Self::FormValidationError { field: a, message: c }, 
-             Self::FormValidationError { field: b, message: d }) => a == b && c == d,
-            (Self::ContextMenu(a), Self::ContextMenu(b)) => a == b,
-            (Self::ContextMenuItemSelected(a), Self::ContextMenuItemSelected(b)) => a == b,
-            (Self::DoubleClick, Self::DoubleClick) => true,
-            (Self::DragStarted { id: a, position: c }, 
-             Self::DragStarted { id: b, position: d }) => a == b && c == d,
-            (Self::DragMoved { id: a, position: c }, 
-             Self::DragMoved { id: b, position: d }) => a == b && c == d,
-            (Self::DragEnded { id: a, position: c }, 
-             Self::DragEnded { id: b, position: d }) => a == b && c == d,
-            (Self::RawEvent(a), Self::RawEvent(b)) => a == b,
-            (Self::WindowFocused, Self::WindowFocused) => true,
-            (Self::WindowBlurred, Self::WindowBlurred) => true,
+            (Self::WindowDragStart(a), Self::WindowDragStart(b)) => a == b,
+            (Self::WindowDragEnd, Self::WindowDragEnd) => true,
+            (Self::WindowDragMove(a), Self::WindowDragMove(b)) => a == b,
+            (Self::WindowPositionChanged(a), Self::WindowPositionChanged(b)) => a == b,
+            (Self::WindowBoundsChanged(a), Self::WindowBoundsChanged(b)) => a == b,
             (Self::WindowCloseRequested, Self::WindowCloseRequested) => true,
-            
-            // Special case for InitializeSystemTray - just check variant, ignore field
-            (Self::InitializeSystemTray(_), Self::InitializeSystemTray(_)) => true,
-            
+            (Self::WindowMinimized, Self::WindowMinimized) => true,
+            (Self::WindowRestored, Self::WindowRestored) => true,
+            (Self::WindowMaximized, Self::WindowMaximized) => true,
+            (Self::WindowUnmaximized, Self::WindowUnmaximized) => true,
+            (Self::WindowFocused, Self::WindowFocused) => true,
+            (Self::WindowUnfocused, Self::WindowUnfocused) => true,
             (Self::ShowWindow, Self::ShowWindow) => true,
             (Self::HideWindow, Self::HideWindow) => true,
-            (Self::WindowUpdate, Self::WindowUpdate) => true,
-            (Self::ToggleDisplayMode, Self::ToggleDisplayMode) => true,
-            (Self::SystemSleep, Self::SystemSleep) => true,
-            (Self::SystemWake, Self::SystemWake) => true,
-            (Self::AppStarting, Self::AppStarting) => true,
-            (Self::AppInitialized, Self::AppInitialized) => true,
-            (Self::AppBackground, Self::AppBackground) => true,
-            (Self::AppForeground, Self::AppForeground) => true,
-            (Self::SaveState, Self::SaveState) => true,
-            (Self::LoadState, Self::LoadState) => true,
-            (Self::RestoreConnection(a), Self::RestoreConnection(b)) => a == b,
-            // Different variants are not equal
+            (Self::StartScan, Self::StartScan) => true,
+            (Self::StopScan, Self::StopScan) => true,
+            (Self::BatteryUpdateFailed(a), Self::BatteryUpdateFailed(b)) => a == b,
+            (Self::ToggleAutoScan(a), Self::ToggleAutoScan(b)) => a == b,
             _ => false,
         }
     }

@@ -2,6 +2,7 @@
 
 pub mod detector;
 mod filter;
+pub mod battery;
 
 pub use detector::{
     DetectedAirPods, detect_airpods, 

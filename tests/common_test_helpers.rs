@@ -8,13 +8,11 @@ use std::pin::Pin;
 use tokio_stream::wrappers::ReceiverStream;
 use std::collections::HashMap;
 use std::str::FromStr;
-use std::sync::Arc;
 
 // Add imports for RustPods types
-use rustpods::airpods::{DetectedAirPods, AirPodsType, AirPodsBattery, ChargingStatus, AirPodsChargingState};
+use rustpods::airpods::{DetectedAirPods, AirPodsType, AirPodsBattery, AirPodsChargingState};
 use rustpods::bluetooth::{DiscoveredDevice, BleEvent};
-use rustpods::config::{AppConfig, BluetoothConfig, UiConfig, SystemConfig, LogLevel, Theme};
-use rustpods::config::app_config::BatteryConfig;
+use rustpods::config::{AppConfig, LogLevel, Theme};
 use rustpods::ui::state::AppState;
 use btleplug::api::BDAddr;
 

@@ -1,5 +1,5 @@
 use iced::{executor, Application, Command, Element, Settings, Length, Color, Background};
-use iced::widget::{column, container, row, text, Container};
+use iced::widget::{column, container, row, text};
 use iced::alignment::{Alignment, Horizontal};
 use iced::theme;
 

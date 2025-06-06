@@ -5,7 +5,7 @@ use std::time::Instant;
 use btleplug::platform::Peripheral;
 use btleplug::api::Peripheral as _;  // Import the Peripheral trait
 use serde::{Serialize, Deserialize, Serializer, Deserializer};
-use crate::airpods::{AirPodsBattery, AirPodsChargingState, parse_airpods_data};
+use crate::airpods::{AirPodsBattery, parse_airpods_data, AirPodsChargingState};
 use crate::error::BluetoothError;
 
 /// Battery status information for AirPods devices

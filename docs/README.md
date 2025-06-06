@@ -6,7 +6,9 @@ Welcome to the RustPods documentation! This directory contains detailed document
 
 - [Main Documentation Index](index.md)
 - [User Guide](user-guide/getting-started.md)
-- [Developer Guide](development/project-structure.md)
+- [Test Coverage Guidelines](development/test-coverage.md)
+- [Manual Testing Guide](development/manual-testing-guide.md)
+- [UI Component Patterns](development/ui-components.md)
 
 ## Documentation Structure
 
@@ -17,10 +19,11 @@ docs/
 ├── development/                  - Developer documentation
 │   ├── assets.md                 - Asset management guide
 │   ├── contributing.md           - Redirects to root CONTRIBUTING.md
-│   └── (other technical docs)    
+│   ├── test-coverage.md          - Test coverage guidelines
+│   ├── manual-testing-guide.md   - Manual testing guide
+│   └── ui-components.md          - UI component patterns
 ├── user-guide/                   - User documentation
-│   ├── getting-started.md        - Installation and setup
-│   └── (other user guides)
+│   └── getting-started.md        - Installation and setup
 └── assets/                       - Documentation assets
 ```
 

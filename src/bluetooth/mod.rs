@@ -9,9 +9,11 @@ mod peripheral;
 pub mod events;
 pub mod battery;
 pub mod battery_monitor;
+pub mod airpods_bridge;
+pub mod cli_scanner;
 
 // Import error types from crate root
-use crate::error::{BluetoothError, RustPodsError, ErrorContext, RecoveryAction};
+use crate::error::{BluetoothError, ErrorContext, RecoveryAction};
 use std::fmt::Debug;
 
 // Re-export all necessary types from scanner
@@ -39,6 +41,10 @@ pub use battery::{
 
 pub use battery_monitor::{
     BatteryMonitor, BatteryMonitorOptions, BatteryAlert
+};
+
+pub use cli_scanner::{
+    CliScanner, CliScannerConfig, CliScannerResult, CliDeviceInfo, CliAirPodsData, ScannerStats
 };
 
 // Export examples for testing

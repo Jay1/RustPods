@@ -131,9 +131,26 @@ pub fn settings_icon_svg_string(color: Color) -> String {
         (color.b * 255.0) as u8
     );
     write!(&mut svg_string, r#"<svg width='24' height='24' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'>"#).unwrap();
-    write!(&mut svg_string, r#"<g stroke='{}' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round' fill='none'>"#, hex).unwrap();
-    write!(&mut svg_string, r#"<circle cx='12' cy='12' r='3.5' stroke='{}' stroke-width='2' fill='none'/>"#, hex).unwrap();
-    write!(&mut svg_string, r#"<path d='M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.09a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z' stroke='{}' fill='none'/>"#, hex).unwrap();
+    write!(&mut svg_string, r#"<g stroke='{}' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round' fill='{}'>"#, hex, hex).unwrap();
+    write!(&mut svg_string, r#"<circle cx='12' cy='12' r='3.5' stroke='{}' stroke-width='2' fill='{}'/>"#, hex, hex).unwrap();
+    write!(&mut svg_string, r#"<path d='M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.09a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z' stroke='{}' fill='{}'/>"#, hex, hex).unwrap();
     write!(&mut svg_string, r#"</g></svg>"#).unwrap();
+    svg_string
+}
+
+/// Generates an SVG string for a generic headset icon (for unknown devices)
+pub fn headset_icon_svg_string() -> String {
+    let mut svg_string = String::new();
+    use std::fmt::Write;
+    write!(&mut svg_string, r#"<svg width='32' height='32' viewBox='0 0 32 32' fill='none' xmlns='http://www.w3.org/2000/svg'>"#).unwrap();
+    // Headband
+    write!(&mut svg_string, r#"<path d='M8 20V16C8 10.4772 12.4772 6 18 6C23.5228 6 28 10.4772 28 16V20' stroke='currentColor' stroke-width='2' fill='none'/>"#).unwrap();
+    // Left earcup
+    write!(&mut svg_string, r#"<rect x='4' y='20' width='6' height='8' rx='2' fill='currentColor'/>"#).unwrap();
+    // Right earcup
+    write!(&mut svg_string, r#"<rect x='22' y='20' width='6' height='8' rx='2' fill='currentColor'/>"#).unwrap();
+    // Mic (optional, subtle)
+    write!(&mut svg_string, r#"<path d='M6 28C6 29.1046 6.89543 30 8 30H24C25.1046 30 26 29.1046 26 28' stroke='currentColor' stroke-width='1.5' fill='none'/>"#).unwrap();
+    write!(&mut svg_string, "</svg>").unwrap();
     svg_string
 } 

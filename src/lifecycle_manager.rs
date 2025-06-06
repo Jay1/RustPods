@@ -41,7 +41,11 @@ pub struct LifecycleManager {
     auto_save_interval: Duration,
     /// Auto-save task handle
     auto_save_task: Option<JoinHandle<()>>,
-    /// System event task handle
+    /// System event task handle (std::thread::JoinHandle on Windows)
+    #[cfg(target_os = "windows")]
+    system_event_task: Option<std::thread::JoinHandle<()>>,
+    /// System event task handle (tokio::task::JoinHandle on non-Windows)
+    #[cfg(not(target_os = "windows"))]
     system_event_task: Option<JoinHandle<()>>,
     /// Crash recovery task handle
     crash_recovery_task: Option<JoinHandle<()>>,
@@ -198,66 +202,9 @@ impl LifecycleManager {
         let persistence_manager = self.persistence_manager.clone();
         
         // Create the system event task
-        #[cfg(target_os = "windows")]
-        let task = tokio::spawn(async move {
-            use windows::Win32::UI::WindowsAndMessaging::{
-                GetMessageW, MSG, WM_POWERBROADCAST, PBT_APMSUSPEND, PBT_APMRESUMESUSPEND,
-                PBT_APMRESUMEAUTOMATIC, PBT_APMPOWERSTATUSCHANGE
-            };
-            
-            log::info!("Starting system event monitor for Windows");
-            
-            // Create a message-only window to receive power notifications
-            let mut msg = MSG::default();
-            
-            loop {
-                // Process Windows messages
-                // In a real implementation, this would use a proper message-only window
-                // For demonstration purposes, we'll implement a simple polling mechanism
-                
-                // Check for power events
-                unsafe {
-                    if GetMessageW(&mut msg, None, 0, 0).as_bool() && msg.message == WM_POWERBROADCAST {
-                        match msg.wParam.0 as u32 {
-                            PBT_APMSUSPEND => {
-                                *state.lock().unwrap() = LifecycleState::Sleep;
-                                ui_sender.send(crate::ui::Message::SystemSleep).ok();
-                                
-                                // Save state before sleep
-                                state_manager.dispatch(crate::ui::state_manager::Action::SystemSleep);
-                                
-                                // Save state before sleep
-                                if let Some(mut persistence_manager) = persistence_manager.clone() {
-                                    if let Err(e) = persistence_manager.save_state() {
-                                        log::error!("Failed to save state before sleep: {}", e);
-                                    } else {
-                                        log::info!("Successfully saved state before sleep");
-                                    }
-                                }
-                                
-                                log::info!("System entering sleep mode");
-                            }
-                            PBT_APMRESUMESUSPEND | PBT_APMRESUMEAUTOMATIC => {
-                                *state.lock().unwrap() = LifecycleState::Running;
-                                ui_sender.send(crate::ui::Message::SystemWake).ok();
-                                state_manager.dispatch(crate::ui::state_manager::Action::SystemWake);
-                                
-                                log::info!("System waking from sleep");
-                            }
-                            PBT_APMPOWERSTATUSCHANGE => {
-                                log::debug!("Power status changed (e.g., battery level)");
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-                
-                // Sleep to avoid high CPU usage in this polling loop
-                tokio::time::sleep(Duration::from_millis(500)).await;
-            }
-        });
-        
-        // For non-Windows platforms, implement a different strategy
+        // Win32 system event monitoring is currently disabled due to removal of unsupported Win32 imports.
+        // See docs/windows-ble-airpods.md for details. Only platform-agnostic or WinRT-relevant code should remain here.
+        // No 'task' is created for Windows at this time.
         #[cfg(not(target_os = "windows"))]
         let task = tokio::spawn(async move {
             log::info!("Starting generic system event monitor");
@@ -288,7 +235,14 @@ impl LifecycleManager {
             }
         });
         
-        self.system_event_task = Some(task);
+        #[cfg(not(target_os = "windows"))]
+        {
+            self.system_event_task = Some(task);
+        }
+        #[cfg(target_os = "windows")]
+        {
+            self.system_event_task = None;
+        }
     }
     
     /// Handle shutdown request
@@ -315,9 +269,19 @@ impl LifecycleManager {
         }
         
         // Cancel system event task
-        if let Some(task) = self.system_event_task.take() {
-            log::debug!("Cancelling system event task");
-            task.abort();
+        #[cfg(target_os = "windows")]
+        {
+            if let Some(_task) = self.system_event_task.take() {
+                log::debug!("Dropping system event thread handle (Windows)");
+                // No abort for std::thread::JoinHandle; dropping is sufficient
+            }
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            if let Some(task) = self.system_event_task.take() {
+                log::debug!("Cancelling system event task (tokio)");
+                task.abort();
+            }
         }
         
         // Cancel crash recovery task
@@ -370,15 +334,6 @@ impl LifecycleManager {
         // Notify state manager
         let sleep_action = crate::ui::state_manager::Action::SystemSleep;
         self.state_manager.dispatch(sleep_action);
-        
-        // Perform any sleep-specific actions
-        // e.g., Disconnect Bluetooth devices to save power
-        let device_state = self.state_manager.get_device_state();
-        if device_state.is_scanning {
-            // Stop scanning during sleep
-            let stop_scan_action = crate::ui::state_manager::Action::StopScanning;
-            self.state_manager.dispatch(stop_scan_action);
-        }
     }
     
     /// Handle system wake event
@@ -394,26 +349,6 @@ impl LifecycleManager {
         // Notify state manager
         let wake_action = crate::ui::state_manager::Action::SystemWake;
         self.state_manager.dispatch(wake_action);
-        
-        // Perform wake-specific actions
-        // e.g., Reconnect to devices
-        let device_state = self.state_manager.get_device_state();
-        
-        // If auto-scan is enabled, restart scanning
-        if device_state.auto_scan {
-            let start_scan_action = crate::ui::state_manager::Action::StartScanning;
-            self.state_manager.dispatch(start_scan_action);
-        }
-        
-        // If we had a selected device before, try to reconnect
-        if let Some(device_address) = &device_state.selected_device {
-            if device_state.connection_state != crate::ui::state_manager::ConnectionState::Disconnected {
-                let reconnect_action = crate::ui::state_manager::Action::RestorePreviousConnection(
-                    device_address.clone()
-                );
-                self.state_manager.dispatch(reconnect_action);
-            }
-        }
     }
     
     /// Force save all state immediately
@@ -528,10 +463,6 @@ impl LifecycleManager {
     fn apply_recovery_data(&self, data: RecoveryData) -> Result<(), String> {
         log::info!("Recovering from previous session state");
         
-        // Restore auto-scan setting
-        let action = crate::ui::state_manager::Action::ToggleAutoScan(data.auto_scan);
-        self.state_manager.dispatch(action);
-        
         // Restore error message if any
         if let Some(error) = data.last_error {
             let action = crate::ui::state_manager::Action::SetError(error);
@@ -544,15 +475,6 @@ impl LifecycleManager {
             
             // Use RestorePreviousConnection action instead of sending message directly
             let action = crate::ui::state_manager::Action::RestorePreviousConnection(device);
-            self.state_manager.dispatch(action);
-        }
-        
-        // If we were scanning, restart scanning
-        if data.is_scanning {
-            log::info!("Restarting scanning from previous session");
-            
-            // Start scanning
-            let action = crate::ui::state_manager::Action::StartScanning;
             self.state_manager.dispatch(action);
         }
         
@@ -625,8 +547,19 @@ impl Drop for LifecycleManager {
             task.abort();
         }
         
-        if let Some(task) = self.system_event_task.take() {
-            task.abort();
+        #[cfg(target_os = "windows")]
+        {
+            if let Some(_task) = self.system_event_task.take() {
+                log::debug!("Dropping system event thread handle (Windows)");
+                // No abort for std::thread::JoinHandle; dropping is sufficient
+            }
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            if let Some(task) = self.system_event_task.take() {
+                log::debug!("Cancelling system event task (tokio)");
+                task.abort();
+            }
         }
         
         if let Some(task) = self.crash_recovery_task.take() {

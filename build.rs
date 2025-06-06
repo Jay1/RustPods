@@ -1,0 +1,162 @@
+//! Build script for RustPods
+//!
+//! This script automatically builds the native CLI scanner during compilation,
+//! ensuring the project is fully self-contained and buildable from source.
+
+use std::env;
+use std::path::PathBuf;
+use std::process::Command;
+
+fn main() {
+    // Only build CLI scanner on Windows (target functionality)
+    if cfg!(target_os = "windows") {
+        build_cli_scanner();
+    } else {
+        println!("cargo:warning=CLI scanner only available on Windows - skipping build");
+    }
+}
+
+fn build_cli_scanner() {
+    println!("cargo:rerun-if-changed=scripts/airpods_battery_cli/");
+    println!("cargo:rerun-if-changed=third_party/spdlog/");
+    
+    let out_dir = env::var("OUT_DIR").unwrap();
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+    
+    let cli_source_dir = PathBuf::from(&manifest_dir)
+        .join("scripts")
+        .join("airpods_battery_cli");
+    
+    let cli_build_dir = cli_source_dir.join("build");
+    
+    println!("cargo:warning=Building AirPods CLI Scanner...");
+    
+    // Initialize submodules if needed
+    if !PathBuf::from(&manifest_dir).join("third_party").join("spdlog").join("include").exists() {
+        println!("cargo:warning=Initializing Git submodules...");
+        let status = Command::new("git")
+            .current_dir(&manifest_dir)
+            .args(&["submodule", "update", "--init", "--recursive"])
+            .status();
+        
+        match status {
+            Ok(status) if status.success() => {
+                println!("cargo:warning=Git submodules initialized successfully");
+            }
+            Ok(_) => {
+                println!("cargo:warning=Git submodule initialization failed - continuing anyway");
+            }
+            Err(_) => {
+                println!("cargo:warning=Git not found - assuming submodules are already initialized");
+            }
+        }
+    }
+    
+    // Determine build configuration
+    let profile = env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
+    let cmake_build_type = if profile == "release" { "Release" } else { "Debug" };
+    
+    // Run CMake configure
+    println!("cargo:warning=Configuring CLI scanner with CMake...");
+    let cmake_configure = Command::new("cmake")
+        .current_dir(&cli_source_dir)
+        .args(&[
+            "-B", "build",
+            "-S", ".",
+            "-G", "Visual Studio 17 2022", 
+            "-A", "x64",
+            &format!("-DCMAKE_BUILD_TYPE={}", cmake_build_type)
+        ])
+        .status();
+    
+    match cmake_configure {
+        Ok(status) if status.success() => {
+            println!("cargo:warning=CMake configuration successful");
+        }
+        Ok(_) => {
+            // Try alternative CMake generator
+            println!("cargo:warning=Visual Studio 2022 not found, trying 2019...");
+            let cmake_configure_alt = Command::new("cmake")
+                .current_dir(&cli_source_dir)
+                .args(&[
+                    "-B", "build",
+                    "-S", ".",
+                    "-G", "Visual Studio 16 2019", 
+                    "-A", "x64",
+                    &format!("-DCMAKE_BUILD_TYPE={}", cmake_build_type)
+                ])
+                .status();
+                
+            match cmake_configure_alt {
+                Ok(status) if status.success() => {
+                    println!("cargo:warning=CMake configuration successful with VS2019");
+                }
+                _ => {
+                    // Try Ninja as fallback
+                    println!("cargo:warning=Visual Studio generators failed, trying Ninja...");
+                    let cmake_ninja = Command::new("cmake")
+                        .current_dir(&cli_source_dir)
+                        .args(&[
+                            "-B", "build",
+                            "-S", ".",
+                            "-G", "Ninja",
+                            &format!("-DCMAKE_BUILD_TYPE={}", cmake_build_type)
+                        ])
+                        .status();
+                        
+                    if cmake_ninja.is_err() || !cmake_ninja.unwrap().success() {
+                        println!("cargo:warning=CMake configuration failed - CLI scanner will not be available");
+                        println!("cargo:warning=Please install Visual Studio 2019/2022 with C++ workload or CMake with Ninja");
+                        return;
+                    }
+                }
+            }
+        }
+        Err(_) => {
+            println!("cargo:warning=CMake not found - CLI scanner will not be available");
+            println!("cargo:warning=Please install CMake to enable CLI scanner build");
+            return;
+        }
+    }
+    
+    // Run CMake build
+    println!("cargo:warning=Building CLI scanner ({} mode)...", cmake_build_type);
+    let cmake_build = Command::new("cmake")
+        .current_dir(&cli_source_dir)
+        .args(&["--build", "build", "--config", cmake_build_type])
+        .status();
+    
+    match cmake_build {
+        Ok(status) if status.success() => {
+            println!("cargo:warning=CLI scanner built successfully");
+            
+            // Verify the executable exists
+            let exe_path = cli_build_dir.join(cmake_build_type).join("airpods_battery_cli.exe");
+            if exe_path.exists() {
+                println!("cargo:warning=CLI scanner executable: {}", exe_path.display());
+                
+                // Tell Cargo about the output
+                println!("cargo:rustc-env=CLI_SCANNER_PATH={}", exe_path.display());
+                
+                // Set environment variable for runtime
+                println!("cargo:rustc-env=CLI_SCANNER_AVAILABLE=true");
+            } else {
+                println!("cargo:warning=CLI scanner executable not found at expected location");
+                println!("cargo:rustc-env=CLI_SCANNER_AVAILABLE=false");
+            }
+        }
+        Ok(_) => {
+            println!("cargo:warning=CLI scanner build failed");
+            println!("cargo:rustc-env=CLI_SCANNER_AVAILABLE=false");
+        }
+        Err(e) => {
+            println!("cargo:warning=CLI scanner build error: {}", e);
+            println!("cargo:rustc-env=CLI_SCANNER_AVAILABLE=false");
+        }
+    }
+    
+    // Output build information
+    println!("cargo:rustc-env=CLI_BUILD_TYPE={}", cmake_build_type);
+    println!("cargo:rustc-env=CLI_SOURCE_DIR={}", cli_source_dir.display());
+    println!("cargo:rustc-env=CLI_BUILD_DIR={}", cli_build_dir.display());
+} 

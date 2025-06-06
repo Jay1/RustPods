@@ -31,22 +31,21 @@ Automatic testing of actual Bluetooth device interaction is challenging. Use the
    - Adapter information (name, address, capabilities) is accurate
    - No errors are shown in the terminal output
 
-### Bluetooth Scanning Testing
+### Paired Device Polling Testing
 
 1. **Prerequisites:**
    - Bluetooth adapter is properly functioning
-   - At least one Bluetooth device (preferably multiple) in discovery mode nearby
+   - At least one Bluetooth device (preferably multiple) paired with Windows
 
 2. **Test Procedure:**
-   - Launch RustPods in CLI mode with: `rustpods scan`
-   - Verify that nearby Bluetooth devices are detected
-   - Check if the signal strength (RSSI) values are reasonable
-   - Confirm that manufacturer data is displayed when available
+   - Launch RustPods and allow it to poll for paired devices (no manual scan required)
+   - Verify that all paired Bluetooth devices are detected and displayed in the UI
+   - Check that device information (name, address, type) is accurate
 
 3. **Expected Outcome:**
-   - Nearby Bluetooth devices are detected and displayed
+   - All paired Bluetooth devices are detected and displayed
    - Device information is accurate (address matches the actual device)
-   - Signal strength values change based on device proximity
+   - UI updates as devices are paired/unpaired in Windows
 
 ### Testing with Real AirPods
 
@@ -56,9 +55,9 @@ Automatic testing of actual Bluetooth device interaction is challenging. Use the
 
 2. **Test Procedure:**
    - Ensure AirPods are in case and case is closed
-   - Launch RustPods in CLI mode with: `rustpods airpods`
-   - Open the AirPods case lid
-   - Verify that the AirPods are detected
+   - Launch RustPods
+   - Open the AirPods case lid or take AirPods out of the case
+   - Verify that the AirPods are detected in the UI
    - Note battery level readings and verify they seem reasonable
 
 3. **Verification Steps:**
@@ -73,7 +72,7 @@ System tray behavior can vary based on Windows version and configuration:
 ### Tray Icon Appearance
 
 1. **Test Procedure:**
-   - Launch RustPods with: `rustpods`
+   - Launch RustPods
    - Verify the system tray icon appears in the taskbar
    - Ensure the icon is clear and properly sized
    - Verify icon behavior when changing display scaling settings
@@ -190,11 +189,11 @@ Testing the full AirPods connection lifecycle is important:
 1. **Test Procedure:**
    - Start with AirPods in case with lid closed
    - Launch RustPods
-   - Open AirPods case lid
+   - Open AirPods case lid or take AirPods out
    - Verify detection time and accuracy
 
 2. **Expected Outcome:**
-   - AirPods are detected within 5 seconds of opening the case
+   - AirPods are detected within 5 seconds of opening the case or removing from case
    - Correct AirPods model is identified
    - Case battery level is reported accurately
 

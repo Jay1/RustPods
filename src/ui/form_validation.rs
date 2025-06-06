@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use std::fmt;
 use thiserror::Error;
 
-use crate::ui::Message;
 use crate::error::{RustPodsError, ErrorContext};
 
 /// Form validation error
@@ -321,13 +320,6 @@ impl FormValidator {
         }
         
         valid
-    }
-    
-    /// Convert validation errors to UI messages
-    pub fn to_messages(&self) -> Vec<Message> {
-        self.errors.iter()
-            .map(|(field, error)| Message::validation_error(field.clone(), error.clone()))
-            .collect()
     }
     
     /// Get a map of all fields and their validation status

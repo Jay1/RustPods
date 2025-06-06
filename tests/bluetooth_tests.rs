@@ -2,7 +2,7 @@ use rustpods::bluetooth::{scanner::*, ScanConfig};
 
 #[tokio::test]
 async fn test_scanner_new() {
-    let scanner = BleScanner::new();
+    let scanner = BleScanner::with_config(ScanConfig::default());
     assert!(!scanner.is_scanning());
     assert_eq!(scanner.get_scan_cycles(), 0);
     assert!(scanner.get_devices().await.is_empty());
@@ -20,7 +20,7 @@ fn test_scanner_with_config() {
 
 #[tokio::test]
 async fn test_device_list_operations() {
-    let mut scanner = BleScanner::new();
+    let mut scanner = BleScanner::with_config(ScanConfig::default());
     
     // Initially empty
     assert!(scanner.get_devices().await.is_empty());

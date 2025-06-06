@@ -3,13 +3,12 @@
 use iced::{Subscription, Application, Element, Command};
 use iced::window;
 use tokio::sync::mpsc;
-use std::{thread, sync::Arc, time::Duration};
-use std::sync::Mutex;
+use std::{sync::Arc, time::Duration};
 
 use crate::ui::{Message, UiComponent, MainWindow, SettingsWindow};
 use crate::ui::system_tray_controller::SystemTrayController;
 use crate::ui::state_manager::StateManager;
-use crate::ui::window_visibility::{WindowVisibilityManager, WindowPosition};
+use crate::ui::window_visibility::WindowVisibilityManager;
 use crate::ui::theme::Theme;
 // Import the AppController from the appropriate path
 
@@ -31,7 +30,6 @@ pub struct StateApp {
     bounds: iced::Rectangle,
     
     /// System tray controller
-    #[allow(dead_code)]
     system_tray_controller: Option<SystemTrayController>,
 }
 
@@ -68,7 +66,14 @@ impl Application for StateApp {
         };
         
         // Create a system tray controller
-        let system_tray_controller = None; // Will be initialized in update
+        let (tray_tx, _tray_rx) = std::sync::mpsc::channel();
+        let mut system_tray_controller = Some(SystemTrayController::new(tray_tx, _config.clone(), Arc::clone(&state_manager)).unwrap());
+        if let Some(controller) = &mut system_tray_controller {
+            match controller.start() {
+                Ok(_) => log::info!("System tray controller started successfully"),
+                Err(e) => log::error!("Failed to start system tray controller: {}", e),
+            }
+        }
         
         (
             Self {
@@ -110,96 +115,36 @@ impl Application for StateApp {
     }
 
     fn update(&mut self, message: Message) -> Command<Message> {
-        // Reference to current bounds for visibility operations
         let bounds = self.bounds;
-        
         match message {
             Message::ToggleVisibility => {
-                // Use the visibility manager to toggle
+                log::info!("StateApp: ToggleVisibility received");
                 self.visibility_manager.toggle(bounds)
             },
             Message::Exit => {
-                // Cleanup and exit
                 if let Some(controller) = &mut self.system_tray_controller {
                     let _ = controller.stop();
                 }
-                
-                // Save settings before exit
                 let config = self.state_manager.get_config();
                 if let Err(e) = config.save() {
                     log::error!("Failed to save settings on exit: {}", e);
                 }
-                
                 window::close()
             },
-            Message::WindowMove(position) => {
-                // Create a WindowPosition and update the visibility manager
-                let window_pos = WindowPosition {
-                    x: position.x,
-                    y: position.y,
-                    width: self.bounds.width,
-                    height: self.bounds.height,
-                };
-                
-                self.visibility_manager.set_position(window_pos)
+            Message::WindowCloseRequested => {
+                log::info!("StateApp: WindowCloseRequested received, minimizing to tray");
+                // Minimize to tray instead of exiting
+                self.visibility_manager.hide(bounds)
             },
-            // Initialize system tray controller if it doesn't exist
-            Message::InitializeSystemTray(tx) => {
-                // Create the system tray controller with the state manager
-                let _config = self.state_manager.get_config();
-                
-                // Create controller and start it
-                match SystemTrayController::new(
-                    tx,
-                    _config.clone(),
-                    Arc::clone(&self.state_manager)
-                ) {
-                    Ok(mut controller) => {
-                        // Start the controller
-                        if let Err(e) = controller.start() {
-                            log::error!("Failed to start system tray controller: {}", e);
-                        } else {
-                            // Store the controller if successful
-                            self.system_tray_controller = Some(controller);
-                            log::info!("System tray controller started successfully");
-                        }
-                    },
-                    Err(e) => {
-                        log::error!("Failed to create system tray controller: {}", e);
-                    }
-                }
-                
-                Command::none()
-            },
-            // Toggle display mode in the main window
-            Message::ToggleDisplayMode => {
-                // Toggle advanced display mode in main window
-                self.main_window.toggle_advanced_display()
-            },
-            // Update the window size for responsive design
-            Message::WindowUpdate => {
-                // Update main window with current bounds
-                self.main_window = self.main_window.clone().with_window_size(
-                    (self.bounds.width as u32, self.bounds.height as u32)
-                );
-                Command::none()
-            },
-            // Animation tick for smooth transitions
             Message::AnimationTick => {
-                // Update animation progress
                 let progress = (self.state_manager.get_animation_progress() + 0.016) % 1.0;
                 self.state_manager.set_animation_progress(progress);
-                
-                // Update main window with animation progress
                 self.main_window = self.main_window.clone()
                     .with_animation_progress(progress)
                     .with_connection_transition(progress);
-                    
                 Command::none()
             },
-            // Other messages can be routed to the state manager
             _ => {
-                // Handle other message types if needed
                 Command::none()
             }
         }
@@ -218,14 +163,16 @@ impl Application for StateApp {
     }
     
     fn subscription(&self) -> Subscription<Message> {
-        // Combine subscriptions
         iced::Subscription::batch(vec![
-            // Window events subscription
-            iced::subscription::events().map(Message::RawEvent),
-            
-            // Regular tick for updates
-            iced::time::every(Duration::from_secs(1))
-                .map(|_| Message::Tick),
+            iced::time::every(Duration::from_secs(1)).map(|_| Message::Tick),
+            iced::subscription::events_with(|event, _status| {
+                if let iced::Event::Window(window_event) = &event {
+                    if let window::Event::CloseRequested = window_event {
+                        return Some(Message::WindowCloseRequested);
+                    }
+                }
+                None
+            }),
         ])
     }
 }
@@ -325,7 +272,7 @@ pub fn run_state_ui() -> Result<(), iced::Error> {
             default_font: iced::Font::with_name("SpaceMono Nerd Font"),
             default_text_size: 16.0,
             antialiasing: true,
-            exit_on_close_request: true,
+            exit_on_close_request: false,
         })
     });
 

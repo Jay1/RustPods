@@ -155,10 +155,6 @@ impl StatePersistenceManager {
     pub fn apply_state(&self, state: PersistentState) -> Result<()> {
         log::info!("Applying persistent state to application");
         
-        // Apply auto-scan setting
-        let action = crate::ui::state_manager::Action::ToggleAutoScan(state.auto_scan);
-        self.state_manager.dispatch(action);
-        
         // Apply advanced display mode setting
         let action = crate::ui::state_manager::Action::SetAdvancedDisplayMode(state.advanced_display_mode);
         self.state_manager.dispatch(action);

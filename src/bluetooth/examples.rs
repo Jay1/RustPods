@@ -1,13 +1,30 @@
 use std::time::{Duration, Instant};
-// use btleplug::api::BDAddr;
+use std::sync::Arc;
+use btleplug::api::{CentralEvent, BDAddr};
+use btleplug::platform::Peripheral;
+use crate::error::BluetoothError;
 
 use crate::bluetooth::{BleScanner, BleEvent, ScanConfig};
 use crate::airpods::{airpods_all_models_filter, airpods_pro_filter, airpods_nearby_filter};
+#[cfg(test)]
+use crate::bluetooth::scanner::MockAdapterEventsProvider;
+
+// Example-only mock provider for demo purposes (not for production use)
+pub struct ExampleMockAdapterEventsProvider;
+impl crate::bluetooth::scanner::AdapterEventsProvider for ExampleMockAdapterEventsProvider {
+    fn clone_box(&self) -> Box<dyn crate::bluetooth::scanner::AdapterEventsProvider> { Box::new(ExampleMockAdapterEventsProvider) }
+    fn get_events<'a>(&'a self) -> std::pin::Pin<Box<dyn futures::Future<Output = Result<std::pin::Pin<Box<dyn futures::Stream<Item = CentralEvent> + Send>>, BluetoothError>> + Send + 'a>> {
+        Box::pin(async { Ok(Box::pin(futures::stream::empty()) as std::pin::Pin<Box<dyn futures::Stream<Item = CentralEvent> + Send>>) })
+    }
+    fn get_peripheral<'a>(&'a self, _address: &BDAddr) -> std::pin::Pin<Box<dyn futures::Future<Output = Result<Peripheral, BluetoothError>> + Send + 'a>> {
+        Box::pin(async { panic!("ExampleMockAdapterEventsProvider::get_peripheral not implemented") })
+    }
+}
 
 /// Basic adapter discovery example
 pub async fn discover_adapters() -> Result<(), Box<dyn std::error::Error>> {
     println!("Discovering Bluetooth adapters...");
-    let mut scanner = BleScanner::new();
+    let mut scanner = BleScanner::new(Arc::new(ExampleMockAdapterEventsProvider), ScanConfig::default());
     
     // Initialize the scanner (which will find the first available adapter)
     scanner.initialize().await?;
@@ -22,7 +39,7 @@ pub async fn scan_with_adapter() -> Result<(), Box<dyn std::error::Error>> {
     println!("Scanning with adapter...");
     
     // Create scanner and initialize
-    let mut scanner = BleScanner::new();
+    let mut scanner = BleScanner::new(Arc::new(ExampleMockAdapterEventsProvider), ScanConfig::default());
     scanner.initialize().await?;
     
     // Start scanning
@@ -106,14 +123,14 @@ pub async fn interval_scanning() -> Result<(), Box<dyn std::error::Error>> {
     println!("Interval-based scanning...");
     
     // Create a scanner with a custom config for interval scanning
-    let config = ScanConfig {
+    let _config = ScanConfig {
         scan_duration: Duration::from_secs(3),
         interval_between_scans: Duration::from_secs(2),
         max_scan_cycles: Some(3),
         ..ScanConfig::default()
     };
     
-    let mut scanner = BleScanner::with_config(config);
+    let mut scanner = BleScanner::new(Arc::new(ExampleMockAdapterEventsProvider), ScanConfig::default());
     scanner.initialize().await?;
     
     // Start scanning
@@ -183,13 +200,13 @@ pub async fn airpods_filtering() -> Result<(), Box<dyn std::error::Error>> {
     println!("AirPods filtering demo...");
     
     // Create scanner with extended scan time
-    let config = ScanConfig {
+    let _config = ScanConfig {
         scan_duration: Duration::from_secs(10),
         auto_stop_scan: true,
         ..ScanConfig::default()
     };
     
-    let mut scanner = BleScanner::with_config(config);
+    let mut scanner = BleScanner::new(Arc::new(ExampleMockAdapterEventsProvider), ScanConfig::default());
     scanner.initialize().await?;
     
     // Start scanning

@@ -8,7 +8,7 @@ use crate::ui::components::settings_view::SettingsView;
 use crate::ui::components::svg_icons::settings_icon_svg_string;
 use iced::{
     widget::{button, column, container, row, scrollable, text, svg::{Svg, Handle}},
-    Element, Length, Alignment, Color
+    Element, Length, Color
 };
 
 /// Represents the settings window of the application
@@ -60,15 +60,17 @@ impl SettingsWindow {
     
     /// Update the configuration
     pub fn update_config(&mut self, config: AppConfig) {
-        self.config = config.clone();
-        self.settings_view.update_config(config);
+        println!("[DEBUG] SettingsWindow::update_config called");
+        self.config = config;
+        println!("[DEBUG] SettingsWindow::config updated");
         self.has_changes = false;
-        self.validation_error = None;
     }
     
     /// Mark that changes have been made
     pub fn mark_changed(&mut self) {
+        println!("[DEBUG] SettingsWindow::mark_changed called");
         self.has_changes = true;
+        println!("[DEBUG] SettingsWindow::has_changes set to true");
     }
     
     /// Check if there are unsaved changes
@@ -88,7 +90,7 @@ impl SettingsWindow {
     
     /// Create the header view
     fn header_view(&self) -> Element<'_, Message, iced::Renderer<Theme>> {
-        let svg_icon = Svg::new(Handle::from_memory(settings_icon_svg_string(theme::LAVENDER).into_bytes()))
+        let svg_icon = Svg::new(Handle::from_memory(settings_icon_svg_string(theme::TEXT).into_bytes()))
             .width(28)
             .height(28);
         let title = text("Settings")
@@ -218,7 +220,7 @@ impl SettingsWindow {
         let reset_button = button(text("Reset to Defaults").size(16).style(theme::TEXT))
             .padding(10)
             .style(theme::Button::Destructive)
-            .on_press(Message::ResetSettings);
+            .on_press(Message::ShowToast("Reset to defaults not implemented".to_string()));
         row![
             reset_button,
             iced::widget::Space::with_width(Length::Fill),

@@ -5,15 +5,11 @@
 //! settings persistence, and settings change event propagation.
 
 use std::time::Duration;
-use std::fs;
-use tempfile::tempdir;
 
 use rustpods::config::{AppConfig, ConfigError, Theme, LogLevel};
 // use rustpods::ui::{SettingsWindow, SettingsTab};
 use rustpods::ui::components::settings_view::{BluetoothSetting, UiSetting, SystemSetting};
 use rustpods::ui::Message;
-use rustpods::ui::UiComponent;
-use rustpods::ui::theme;
 use iced::widget::text;
 use iced::Element;
 

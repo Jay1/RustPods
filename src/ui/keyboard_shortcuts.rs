@@ -156,8 +156,6 @@ impl KeyboardShortcutManager {
     /// Register the default keyboard shortcuts for the application
     pub fn register_default_shortcuts(&mut self) {
         // Main application shortcuts
-        self.register(KeyboardShortcut::ctrl(KeyCode::R), Message::StartScan);
-        self.register(KeyboardShortcut::ctrl(KeyCode::S), Message::StopScan);
         self.register(KeyboardShortcut::ctrl(KeyCode::Q), Message::Exit);
         self.register(KeyboardShortcut::ctrl(KeyCode::H), Message::ToggleVisibility);
         
@@ -192,8 +190,6 @@ impl KeyboardShortcutManager {
         
         for (shortcut, message) in &self.shortcuts {
             let description = match message {
-                Message::StartScan => "Start scanning for devices",
-                Message::StopScan => "Stop scanning for devices",
                 Message::Exit => "Exit application",
                 Message::ToggleVisibility => "Show/hide application window",
                 Message::OpenSettings => "Open settings",

@@ -118,13 +118,9 @@ pub fn handle_window_events(
     match event {
         Event::Mouse(mouse_event) => match mouse_event {
             mouse::Event::ButtonPressed(mouse::Button::Left) => {
-                // Use the position from the window's current state instead
                 let window_position = Point::new(bounds.x, bounds.y);
-                
-                // Check if the click is in a draggable region (top 40px)
                 let last_cursor_pos = window_state.last_window_position.unwrap_or(Point::new(0.0, 0.0));
                 let is_in_title_bar = last_cursor_pos.y - bounds.y <= 40.0;
-                
                 if is_in_title_bar {
                     window_state.handle_mouse_press(
                         last_cursor_pos,
@@ -139,11 +135,7 @@ pub fn handle_window_events(
                 None
             }
             mouse::Event::CursorMoved { position } => {
-                if window_state.dragging {
-                    window_state.calculate_window_position(*position).map(Message::WindowMove)
-                } else {
-                    None
-                }
+                None
             }
             _ => None,
         },

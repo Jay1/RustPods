@@ -9,17 +9,15 @@ use iced::{
 use iced::alignment::Horizontal;
 use iced::widget::svg::Handle;
 
-use crate::bluetooth::DiscoveredDevice;
 use crate::bluetooth::AirPodsBatteryStatus;
-use crate::airpods::{DetectedAirPods, AirPodsBattery};
-use crate::ui::components::{battery_display_row, battery_with_label};
-use crate::ui::components::ConnectionStatusWrapper;
+use crate::airpods::DetectedAirPods;
 use crate::ui::Message;
 use crate::ui::theme;
 use crate::config::AppConfig;
 use crate::ui::UiComponent;
-use crate::ui::components::svg_icons::settings_icon_svg_string;
+use crate::ui::components::svg_icons::{settings_icon_svg_string, headset_icon_svg_string};
 use crate::ui::theme::Theme;
+use crate::ui::state::MergedBluetoothDevice;
 
 /// Main window component
 #[derive(Debug, Clone)]
@@ -28,7 +26,7 @@ pub struct MainWindow {
     pub selected_device: Option<DetectedAirPods>,
     
     /// List of discovered devices
-    pub devices: Vec<DiscoveredDevice>,
+    pub merged_devices: Vec<MergedBluetoothDevice>,
     
     /// Whether a scan is currently in progress
     pub is_scanning: bool,
@@ -59,7 +57,7 @@ impl MainWindow {
     pub fn new() -> Self {
         Self {
             selected_device: None,
-            devices: Vec::new(),
+            merged_devices: Vec::new(),
             is_scanning: false,
             animation_progress: 0.0,
             config: AppConfig::default(),
@@ -88,23 +86,6 @@ impl MainWindow {
     /// Toggle advanced display mode and return a command
     pub fn toggle_display_mode(&mut self) -> Command<Message> {
         let _ = self.toggle_advanced_display();
-        Command::none()
-    }
-    
-    /// Update the window with a new device
-    pub fn update_device(&mut self, device: DiscoveredDevice) -> Command<Message> {
-        // Find and update existing device or add new one
-        if let Some(existing) = self.devices.iter_mut().find(|d| d.address == device.address) {
-            *existing = device;
-        } else {
-            self.devices.push(device);
-        }
-        Command::none()
-    }
-    
-    /// Remove a device from the list
-    pub fn remove_device(&mut self, address: String) -> Command<Message> {
-        self.devices.retain(|d| d.address.to_string() != address);
         Command::none()
     }
     
@@ -161,19 +142,27 @@ impl MainWindow {
             .horizontal_alignment(Horizontal::Center)
             .style(crate::ui::theme::TEXT);
         
-        // SVG settings icon
-        let svg_data = settings_icon_svg_string(theme::LAVENDER).into_bytes();
+        // SVG settings icon with theme-driven color
+        let svg_data = settings_icon_svg_string(theme::settings_icon_color(&Theme::CatppuccinMocha)).into_bytes();
         let svg_icon = Svg::new(Handle::from_memory(svg_data))
             .width(24)
             .height(24);
         let settings_button = button(svg_icon)
             .padding(8)
-            .on_press(Message::OpenSettings);
-        
+            .on_press(Message::OpenSettings)
+            .style(crate::ui::theme::button_style());
+        let exit_button = button(text("Exit")
+            .size(16)
+            .style(theme::TEXT))
+            .padding([6, 16])
+            .on_press(Message::Exit)
+            .style(crate::ui::theme::lavender_button_style());
         row![
             title,
             iced::widget::Space::with_width(Length::Fill),
-            settings_button
+            settings_button,
+            iced::widget::Space::with_width(8),
+            exit_button
         ]
         .width(Length::Fill)
         .align_items(iced::Alignment::Center)
@@ -196,34 +185,32 @@ impl MainWindow {
 impl UiComponent for MainWindow {
     fn view(&self) -> Element<'_, Message, iced::Renderer<Theme>> {
         let header = self.create_header();
-        
-        // Create the connection status wrapper that can be used directly in the column
-        let connection_status = ConnectionStatusWrapper::new(
-            self.selected_device.is_some(),
-            self.is_scanning
-        )
-        .with_animation_progress(self.animation_progress);
-        
+        let show_no_device = self.merged_devices.is_empty() && self.selected_device.is_none();
+        let no_device_msg = if show_no_device {
+            Some(
+                iced::widget::text("No device connected")
+                    .size(20)
+                    .style(crate::ui::theme::ROSEWATER)
+            )
+        } else {
+            None
+        };
         let content = self.view_content();
-        
-        // Create column that contains all the main window content
-        let main_content = column![
-            header,
-            connection_status,
-            iced::widget::Space::new(Length::Fill, Length::Fixed(20.0)),
-            content
-        ]
-        .padding(20)
-        .spacing(10)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .align_items(iced::Alignment::Center);
-
+        let mut main_content = column![header];
+        if let Some(msg) = no_device_msg {
+            main_content = main_content.push(msg);
+        }
+        main_content = main_content
+            .push(content)
+            .padding(20)
+            .spacing(10)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .align_items(iced::Alignment::Center);
         container(main_content)
             .width(Length::Fill)
             .height(Length::Fill)
-            .center_x()
-            .center_y()
+            .style(crate::ui::theme::device_row_style())
             .into()
     }
 }
@@ -325,93 +312,164 @@ impl MainWindow {
     
     /// Render device list
     fn render_device_list(&self) -> Element<Message, iced::Renderer<Theme>> {
-        let devices_list = if self.devices.is_empty() {
-            // No devices found message
-            let empty_message: Element<Message, iced::Renderer<Theme>> = text("No devices found. Press Scan to search for devices.")
+        let mut col = column![];
+        let devices_list = if self.merged_devices.is_empty() {
+            let empty_message: Element<Message, iced::Renderer<Theme>> = text("No devices found.")
                 .size(16)
                 .style(crate::ui::theme::TEXT)
                 .into();
-                
             empty_message
         } else {
-            let devices_column = self.devices.iter().fold(
+            let devices_column = self.merged_devices.iter().fold(
                 column![].spacing(10),
                 |column, device| {
-                    column.push(self.render_device_item(device))
+                    column.push(self.render_merged_device_item(device))
                 }
             );
-            
             scrollable(devices_column)
                 .height(Length::Fill)
                 .into()
         };
-        
-        // Scan button
-        let scan_button = button(
-            text(if self.is_scanning { "Stop Scan" } else { "Scan for Devices" })
-                .style(crate::ui::theme::TEXT)
-        )
-        .on_press(
-            if self.is_scanning { 
-                Message::StopScan 
-            } else { 
-                Message::StartScan 
-            }
-        );
-        
-        column![
-            text("Available Devices")
-                .size(20)
-                .style(crate::ui::theme::TEXT),
-            iced::widget::Space::new(Length::Fill, Length::Fixed(10.0)),
-            devices_list,
-            iced::widget::Space::new(Length::Fill, Length::Fixed(20.0)),
-            scan_button,
-        ]
-        .padding(20)
-        .spacing(10)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .into()
+        col = col
+            .push(text("Available Devices").size(20).style(crate::ui::theme::TEXT))
+            .push(iced::widget::Space::new(Length::Fill, Length::Fixed(10.0)))
+            .push(devices_list)
+            .push(iced::widget::Space::new(Length::Fill, Length::Fixed(20.0)));
+        col
+            .padding(20)
+            .spacing(10)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into()
     }
     
     /// Render a device item in the list
-    fn render_device_item(&self, device: &DiscoveredDevice) -> Element<Message, iced::Renderer<Theme>> {
-        let device_name = device.name.clone()
-            .unwrap_or_else(|| "Unknown Device".to_string());
-        let address = device.address.to_string();
-        
-        // Device name and address
-        let device_info = column![
-            text(&device_name).size(16).style(crate::ui::theme::TEXT),
-            text(&address).size(12).style(crate::ui::theme::TEXT),
-        ]
-        .spacing(5)
-        .width(Length::Fill);
-        
-        // Signal strength indicator (RSSI)
-        let rssi_text = match device.rssi {
-            Some(rssi) => format!("{}dBm", rssi),
-            None => "Unknown".to_string(),
+    fn render_merged_device_item(&self, device: &MergedBluetoothDevice) -> Element<Message, iced::Renderer<Theme>> {
+        use iced::widget::{Image, Svg, Space, Container, Row, Column, Button};
+        use iced::widget::svg::Handle;
+        use iced::{Length, Alignment};
+        use crate::ui::theme;
+        // --- Icon selection logic ---
+        let device_type = device.device_type.as_deref().unwrap_or("Unknown").to_lowercase();
+        let name_lower = device.name.to_lowercase();
+        let icon_element: iced::Element<'_, Message, iced::Renderer<Theme>> = if device.device_subtype.as_deref() == Some("case") {
+            Image::new("assets/icons/hw/airpodscase.png").width(32).height(32).into()
+        } else if name_lower.contains("airpods") {
+            Image::new("assets/icons/hw/airpods.png").width(32).height(32).into()
+        } else if name_lower.contains("sony") {
+            Image::new("assets/icons/hw/sony.png").width(32).height(32).into()
+        } else if name_lower.contains("sennheiser") {
+            Image::new("assets/icons/hw/Sennheiser.png").width(32).height(32).into()
+        } else if name_lower.contains("bose") {
+            Image::new("assets/icons/hw/Bose.png").width(32).height(32).into()
+        } else if name_lower.contains("beats") {
+            Image::new("assets/icons/hw/beats.png").width(32).height(32).into()
+        } else if name_lower.contains("jabra") {
+            Image::new("assets/icons/hw/jabra.png").width(32).height(32).into()
+        } else if name_lower.contains("anker") {
+            Image::new("assets/icons/hw/anker.png").width(32).height(32).into()
+        } else if name_lower.contains("earfun") {
+            Image::new("assets/icons/hw/earfun.png").width(32).height(32).into()
+        } else if name_lower.contains("technics") {
+            Image::new("assets/icons/hw/technics.png").width(32).height(32).into()
+        } else if name_lower.contains("google") {
+            Image::new("assets/icons/hw/google.png").width(32).height(32).into()
+        } else if name_lower.contains("samsung") {
+            Image::new("assets/icons/hw/samsung.png").width(32).height(32).into()
+        } else {
+            let svg_data = headset_icon_svg_string();
+            let svg_handle = Handle::from_memory(svg_data.into_bytes());
+            Svg::new(svg_handle).width(32).height(32).into()
         };
-        let rssi = text(rssi_text).size(14).style(crate::ui::theme::TEXT);
-        
-        // Connect button
-        let connect_button = button(text("Connect").style(crate::ui::theme::TEXT))
-            .on_press(Message::SelectDevice(address.clone()));
-        
-        // Combine elements
-        container(
-            row![
-                device_info,
-                rssi,
-                connect_button,
-            ]
-            .spacing(10)
-            .align_items(iced::Alignment::Center)
-        )
-        .padding(10)
-        .width(Length::Fill)
-        .into()
+        // --- Device info ---
+        let device_name = if device.name.trim().is_empty() {
+            "Unknown Device".to_string()
+        } else {
+            device.name.clone()
+        };
+        let address = &device.address;
+        let paired = device.paired;
+        let connected = device.connected;
+        // Status badge
+        let (status_str, status_color) = if connected {
+            ("Connected", theme::GREEN)
+        } else if paired {
+            ("Paired", theme::YELLOW)
+        } else {
+            ("Not Paired", theme::RED)
+        };
+        // Battery badge(s)
+        let mut battery_row = Row::new();
+        if let Some(left) = device.left_battery {
+            battery_row = battery_row.push(Container::new(text(format!("L: {}%", left)).size(12).style(theme::TEXT)).padding([2, 8]).style(theme::badge_style(theme::BLUE)));
+            if let Some(in_ear) = device.left_in_ear {
+                battery_row = battery_row.push(Container::new(text(format!("L in-ear: {}", if in_ear { "Yes" } else { "No" })).size(12).style(theme::TEXT)).padding([2, 8]).style(theme::badge_style(theme::GREEN)));
+            }
+        }
+        if let Some(right) = device.right_battery {
+            battery_row = battery_row.push(Container::new(text(format!("R: {}%", right)).size(12).style(theme::TEXT)).padding([2, 8]).style(theme::badge_style(theme::BLUE)));
+            if let Some(in_ear) = device.right_in_ear {
+                battery_row = battery_row.push(Container::new(text(format!("R in-ear: {}", if in_ear { "Yes" } else { "No" })).size(12).style(theme::TEXT)).padding([2, 8]).style(theme::badge_style(theme::GREEN)));
+            }
+        }
+        if let Some(case) = device.case_battery {
+            battery_row = battery_row.push(Container::new(text(format!("Case: {}%", case)).size(12).style(theme::TEXT)).padding([2, 8]).style(theme::badge_style(theme::BLUE)));
+            if let Some(lid_open) = device.case_lid_open {
+                battery_row = battery_row.push(Container::new(text(format!("Lid open: {}", if lid_open { "Yes" } else { "No" })).size(12).style(theme::TEXT)).padding([2, 8]).style(theme::badge_style(theme::GREEN)));
+            }
+        }
+        // Advanced/diagnostic fields
+        if self.advanced_display_mode {
+            if let Some(side) = &device.side {
+                battery_row = battery_row.push(Container::new(text(format!("Side: {}", side)).size(12).style(theme::TEXT)).padding([2, 8]).style(theme::badge_style(theme::YELLOW)));
+            }
+            if let Some(both_in_case) = device.both_in_case {
+                battery_row = battery_row.push(Container::new(text(format!("Both in case: {}", if both_in_case { "Yes" } else { "No" })).size(12).style(theme::TEXT)).padding([2, 8]).style(theme::badge_style(theme::YELLOW)));
+            }
+            if let Some(color) = &device.color {
+                battery_row = battery_row.push(Container::new(text(format!("Color: {}", color)).size(12).style(theme::TEXT)).padding([2, 8]).style(theme::badge_style(theme::YELLOW)));
+            }
+            if let Some(switch_count) = device.switch_count {
+                battery_row = battery_row.push(Container::new(text(format!("Switches: {}", switch_count)).size(12).style(theme::TEXT)).padding([2, 8]).style(theme::badge_style(theme::YELLOW)));
+            }
+        }
+        // --- Layout ---
+        let info_col = Column::new()
+            .push(
+                text(device_name)
+                    .size(16)
+                    .style(theme::TEXT)
+            )
+            .push(
+                text(address)
+                    .size(12)
+                    .style(theme::SUBTLE_TEXT)
+            )
+            .push(
+                Row::new()
+                    .push(Container::new(text(status_str).size(12).style(theme::TEXT)).padding([2, 8]).style(theme::badge_style(status_color)))
+                    .push(Space::with_width(Length::Fixed(8.0)))
+                    .push(battery_row)
+                    .spacing(8)
+            )
+            .spacing(3)
+            .width(Length::Fill);
+        let select_button = Button::new(text("Select").style(theme::TEXT))
+            .on_press(Message::SelectDevice(address.clone()))
+            .padding([6, 16])
+            .style(theme::button_style());
+        let row_content = Row::new()
+            .push(icon_element)
+            .push(Space::with_width(Length::Fixed(16.0)))
+            .push(info_col)
+            .push(Space::with_width(Length::Fixed(16.0)))
+            .push(select_button)
+            .spacing(16)
+            .align_items(Alignment::Center);
+        Container::new(row_content)
+            .padding(12)
+            .width(Length::Fill)
+            .style(theme::device_row_style())
+            .into()
     }
 }

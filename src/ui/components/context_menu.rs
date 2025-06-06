@@ -177,12 +177,6 @@ impl ContextMenu {
             .padding(4)
             .style(iced::theme::Button::Secondary);
         
-        let btn = if item.disabled {
-            btn
-        } else {
-            btn.on_press(Message::ContextMenuItemSelected(item.id.clone()))
-        };
-        
         btn.into()
     }
     

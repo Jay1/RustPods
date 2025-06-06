@@ -51,6 +51,9 @@ pub static LIGHT_SURFACE: Color = Color::from_rgb(0xdd as f32 / 255.0, 0xdd as f
 pub static LIGHT_TEXT: Color = Color::from_rgb(0x33 as f32 / 255.0, 0x33 as f32 / 255.0, 0x33 as f32 / 255.0);
 pub static LIGHT_ACCENT: Color = Color::from_rgb(0x40 as f32 / 255.0, 0x90 as f32 / 255.0, 0xF0 as f32 / 255.0);
 
+// Subtle text color for secondary info
+pub static SUBTLE_TEXT: Color = SUBTEXT1;
+
 /// Theme variants for the application
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Theme {
@@ -535,7 +538,7 @@ impl svg::StyleSheet for Theme {
 
     fn appearance(&self, _style: &Self::Style) -> svg::Appearance {
         svg::Appearance {
-            color: Some(MAUVE),
+            color: None, // Use the color from the SVG string, not the theme
         }
     }
 }
@@ -560,4 +563,33 @@ impl From<Theme> for crate::config::Theme {
     }
 }
 
-// NOTE: To use SpaceMono Nerd Font, ensure the font file is included in your assets and registered in main.rs or the application entry point using iced::font::Family or similar. 
+// Badge style for status/battery badges
+pub fn badge_style(color: Color) -> iced::theme::Container {
+    iced::theme::Container::Box // Use Box for now; can be extended for custom
+}
+
+// Button style for action buttons
+pub fn button_style() -> iced::theme::Button {
+    iced::theme::Button::Primary
+}
+
+// Device row style for container
+pub fn device_row_style() -> iced::theme::Container {
+    iced::theme::Container::Box
+}
+
+// Button style for a lavender background and TEXT color
+pub fn lavender_button_style() -> iced::theme::Button {
+    // Use Secondary as base, but override in the stylesheet if needed
+    iced::theme::Button::Secondary
+}
+
+// NOTE: To use SpaceMono Nerd Font, ensure the font file is included in your assets and registered in main.rs or the application entry point using iced::font::Family or similar.
+
+// Returns the color to use for the settings cogwheel icon based on the theme
+pub fn settings_icon_color(theme: &Theme) -> Color {
+    match theme {
+        Theme::Light => LIGHT_TEXT,
+        Theme::Dark | Theme::System | Theme::CatppuccinMocha => TEXT,
+    }
+} 

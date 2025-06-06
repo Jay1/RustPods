@@ -43,8 +43,7 @@ When working with Iced components, careful attention must be paid to lifetimes a
 fn view(&self) -> Element<'_, Message, iced::Renderer<Theme>> {
     // Create a temporary component
     let status = ConnectionStatus::new(
-        self.is_connected, 
-        self.is_scanning
+        self.is_connected
     );
     
     // Problem: This returns a reference to the temporary 'status' variable
@@ -64,7 +63,6 @@ To solve this issue, RustPods uses a wrapper component pattern:
 // ✅ Correct pattern using a wrapper component
 pub struct ConnectionStatusWrapper {
     pub is_connected: bool,
-    pub is_scanning: bool,
     pub animation_progress: f32,
 }
 

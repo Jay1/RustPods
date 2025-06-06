@@ -121,8 +121,9 @@ impl AppController {
                         ui_sender.send(Message::DeviceDiscovered(device)).ok();
                     }
                     BleEvent::DeviceLost(address) => {
-                        // For now, just log this. We could send a device lost message if needed.
-                        println!("Device lost: {}", address);
+                        // Developer log and optional user feedback
+                        log::info!("Device lost: {}", address);
+                        let _ = ui_sender.send(Message::ShowToast(format!("Device lost: {}", address)));
                     }
                     _ => {} // Ignore other events
                 }
@@ -152,127 +153,6 @@ impl AppController {
         rx.recv().expect("Failed to receive result")
     }
     
-    /// Start scanning for devices
-    pub fn start_scanning(&mut self) -> Result<(), String> {
-        // Clone necessary values to use in the async block
-        let scanner_arc = self.scanner.clone();
-        let scan_config = self.scan_config.clone();
-        let event_broker = self.event_broker.clone();
-        let ui_sender = self.ui_sender.clone();
-        
-        let result = self.run_async(async move {
-            // Check if already scanning
-            if scanner_arc.lock().unwrap().is_some() {
-                return Err("Already scanning".to_string());
-            }
-            
-            // Create a new scanner
-            let mut scanner = BleScanner::new();
-            
-            // Initialize the scanner
-            if let Err(e) = scanner.initialize().await {
-                return Err(format!("Error initializing scanner: {}", e));
-            }
-            
-            // Apply scan configuration directly using set_config instead of apply_config
-            scanner.set_config(scan_config);
-            
-            // Get the event broker's sender
-            let sender = event_broker.get_sender();
-            
-            // Start scanning
-            let result = scanner.start_scanning().await;
-            if let Err(e) = &result {
-                return Err(format!("Error starting scan: {}", e));
-            }
-            
-            // Connect the event sender to the scanner's event receiver
-            let mut rx = result.unwrap();
-            tokio::spawn(async move {
-                while let Some(event) = rx.recv().await {
-                    // Forward events to the event broker
-                    sender.send(event).await.ok();
-                }
-            });
-            
-            // Store scanner
-            *scanner_arc.lock().unwrap() = Some(scanner);
-            
-            // Notify UI that scanning started
-            ui_sender.send(Message::ScanStarted).ok();
-            
-            // Create a progess task
-            let ui_sender_clone = ui_sender.clone();
-            let task = tokio::spawn(async move {
-                let mut interval = tokio::time::interval(Duration::from_millis(200));
-                let mut count = 0;
-                
-                loop {
-                    interval.tick().await;
-                    
-                    // Send progress update (0-100)
-                    ui_sender_clone.send(Message::ScanProgress(count % 100)).ok();
-                    count += 1;
-                }
-            });
-            
-            Ok(task)
-        });
-        
-        // Store the scan task if successful
-        if let Ok(task) = result {
-            self.scan_task = Some(task);
-            Ok(())
-        } else {
-            result.map(|_| ())
-        }
-    }
-    
-    /// Stop scanning for devices
-    pub fn stop_scanning(&mut self) -> Result<(), String> {
-        // Clone necessary values to use in the async block
-        let scanner_arc = self.scanner.clone();
-        let ui_sender = self.ui_sender.clone();
-        
-        // Get the current scan task to abort it outside the async block
-        let scan_task = self.scan_task.take();
-        
-        self.run_async(async move {
-            // Check if we have a scanner
-            let scanner_exists = scanner_arc.lock().unwrap().is_some();
-            if !scanner_exists {
-                return Err("Not scanning".to_string());
-            }
-            
-            // Take the scanner out of the Arc<Mutex<>> to avoid holding the guard across await
-            let mut scanner_option = std::mem::take(&mut *scanner_arc.lock().unwrap());
-            
-            // Stop scanner if we have one
-            let scanner_result = if let Some(ref mut scanner) = scanner_option {
-                scanner.stop_scanning().await
-            } else {
-                return Err("Scanner not available".to_string());
-            };
-            
-            // We're done with the scanner, just leave it as None
-            
-            // Abort scan task if running (outside the async block)
-            if let Some(task) = scan_task {
-                task.abort();
-            }
-            
-            // Check if stop was successful
-            if let Err(e) = scanner_result {
-                return Err(format!("Error stopping scan: {}", e));
-            }
-            
-            // Notify UI that scanning stopped
-            ui_sender.send(Message::ScanStopped).ok();
-            
-            Ok(())
-        })
-    }
-    
     /// Connect to a selected device by address
     pub fn connect_device(&mut self, address: String) -> Result<(), String> {
         // Clone necessary values to use in the async block
@@ -281,8 +161,8 @@ impl AppController {
         let runtime_handle = self.runtime_handle.clone();
         
         let result = self.run_async(async move {
-            // Log selected device
-            println!("Selected device with address: {}", address);
+            // Developer log
+            log::info!("Selected device with address: {}", address);
             
             // For now, we just set the connection timestamp and let the UI handle the rest
             // In a real implementation, we would actually connect to the device
@@ -345,10 +225,10 @@ impl AppController {
             
             if is_scanning {
                 // Take the scanner out to avoid holding the guard across await
-                let mut scanner_option = std::mem::take(&mut *scanner_arc.lock().unwrap());
+                let mut scanner_option: Option<BleScanner> = std::mem::take(&mut *scanner_arc.lock().unwrap());
                 
                 // Stop scanner if we have one
-                if let Some(ref mut scanner) = scanner_option {
+                if let Some(scanner) = scanner_option.as_mut() {
                     let _ = scanner.stop_scanning().await;
                 }
                 

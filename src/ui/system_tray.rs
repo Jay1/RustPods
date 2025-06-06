@@ -158,19 +158,6 @@ impl SystemTray {
             },
         ];
         
-        let scan_actions = vec![
-            MenuItem { 
-                label: "Start Scan".to_string(), 
-                shortcut: Some("Ctrl+S".to_string()), 
-                message: Some(Message::StartScan) 
-            },
-            MenuItem { 
-                label: "Stop Scan".to_string(), 
-                shortcut: Some("Ctrl+X".to_string()), 
-                message: Some(Message::StopScan) 
-            },
-        ];
-        
         let settings_actions = vec![
             MenuItem { 
                 label: "Settings".to_string(), 
@@ -211,19 +198,6 @@ impl SystemTray {
             })?;
         
         // Rest of menu adding with better error handling
-        Self::add_menu_group(&mut tray, &tx, &scan_actions)
-            .map_err(|e| {
-                log::error!("Failed to add scan actions to tray: {}", e);
-                SystemTrayError::MenuItem(e)
-            })?;
-        
-        tray.add_menu_item("-", || {})
-            .map_err(|e| {
-                let msg = format!("Failed to add separator: {}", e);
-                log::error!("{}", msg);
-                SystemTrayError::MenuItem(msg)
-            })?;
-        
         Self::add_menu_group(&mut tray, &tx, &settings_actions)
             .map_err(|e| {
                 log::error!("Failed to add settings actions to tray: {}", e);
@@ -251,9 +225,7 @@ impl SystemTray {
                 "RustPods v{}\nA simple AirPods battery monitor for Windows\nDeveloped with Rust and Iced", 
                 version
             );
-            if let Err(e) = tx_clone.send(Message::Status(about_message)) {
-                log::error!("Failed to send about message: {}", e);
-            }
+            let _ = tx_clone.send(Message::ShowToast(about_message));
         })
         .map_err(|e| {
             let msg = format!("Failed to add about menu item: {}", e);
@@ -407,8 +379,9 @@ impl SystemTray {
             if let Some(message) = &item.message {
                 let tx_clone = tx.clone();
                 let message_clone = message.clone();
-                
+                let label_for_closure = label.clone();
                 tray.add_menu_item(&label, move || {
+                    log::info!("SystemTray: Tray menu action '{}' triggered", label_for_closure);
                     let _ = tx_clone.send(message_clone.clone());
                 })
                 .map_err(|e| e.to_string())?;
@@ -500,7 +473,7 @@ impl SystemTray {
                     log::info!("Low battery warning: Left: {}, Right: {}", left_text, right_text);
                     
                     // We could also send a message to show a notification in the UI
-                    let _ = self.tx.send(Message::Status(format!(
+                    let _ = self.tx.send(Message::ShowToast(format!(
                         "Low Battery Warning - Left: {}, Right: {}", 
                         left_text, right_text
                     )));

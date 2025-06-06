@@ -34,20 +34,11 @@ pub enum Action {
     /// Select a device
     SelectDevice(String),
     
-    /// Start Bluetooth scanning
-    StartScanning,
-    
-    /// Stop Bluetooth scanning
-    StopScanning,
-    
     /// Update battery status
     UpdateBatteryStatus(AirPodsBatteryStatus),
     
     /// Update animation progress (0.0-1.0)
     UpdateAnimationProgress(f32),
-    
-    /// Toggle automatic scanning
-    ToggleAutoScan(bool),
     
     /// Update application settings
     UpdateSettings(AppConfig),
@@ -87,6 +78,15 @@ pub enum Action {
     
     /// Load persistent state
     LoadPersistentState,
+    
+    /// Toggle auto scan
+    ToggleAutoScan(bool),
+    
+    /// Start scanning for devices
+    StartScanning,
+    
+    /// Stop scanning for devices  
+    StopScanning,
 }
 
 /// Represents a connection state
@@ -247,31 +247,16 @@ impl StateManager {
             Action::ToggleVisibility => {
                 let mut ui_state = self.ui_state.lock().unwrap();
                 ui_state.visible = !ui_state.visible;
-                
-                // Notify UI of visibility change
-                if ui_state.visible {
-                    self.notify_ui(Message::ShowWindow);
-                } else {
-                    self.notify_ui(Message::HideWindow);
-                }
             },
             Action::UpdateDevice(device) => {
                 let mut device_state = self.device_state.lock().unwrap();
-                
-                // Check if this is a new device or an update
                 match device_state.devices.entry(device.address.to_string()) {
                     std::collections::hash_map::Entry::Occupied(mut e) => {
-                        // Existing device, update it
                         e.insert(device.clone());
-                        
-                        // Notify UI
                         self.notify_ui(Message::DeviceUpdated(device));
                     }
                     std::collections::hash_map::Entry::Vacant(e) => {
-                        // New device
                         e.insert(device.clone());
-                        
-                        // Notify UI
                         self.notify_ui(Message::DeviceDiscovered(device));
                     }
                 }
@@ -279,15 +264,11 @@ impl StateManager {
             Action::RemoveDevice(address) => {
                 let mut device_state = self.device_state.lock().unwrap();
                 device_state.devices.remove(&address);
-                
-                // If this was the selected device, clear selection
                 if let Some(selected_device) = &device_state.selected_device {
                     if selected_device == &address {
                         device_state.selected_device = None;
                         device_state.connection_state = ConnectionState::Disconnected;
                         device_state.battery_status = None;
-                        
-                        // Notify UI
                         self.notify_ui(Message::DeviceDisconnected);
                     }
                 }
@@ -297,13 +278,9 @@ impl StateManager {
                 device_state.selected_device = Some(address.clone());
                 device_state.connection_state = ConnectionState::Connected;
                 device_state.connection_timestamp = Some(std::time::Instant::now());
-                
-                // Notify UI
                 if let Some(device) = device_state.devices.get(&address) {
-                    // Check if this is an AirPods device
                     if let Some(name) = &device.name {
                         if name.contains("AirPods") {
-                            // Create a DetectedAirPods instance
                             let airpods = crate::airpods::DetectedAirPods {
                                 address: device.address,
                                 name: Some(name.clone()),
@@ -313,184 +290,64 @@ impl StateManager {
                                 is_connected: false,
                                 last_seen: std::time::Instant::now(),
                             };
-                            
                             self.notify_ui(Message::AirPodsConnected(airpods));
                         } else {
-                            // Generic device selection
                             self.notify_ui(Message::SelectDevice(address));
                         }
                     }
                 }
             },
-            Action::StartScanning => {
-                let mut device_state = self.device_state.lock().unwrap();
-                device_state.is_scanning = true;
-                
-                // Notify UI
-                self.notify_ui(Message::ScanStarted);
-            },
-            Action::StopScanning => {
-                let mut device_state = self.device_state.lock().unwrap();
-                device_state.is_scanning = false;
-                
-                // Notify UI
-                self.notify_ui(Message::ScanStopped);
-            },
             Action::UpdateBatteryStatus(status) => {
                 let mut device_state = self.device_state.lock().unwrap();
                 device_state.battery_status = Some(status.clone());
-                
-                // Notify UI
                 self.notify_ui(Message::BatteryStatusUpdated(status));
             },
             Action::UpdateAnimationProgress(progress) => {
                 let mut ui_state = self.ui_state.lock().unwrap();
                 ui_state.animation_progress = progress;
-                
-                // Notify UI
                 self.notify_ui(Message::AnimationProgress(progress));
             },
-            Action::ToggleAutoScan(enabled) => {
-                let mut device_state = self.device_state.lock().unwrap();
-                device_state.auto_scan = enabled;
-                
-                // Update config
-                let mut config = self.config.lock().unwrap();
-                config.bluetooth.auto_scan_on_startup = enabled;
-                
-                // Notify UI
-                self.notify_ui(Message::ToggleAutoScan(enabled));
-            },
             Action::UpdateSettings(new_config) => {
-                // Update config
                 let mut config = self.config.lock().unwrap();
                 *config = new_config.clone();
-                
-                // Notify UI
                 self.notify_ui(Message::SettingsChanged(new_config));
             },
             Action::ShowSettings => {
                 let mut ui_state = self.ui_state.lock().unwrap();
                 ui_state.show_settings = true;
-                
-                // Notify UI
                 self.notify_ui(Message::OpenSettings);
             },
             Action::HideSettings => {
                 let mut ui_state = self.ui_state.lock().unwrap();
                 ui_state.show_settings = false;
-                
-                // Notify UI
                 self.notify_ui(Message::CloseSettings);
-            },
-            Action::SetError(message) => {
-                let mut ui_state = self.ui_state.lock().unwrap();
-                ui_state.error_message = Some(message.clone());
-                ui_state.show_error = true;
-                
-                // Notify UI
-                self.notify_ui(Message::Error(message));
-            },
-            Action::ClearError => {
-                let mut ui_state = self.ui_state.lock().unwrap();
-                ui_state.error_message = None;
-                ui_state.show_error = false;
-                
-                // Notify UI
-                self.notify_ui(Message::ClearError);
-            },
-            Action::SetConnectionState(state) => {
-                let mut device_state = self.device_state.lock().unwrap();
-                device_state.connection_state = state.clone();
-                
-                // Notify UI
-                self.notify_ui(Message::ConnectionStateChanged(state));
-            },
-            Action::SystemSleep => {
-                // Handle system sleep event
-                let mut device_state = self.device_state.lock().unwrap();
-                
-                // Save connection state but mark as disconnected for now
-                if device_state.connection_state == ConnectionState::Connected {
-                    device_state.connection_state = ConnectionState::Reconnecting;
-                }
-                
-                // Notify UI
-                self.notify_ui(Message::SystemSleep);
-                
-                // Log sleep event
-                log::info!("System entering sleep mode - suspending device connections");
-            },
-            Action::SystemWake => {
-                // Handle system wake event
-                let device_state = self.device_state.lock().unwrap();
-                
-                // Attempt to reconnect if we were previously connected
-                if device_state.connection_state == ConnectionState::Reconnecting {
-                    if let Some(address) = &device_state.selected_device {
-                        log::info!("Attempting to reconnect to device: {}", address);
-                        
-                        // Trigger reconnection attempt
-                        self.notify_ui(Message::RetryConnection);
-                    }
-                }
-                
-                // Notify UI
-                self.notify_ui(Message::SystemWake);
-                
-                // Log wake event
-                log::info!("System waking from sleep mode - restoring connections");
-            },
-            Action::Shutdown => {
-                // Perform shutdown operations
-                let config = self.config.lock().unwrap();
-                
-                // Save config
-                if let Err(e) = config.save() {
-                    log::error!("Failed to save config during shutdown: {}", e);
-                }
-                
-                // Notify UI to exit
-                self.notify_ui(Message::Exit);
             },
             Action::ShowWindow => {
                 let mut ui_state = self.ui_state.lock().unwrap();
                 ui_state.visible = true;
-                
-                // Notify UI
                 self.notify_ui(Message::ShowWindow);
             },
             Action::HideWindow => {
                 let mut ui_state = self.ui_state.lock().unwrap();
                 ui_state.visible = false;
-                
-                // Notify UI
                 self.notify_ui(Message::HideWindow);
             },
-            Action::RestorePreviousConnection(address) => {
-                log::info!("Attempting to restore connection to device: {}", address);
-                
-                // Try to reconnect to the device
-                self.notify_ui(Message::SelectDevice(address));
+            Action::ToggleAutoScan(enabled) => {
+                let mut device_state = self.device_state.lock().unwrap();
+                device_state.auto_scan = enabled;
             },
-            Action::SetAdvancedDisplayMode(enabled) => {
-                // This would update some state field in a real implementation
-                log::info!("Setting advanced display mode: {}", enabled);
-                
-                // Notify UI
-                self.notify_ui(Message::ToggleDisplayMode);
+            Action::StartScanning => {
+                let mut device_state = self.device_state.lock().unwrap();
+                device_state.is_scanning = true;
+                self.notify_ui(Message::StartScan);
             },
-            Action::SavePersistentState => {
-                // This would be handled by the StatePersistenceManager
-                log::info!("Saving persistent state");
-                
-                // In a real implementation, we would call into StatePersistenceManager
+            Action::StopScanning => {
+                let mut device_state = self.device_state.lock().unwrap();
+                device_state.is_scanning = false;
+                self.notify_ui(Message::StopScan);
             },
-            Action::LoadPersistentState => {
-                // This would be handled by the StatePersistenceManager
-                log::info!("Loading persistent state");
-                
-                // In a real implementation, we would call into StatePersistenceManager
+            _ => {
+                // Other actions are not handled in the UI
             }
         }
     }

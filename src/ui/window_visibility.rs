@@ -98,11 +98,10 @@ impl WindowVisibilityManager {
     /// Show the window
     pub fn show(&mut self) -> Command<Message> {
         self.is_visible = true;
-        
+        log::info!("WindowVisibilityManager: show() called, window should be visible");
         if let Some(state_manager) = &self.state_manager {
             state_manager.dispatch(Action::ToggleVisibility);
         }
-        
         // Use the last known position if available
         if let Some(_position) = self.last_position {
             window::change_mode(window::Mode::Windowed)
@@ -116,11 +115,10 @@ impl WindowVisibilityManager {
         // Save the current position before hiding
         self.last_position = Some(WindowPosition::from(bounds));
         self.is_visible = false;
-        
+        log::info!("WindowVisibilityManager: hide() called, window should be hidden");
         if let Some(state_manager) = &self.state_manager {
             state_manager.dispatch(Action::ToggleVisibility);
         }
-        
         window::change_mode(window::Mode::Hidden)
     }
     

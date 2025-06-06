@@ -1,5 +1,5 @@
 //! Tests for the StateManager component
-//! This tests the core state management functionality implemented in Task 10.1
+//! This tests the core state management functionality (post-refactor)
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -66,7 +66,6 @@ fn test_state_manager_init() {
     assert!(device_state.devices.is_empty());
     assert!(device_state.selected_device.is_none());
     assert!(device_state.battery_status.is_none());
-    assert!(!device_state.is_scanning);
 }
 
 /// Test device state updates
@@ -132,28 +131,6 @@ fn test_state_manager_battery_status() {
     assert_eq!(device_state.battery_status.as_ref().unwrap().battery.case, battery_status.battery.case);
 }
 
-/// Test scanning state
-#[test]
-fn test_state_manager_scanning() {
-    // Create a state manager
-    let state_manager = create_test_state_manager();
-    
-    // Initial state should not be scanning
-    assert!(!state_manager.get_device_state().is_scanning);
-    
-    // Start scanning
-    state_manager.dispatch(Action::StartScanning);
-    
-    // Check that scanning was started
-    assert!(state_manager.get_device_state().is_scanning);
-    
-    // Stop scanning
-    state_manager.dispatch(Action::StopScanning);
-    
-    // Check that scanning was stopped
-    assert!(!state_manager.get_device_state().is_scanning);
-}
-
 /// Test config updates
 #[test]
 fn test_state_manager_config_updates() {
@@ -198,10 +175,7 @@ fn test_ui_actions() {
     
     // Update settings
     let config = AppConfig::default();
-    state_manager.dispatch(Action::UpdateSettings(config.clone()));
-    
-    // Verify config was updated (indirectly, as it's internal)
-    // We'd typically test the effect of this in integration tests
+    state_manager.dispatch(Action::UpdateSettings(config));
 }
 
 #[test]

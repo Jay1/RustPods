@@ -5,14 +5,9 @@ mod tests {
 
     #[test]
     fn test_header_creation() {
-        // Create with scanning active
-        let header = Header::new(true, true);
-        assert!(header.is_scanning);
-        assert!(header.auto_scan);
-        // Create with scanning inactive
-        let header = Header::new(false, false);
-        assert!(!header.is_scanning);
-        assert!(!header.auto_scan);
+        // Create header (no scan state)
+        let header = Header::new();
+        let _element = header.view();
     }
 
     #[test]

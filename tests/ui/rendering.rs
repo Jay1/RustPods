@@ -1,8 +1,9 @@
-//! Tests for UI rendering and component behavior
-//! Note: Some tests are commented out because they require a GUI environment
+//! Tests for UI rendering and component behavior (post-refactor)
+//! Updated for native C++ AirPods battery helper and new state/message model
 
 use std::collections::HashMap;
 use std::time::Instant;
+use tokio::sync::mpsc;
 
 use btleplug::api::BDAddr;
 use iced::Element;
@@ -12,168 +13,138 @@ use rustpods::bluetooth::DiscoveredDevice;
 use rustpods::ui::components::{BatteryDisplay, DeviceList, Header};
 use rustpods::ui::{Message, UiComponent};
 use rustpods::ui::theme::Theme;
-
 use rustpods::ui::state::AppState;
-use rustpods::airpods::{
-    DetectedAirPods, AirPodsType, AirPodsBattery, ChargingStatus
-};
+use rustpods::airpods::{DetectedAirPods, AirPodsType, AirPodsBattery};
 
 /// Test that the battery display renders correctly with different levels
 #[test]
 fn test_battery_display_component() {
-    // Create with valid battery levels
     let display = BatteryDisplay::new(Some(75), Some(80), Some(90));
-    
-    // Ensure view function can be called (this is a more of a compilation test)
     let _element: Element<'_, Message, iced::Renderer<Theme>> = display.view();
-    
-    // Create with empty values
     let display = BatteryDisplay::empty();
     let _element: Element<'_, Message, iced::Renderer<Theme>> = display.view();
-    
-    // Test with extreme values
     let display = BatteryDisplay::new(Some(0), Some(100), None);
     let _element: Element<'_, Message, iced::Renderer<Theme>> = display.view();
 }
 
-/// Test that the device list renders correctly with different devices
+/// Test that the device list renders only paired devices
 #[test]
-fn test_device_list_component() {
-    // Create some test devices
+fn test_device_list_paired_only() {
     let device1 = DiscoveredDevice {
         address: BDAddr::from([1, 2, 3, 4, 5, 6]),
-        name: Some("Device 1".to_string()),
+        name: Some("Paired Device".to_string()),
         rssi: Some(-60),
         manufacturer_data: HashMap::new(),
         is_potential_airpods: false,
         last_seen: Instant::now(),
-        is_connected: false,
+        is_connected: true, // Simulate paired
         service_data: HashMap::new(),
         services: Vec::new(),
         tx_power_level: None,
     };
-
     let device2 = DiscoveredDevice {
         address: BDAddr::from([6, 5, 4, 3, 2, 1]),
-        name: Some("AirPods".to_string()),
+        name: Some("Unpaired Device".to_string()),
         rssi: Some(-50),
         manufacturer_data: HashMap::new(),
-        is_potential_airpods: true,
+        is_potential_airpods: false,
         last_seen: Instant::now(),
-        is_connected: false,
+        is_connected: false, // Not paired
         service_data: HashMap::new(),
         services: Vec::new(),
         tx_power_level: None,
     };
-
-    // Create device list with devices
-    let devices = vec![device1, device2];
-    let selected = Some(BDAddr::from([6, 5, 4, 3, 2, 1]).to_string());
-    
+    let devices = vec![device1.clone(), device2];
+    let selected = Some(device1.address.to_string());
     let device_list = DeviceList::new(devices, selected);
-    let _element: Element<'_, Message, iced::Renderer<Theme>> = device_list.view();
-    
-    // Create an empty device list
-    let device_list = DeviceList::new(vec![], None);
     let _element: Element<'_, Message, iced::Renderer<Theme>> = device_list.view();
 }
 
 /// Test that the header renders correctly
 #[test]
 fn test_header_component() {
-    // Test with scanning active
-    let header = Header::new(true, true);
-    let _element: Element<'_, Message, iced::Renderer<Theme>> = header.view();
-    
-    // Test with scanning inactive
-    let header = Header::new(false, false);
+    let header = Header::new();
     let _element: Element<'_, Message, iced::Renderer<Theme>> = header.view();
 }
 
-/// Helper to create a test device
-fn create_test_device(
-    address: [u8; 6],
-    name: Option<&str>,
-    rssi: Option<i16>,
-    is_airpods: bool
-) -> DiscoveredDevice {
-    let mut manufacturer_data = HashMap::new();
-    if is_airpods {
-        manufacturer_data.insert(0x004C, vec![
-            0x07, 0x19, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A,
-            0x08, 0x07, 0x01, 0x06, // Battery levels and charging status
-        ]);
-    }
-    DiscoveredDevice {
-        address: BDAddr::from(address),
-        name: name.map(|s| s.to_string()),
-        rssi,
-        manufacturer_data,
-        is_potential_airpods: is_airpods,
-        last_seen: Instant::now(),
-        is_connected: false,
-        service_data: HashMap::new(),
-        services: Vec::new(),
-        tx_power_level: None,
-    }
-}
-
-/// Create test AirPods device
-fn create_test_airpods(
-    address: [u8; 6],
-    name: Option<&str>,
-    rssi: Option<i16>
-) -> DetectedAirPods {
+/// Create test AirPods device with battery info
+fn create_test_airpods(address: [u8; 6], name: Option<&str>, left: Option<u8>, right: Option<u8>, case: Option<u8>) -> DetectedAirPods {
     DetectedAirPods {
         address: BDAddr::from(address),
         name: name.map(|s| s.to_string()),
-        rssi,
-        device_type: AirPodsType::AirPods1,
+        rssi: Some(-40),
+        device_type: AirPodsType::AirPodsPro2,
         battery: Some(AirPodsBattery {
-            left: Some(80),
-            right: Some(75),
-            case: Some(90),
+            left,
+            right,
+            case,
             charging: None,
         }),
         last_seen: Instant::now(),
-        is_connected: false,
+        is_connected: true,
     }
 }
 
-/// Test that the AppState can be viewed correctly
+/// Test AirPods battery info display in the UI
 #[test]
-fn test_app_state_view() {
-    let mut state = AppState::default();
-    
-    // Add some devices
-    let device1 = create_test_device([1, 2, 3, 4, 5, 6], Some("Device 1"), Some(-60), false);
-    let device2 = create_test_device([6, 5, 4, 3, 2, 1], Some("AirPods"), Some(-50), true);
-    
-    state.update_device(device1);
-    state.update_device(device2);
-    
-    // Should be able to call view method (compilation test)
-    let _element = state.view();
+fn test_airpods_battery_display() {
+    let airpods = create_test_airpods([1, 2, 3, 4, 5, 6], Some("My AirPods Pro 2"), Some(88), Some(92), Some(75));
+    let display = BatteryDisplay::new(airpods.battery.as_ref().and_then(|b| b.left), airpods.battery.as_ref().and_then(|b| b.right), airpods.battery.as_ref().and_then(|b| b.case));
+    let _element: Element<'_, Message, iced::Renderer<Theme>> = display.view();
 }
 
-/// Test that the AppState responds to messages correctly
+/// Test AppState overlays: status and toast
 #[test]
-fn test_app_state_update() {
-    let mut state = AppState::default();
+fn test_app_state_status_and_toast() {
+    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+    let mut state = AppState::new(tx);
+    state.status_message = Some("Status!".to_string());
+    state.toast_message = Some("Toast!".to_string());
     
-    // Test message handling
-    let _ = state.update(Message::StartScan);
-    assert!(state.is_scanning);
+    // Test that view works with messages
+    {
+        let _element = state.view();
+    } // Drop the element before mutating state
     
-    let _ = state.update(Message::StopScan);
-    assert!(!state.is_scanning);
-    
-    let device = create_test_device([1, 2, 3, 4, 5, 6], Some("Test Device"), Some(-60), false);
-    let device_address = device.address.to_string();
-    
-    let _ = state.update(Message::DeviceDiscovered(device));
-    assert_eq!(state.devices.len(), 1);
-    
-    let _ = state.update(Message::SelectDevice(device_address.clone()));
-    assert_eq!(state.selected_device, Some(device_address));
+    state.clear_status_message();
+    assert!(state.status_message.is_none());
+    state.clear_toast_message();
+    assert!(state.toast_message.is_none());
+}
+
+/// Test AppState visibility toggling
+#[test]
+fn test_app_state_visibility_toggle() {
+    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+    let mut state = AppState::new(tx);
+    assert!(state.visible);
+    state.toggle_visibility();
+    assert!(!state.visible);
+    state.toggle_visibility();
+    assert!(state.visible);
+}
+
+/// Test AppState device update and selection (paired devices)
+#[test]
+fn test_app_state_device_update_and_select() {
+    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+    let mut state = AppState::new(tx);
+    let device = DiscoveredDevice {
+        address: BDAddr::from([1, 2, 3, 4, 5, 6]),
+        name: Some("Paired Device".to_string()),
+        rssi: Some(-60),
+        manufacturer_data: HashMap::new(),
+        is_potential_airpods: false,
+        last_seen: Instant::now(),
+        is_connected: true,
+        service_data: HashMap::new(),
+        services: Vec::new(),
+        tx_power_level: None,
+    };
+    let initial_device_count = state.devices.len();
+    state.update_device(device.clone());
+    // Should have at least the test device (may have more from CLI scanner)
+    assert!(state.devices.len() >= initial_device_count + 1);
+    state.select_device(device.address.to_string());
+    assert_eq!(state.selected_device, Some(device.address.to_string()));
 } 

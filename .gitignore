@@ -30,8 +30,10 @@ Cargo.lock
 /iced_minimal/
 /iced_minimal/target/
 
-# Workspace specific
-scripts/
+# Task Master: Exclude ALL Task Master files from GitHub
+# Keep Task Master for local development only
+.taskmasterconfig
+.taskmaster/
 tasks/
 
 # Dependencies
@@ -66,3 +68,13 @@ build_rs_cov.profraw
 # Ignore Windows binaries and debug symbols
 *.exe
 *.pdb
+
+# Build directories (except specific ones)
+/build/
+/dist/
+
+# Empty tool directories
+/tools/
+
+# Ignore AirPodsDesktop reference clone
+.brainstorm/

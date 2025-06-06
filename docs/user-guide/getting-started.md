@@ -22,16 +22,15 @@ When you first launch RustPods:
 
 1. The application will start in the system tray
 2. Click the RustPods icon in the system tray to open the main window
-3. RustPods will automatically scan for AirPods devices nearby
-4. Ensure your AirPods case is open or your AirPods are out of the case to make them discoverable
+3. RustPods will automatically detect all paired Bluetooth devices, including AirPods, and display them in the UI
+4. Ensure your AirPods case is open or your AirPods are out of the case to make them discoverable for battery info
 
 ## Connecting to AirPods
 
 1. Make sure your AirPods are paired with your Windows device through the Windows Bluetooth settings
 2. Open the main RustPods window by clicking the tray icon
-3. Click "Start Scan" if scanning isn't already in progress
-4. When your AirPods appear in the list, click on them to connect
-5. RustPods will display the battery levels for your AirPods and case
+3. When your AirPods appear in the list, select them to view battery levels and status
+4. RustPods will display the battery levels for your AirPods and case automatically
 
 ## Troubleshooting
 

@@ -289,12 +289,7 @@ impl MockSystemTray {
     /// Process a click on a menu item
     pub fn process_click(&mut self, menu_item: &str) -> Option<Message> {
         self.actions.push(format!("click: {}", menu_item));
-        
         match menu_item {
-            "Show" => Some(Message::ShowWindow),
-            "Hide" => Some(Message::HideWindow),
-            "Start Scan" => Some(Message::StartScan),
-            "Stop Scan" => Some(Message::StopScan),
             "Settings" => Some(Message::SaveSettings),
             "Exit" => Some(Message::Exit),
             _ => None

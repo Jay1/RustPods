@@ -25,11 +25,14 @@ impl SettingsView {
     
     /// Update the config
     pub fn update_config(&mut self, config: AppConfig) {
+        println!("[DEBUG] SettingsView::update_config called");
         self.config = config;
+        println!("[DEBUG] SettingsView::config updated");
     }
     
     /// Update bluetooth settings
     pub fn update_bluetooth_setting(&mut self, setting: BluetoothSetting) {
+        println!("[DEBUG] SettingsView::update_bluetooth_setting called: {:?}", setting);
         match setting {
             BluetoothSetting::AutoScanOnStartup(value) => {
                 self.config.bluetooth.auto_scan_on_startup = value;
@@ -60,14 +63,6 @@ impl SettingsView {
         let title = Text::new("Bluetooth")
             .size(20)
             .style(ui_theme::TEXT);
-            
-        let auto_scan = Checkbox::new(
-            "Auto scan on startup",
-            self.config.bluetooth.auto_scan_on_startup,
-            move |value| {
-                Message::UpdateBluetoothSetting(BluetoothSetting::AutoScanOnStartup(value))
-            }
-        );
         
         let scan_duration_seconds = self.config.bluetooth.scan_duration.as_secs() as i32;
         let scan_duration = Column::new()
@@ -88,7 +83,7 @@ impl SettingsView {
                     )
                     .push(Text::new(scan_duration_seconds.to_string()).style(ui_theme::TEXT))
             );
-            
+        
         let scan_interval_seconds = self.config.bluetooth.scan_interval.as_secs() as i32;
         let scan_interval = Column::new()
             .spacing(5)
@@ -108,7 +103,7 @@ impl SettingsView {
                     )
                     .push(Text::new(scan_interval_seconds.to_string()).style(ui_theme::TEXT))
             );
-            
+        
         let battery_refresh_seconds = self.config.bluetooth.battery_refresh_interval as i32;
         let battery_refresh = Column::new()
             .spacing(5)
@@ -128,69 +123,14 @@ impl SettingsView {
                     )
                     .push(Text::new(battery_refresh_seconds.to_string()).style(ui_theme::TEXT))
             );
-            
-        let min_rssi_value = self.config.bluetooth.min_rssi.unwrap_or(-70) as i32;
-        let min_rssi = Column::new()
-            .spacing(5)
-            .push(Text::new("Minimum RSSI (signal strength)").style(ui_theme::TEXT))
-            .push(
-                Row::new()
-                    .spacing(10)
-                    .push(
-                        Slider::new(
-                            -100..=-40,
-                            min_rssi_value,
-                            move |value| {
-                                Message::UpdateBluetoothSetting(BluetoothSetting::MinRssi(value))
-                            }
-                        )
-                        .width(Length::Fill)
-                    )
-                    .push(Text::new(format!("{} dBm", min_rssi_value)).style(ui_theme::TEXT))
-            );
-            
-        let auto_reconnect = Checkbox::new(
-            "Auto reconnect to devices",
-            self.config.bluetooth.auto_reconnect,
-            move |value| {
-                Message::UpdateBluetoothSetting(BluetoothSetting::AutoReconnect(value))
-            }
-        );
         
-        let reconnect_attempts = Column::new()
-            .spacing(5)
-            .push(Text::new("Reconnect attempts").style(ui_theme::TEXT))
-            .push(
-                Row::new()
-                    .spacing(10)
-                    .push(
-                        Slider::new(
-                            1..=10,
-                            self.config.bluetooth.reconnect_attempts as i32,
-                            move |value| {
-                                Message::UpdateBluetoothSetting(BluetoothSetting::ReconnectAttempts(value))
-                            }
-                        )
-                        .width(Length::Fill)
-                    )
-                    .push(Text::new(self.config.bluetooth.reconnect_attempts.to_string()).style(ui_theme::TEXT))
-            );
-            
-        Container::new(
-            Column::new()
-                .spacing(15)
-                .push(title)
-                .push(auto_scan)
-                .push(scan_duration)
-                .push(scan_interval)
-                .push(battery_refresh)
-                .push(min_rssi)
-                .push(auto_reconnect)
-                .push(reconnect_attempts)
-                .width(Length::Fill)
-        )
-        .width(Length::Fill)
-        .into()
+        Column::new()
+            .spacing(15)
+            .push(title)
+            .push(scan_duration)
+            .push(scan_interval)
+            .push(battery_refresh)
+            .into()
     }
     
     /// UI settings section

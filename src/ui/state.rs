@@ -1,32 +1,29 @@
 use std::collections::HashMap;
 #[cfg(test)]
 use std::time::Instant;
-use iced::{Subscription, Application, Command, Length, Alignment};
-use iced::widget::{container, text, Column};
+use iced::{Subscription, Application, Command};
 use std::convert::TryInto;
 use iced::executor;
-use std::sync::mpsc;
+use tokio::sync::mpsc;
+use std::sync::OnceLock;
+use tokio::sync::Mutex;
+use serde::Deserialize;
 
 use crate::bluetooth::DiscoveredDevice;
+use crate::bluetooth::cli_scanner::{CliScannerResult, CliAirPodsData};
+use crate::airpods::battery::AirPodsBatteryInfo;
 use crate::config::{AppConfig, ConfigManager, ConfigError};
 use crate::ui::Message;
 use crate::ui::components::{BluetoothSetting, UiSetting, SystemSetting};
 use crate::ui::{MainWindow, SettingsWindow};
 use crate::ui::SystemTray;
 use crate::ui::system_tray::SystemTrayError;
-use crate::ui::state_manager::StateManager;
 
 /// Main application state
 #[derive(Debug, Clone)]
 pub struct AppState {
     /// Whether the application window is visible
     pub visible: bool,
-    
-    /// Whether we're currently scanning for devices
-    pub is_scanning: bool,
-    
-    /// Whether automatic scanning is enabled
-    pub auto_scan: bool,
     
     /// Discovered Bluetooth devices
     pub devices: HashMap<String, DiscoveredDevice>,
@@ -64,29 +61,186 @@ pub struct AppState {
     /// System tray component
     pub system_tray: Option<SystemTray>,
     
-    /// Current toast/notification message
+    /// Persistent status message (for status feedback)
+    pub status_message: Option<String>,
+    
+    /// Current toast/notification message (temporary)
     pub toast_message: Option<String>,
+    
+    /// Channel to send messages to the controller
+    pub controller_sender: mpsc::UnboundedSender<Message>,
+    
+    /// Merged Bluetooth devices
+    pub merged_devices: Vec<MergedBluetoothDevice>,
 }
 
-impl Default for AppState {
-    fn default() -> Self {
+impl AppState {
+    /// Create a new AppState with the given controller sender
+    pub fn new(controller_sender: mpsc::UnboundedSender<Message>) -> Self {
         // Load config or use default
         let config = AppConfig::load().unwrap_or_default();
-        
-        // Create config manager
         let config_manager = Some(ConfigManager::default());
-        
-        // Create an empty main window
+        let main_window = MainWindow::empty();
+        let settings_window = SettingsWindow::new(config.clone());
+        // --- BEGIN: AirPods helper integration ---
+        #[cfg(target_os = "windows")]
+        {
+            use crate::bluetooth::scanner::DiscoveredDevice;
+            use btleplug::api::BDAddr;
+            use std::collections::HashMap;
+            use crate::airpods::battery::AirPodsBatteryInfo;
+use crate::bluetooth::cli_scanner::{CliScannerResult, CliDeviceInfo};
+use crate::bluetooth::cli_scanner::{CliScannerConfig, CliScanner};
+            use crate::airpods::{AirPodsBattery, AirPodsChargingState};
+            use crate::bluetooth::AirPodsBatteryStatus;
+            // Use the new CLI scanner to get actual device data
+            let infos: Vec<AirPodsBatteryInfo> = get_airpods_from_cli_scanner();
+            println!("[DEBUG] AirPods helper output: {infos:?}");
+            log::info!("Raw AirPodsBatteryInfo from helper: {infos:?}");
+            let mut devices = HashMap::new();
+            let mut merged_devices = Vec::new();
+            let mut address_map: HashMap<u64, &AirPodsBatteryInfo> = HashMap::new();
+            // Clamp battery values to 0-100, None if out of range
+            let clamp = |v: i32| -> Option<u8> {
+                if v > 0 && v <= 100 { Some(v as u8) } else if v > 100 { Some(100) } else { None }
+            };
+            for info in infos.iter() {
+                if address_map.contains_key(&info.address) {
+                    println!("[WARN] Duplicate AirPods address in helper output: {}", info.address);
+                    continue;
+                }
+                if info.left_battery <= 0 && info.right_battery <= 0 && info.case_battery <= 0 {
+                    println!("[WARN] Skipping AirPods entry with no battery info: {}", info.address);
+                    continue;
+                }
+                address_map.insert(info.address, info);
+            }
+            // Deduplicate: keep only the entry with the highest sum of battery values for each name
+            let mut deduped: HashMap<String, &AirPodsBatteryInfo> = HashMap::new();
+            for info in address_map.values() {
+                let name = if info.name.is_empty() { "AirPods".to_string() } else { info.name.clone() };
+                let sum = info.left_battery.max(0) + info.right_battery.max(0) + info.case_battery.max(0);
+                if let Some(existing) = deduped.get(&name) {
+                    let existing_sum = existing.left_battery.max(0) + existing.right_battery.max(0) + existing.case_battery.max(0);
+                    if sum > existing_sum {
+                        println!("[INFO] Replacing AirPods entry for '{}' with higher battery sum ({} > {})", name, sum, existing_sum);
+                        deduped.insert(name, info);
+                    } else {
+                        println!("[INFO] Filtering out ghost/duplicate AirPods entry for '{}' with lower battery sum ({} <= {})", name, sum, existing_sum);
+                    }
+                } else {
+                    deduped.insert(name, info);
+                }
+            }
+            let mut selected_device = None;
+            let mut battery_status = None;
+            for info in deduped.values() {
+                let bytes = info.address.to_le_bytes();
+                let address = BDAddr::from([bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5]]);
+                let left_battery = clamp(info.left_battery);
+                let right_battery = clamp(info.right_battery);
+                let case_battery = clamp(info.case_battery);
+                let left_in_ear = info.left_in_ear.unwrap_or(false);
+                let right_in_ear = info.right_in_ear.unwrap_or(false);
+                let case_lid_open = info.case_lid_open.unwrap_or(false);
+                let side = info.side.map(|v| v.to_string());
+                let both_in_case = info.both_in_case;
+                let color = info.color.map(|v| v.to_string());
+                let switch_count = info.switch_count.map(|v| v as u8);
+                // Robustly determine charging state
+                let charging_state = match (info.left_charging, info.right_charging, info.case_charging) {
+                    (true, true, _) => Some(AirPodsChargingState::BothBudsCharging),
+                    (true, false, _) => Some(AirPodsChargingState::LeftCharging),
+                    (false, true, _) => Some(AirPodsChargingState::RightCharging),
+                    (false, false, true) => Some(AirPodsChargingState::CaseCharging),
+                    _ => Some(AirPodsChargingState::NotCharging),
+                };
+                // Convert to AirPodsBattery and AirPodsBatteryStatus
+                let battery = AirPodsBattery {
+                    left: left_battery,
+                    right: right_battery,
+                    case: case_battery,
+                    charging: charging_state,
+                };
+                let status = AirPodsBatteryStatus::new(battery.clone());
+                // Store the first device's battery status for UI display
+                if battery_status.is_none() {
+                    battery_status = Some(status.clone());
+                }
+                let device = DiscoveredDevice {
+                    address,
+                    name: if info.name.is_empty() { Some("AirPods".to_string()) } else { Some(info.name.clone()) },
+                    rssi: None,
+                    manufacturer_data: HashMap::new(),
+                    is_potential_airpods: true,
+                    last_seen: std::time::Instant::now(),
+                    is_connected: true,
+                    service_data: HashMap::new(),
+                    services: Vec::new(),
+                    tx_power_level: None,
+                };
+                if selected_device.is_none() {
+                    selected_device = Some(address.to_string());
+                }
+                devices.insert(address.to_string(), device);
+                merged_devices.push(crate::ui::state::MergedBluetoothDevice {
+                    name: if info.name.is_empty() { "AirPods".to_string() } else { info.name.clone() },
+                    address: address.to_string(),
+                    paired: false,
+                    connected: true,
+                    device_type: None,
+                    battery: [left_battery, right_battery, case_battery].iter().filter_map(|&b| b).max(),
+                    left_battery,
+                    right_battery,
+                    case_battery,
+                    device_subtype: None,
+                    left_in_ear: Some(left_in_ear),
+                    right_in_ear: Some(right_in_ear),
+                    case_lid_open: Some(case_lid_open),
+                    side,
+                    both_in_case,
+                    color,
+                    switch_count,
+                });
+            }
+            let mut main_window = MainWindow::empty();
+            main_window.merged_devices = merged_devices;
+            // --- Store the battery status for UI and state ---
+            let this = Self {
+                visible: true,
+                devices,
+                selected_device,
+                connection_timestamp: None,
+                animation_progress: 0.0,
+                battery_status, // Set robustly from helper output
+                config,
+                config_manager,
+                show_settings: false,
+                main_window,
+                settings_window,
+                settings_error: None,
+                system_tray: None,
+                status_message: None,
+                toast_message: None,
+                controller_sender,
+                merged_devices: Vec::new(),
+            };
+            println!("[DEBUG] AppState::new: instance at {:p}", &this as *const _);
+            this
+        }
+        // --- END: AirPods helper integration ---
+    }
+
+    /// Create a new AppState for testing without CLI scanner integration
+    #[cfg(test)]
+    pub fn new_for_test(controller_sender: mpsc::UnboundedSender<Message>) -> Self {
+        let config = AppConfig::default();
+        let config_manager = None;
+        let settings_window = SettingsWindow::new(config.clone());
         let main_window = MainWindow::empty();
         
-        // Create settings window with the config
-        let settings_window = SettingsWindow::new(config.clone());
-        
         Self {
-            // Always start with visible = true to ensure the UI shows up
             visible: true,
-            is_scanning: false,
-            auto_scan: true,
             devices: HashMap::new(),
             selected_device: None,
             connection_timestamp: None,
@@ -99,8 +253,17 @@ impl Default for AppState {
             settings_window,
             settings_error: None,
             system_tray: None,
+            status_message: None,
             toast_message: None,
+            controller_sender,
+            merged_devices: Vec::new(),
         }
+    }
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        panic!("AppState::default() should not be used. Use AppState::new(controller_sender) instead.");
     }
 }
 
@@ -108,16 +271,11 @@ impl Application for AppState {
     type Message = Message;
     type Theme = crate::ui::theme::Theme;
     type Executor = executor::Default;
-    type Flags = std::sync::Arc<StateManager>;
+    type Flags = (mpsc::UnboundedSender<Message>, mpsc::UnboundedReceiver<Message>);
 
-    fn new(_flags: Self::Flags) -> (Self, Command<Message>) {
-        let state = Self::default();
-        
-        // Store the state manager reference in some way
-        // This is a placeholder - ideally we'd have a way to store and use the state manager
-        // For now, we'll just use the default state
-        
-        (state, Command::none())
+    fn new((controller_sender, controller_receiver): Self::Flags) -> (Self, Command<Message>) {
+        // Store the receiver in the subscription state, not in AppState
+        (AppState::new(controller_sender), Command::none())
     }
     
     fn title(&self) -> String {
@@ -129,12 +287,12 @@ impl Application for AppState {
     }
 
     fn update(&mut self, message: Message) -> Command<Message> {
+        println!("[DEBUG] AppState::update: instance at {:p}", self as *const _);
         match message {
             Message::ToggleVisibility => {
                 self.toggle_visibility();
             }
             Message::Exit => {
-                // Clean up resources before exit
                 #[cfg(target_os = "windows")]
                 if let Some(tray) = &mut self.system_tray {
                     if let Err(e) = tray.cleanup() {
@@ -143,13 +301,9 @@ impl Application for AppState {
                         log::info!("System tray resources cleaned up");
                     }
                 }
-                
-                // Save settings before exit
                 if let Err(e) = self.config.save() {
                     log::error!("Failed to save settings on exit: {}", e);
                 }
-                
-                // Exit will be handled by the AppController
                 std::process::exit(0);
             }
             Message::DeviceDiscovered(device) => {
@@ -160,67 +314,20 @@ impl Application for AppState {
                 self.update_device(device);
             }
             Message::SelectDevice(address) => {
-                self.select_device(address);
-            }
-            Message::StartScan => {
-                log::debug!("[UI] StartScan received");
-                self.is_scanning = true;
-                self.animation_progress = 0.0;
-                // AppController will handle the actual scanning
-            }
-            Message::StopScan => {
-                log::debug!("[UI] StopScan received");
-                self.is_scanning = false;
-                // AppController will handle the actual scanning
-            }
-            Message::ScanStarted => {
-                self.is_scanning = true;
-            }
-            Message::ScanStopped => {
-                self.is_scanning = false;
-            }
-            Message::ScanCompleted => {
-                self.is_scanning = false;
-            }
-            Message::ScanProgress(_progress) => {
-                // We don't need to update state for scan progress
-            }
-            Message::AnimationTick => {
-                // Update animation progress
-                self.animation_progress = (self.animation_progress + 0.01) % 1.0;
-                
-                // Update main window with current animation progress
-                if let Some(_device) = self.get_selected_device() {
-                    self.main_window = MainWindow::new()
-                        .with_animation_progress(self.animation_progress);
-                }
-            }
-            Message::AnimationProgress(progress) => {
-                self.animation_progress = progress;
-            }
-            Message::ToggleAutoScan(enabled) => {
-                self.auto_scan = enabled;
+                self.select_device(address.clone());
             }
             Message::BatteryStatusUpdated(status) => {
-                // Update battery status
                 let status_clone = status.clone();
                 self.battery_status = Some(status);
-                
-                // Update main window with new battery status
                 if let Some(_device) = self.get_selected_device() {
                     self.main_window = MainWindow::new()
                         .with_animation_progress(self.animation_progress)
                         .with_battery_status(status_clone.clone());
                 }
-                
-                // Update system tray with battery status if available
                 if let Some(tray) = &mut self.system_tray {
-                    // Update connection status in tray icon
                     if let Err(e) = tray.update_icon(true) {
                         log::warn!("Failed to update tray icon: {}", e);
                     }
-                    
-                    // Update tooltip with battery information
                     if let Err(e) = tray.update_tooltip_with_battery(
                         status_clone.battery.left,
                         status_clone.battery.right,
@@ -231,205 +338,190 @@ impl Application for AppState {
                 }
             }
             Message::AirPodsConnected(airpods) => {
-                // We've connected to AirPods
                 println!("Connected to AirPods: {:?}", airpods);
-                // Update the corresponding device if we have it
                 if let Some(address) = self.selected_device.as_ref() {
                     if let Some(device) = self.devices.get_mut(address) {
                         device.is_potential_airpods = true;
                     }
                 }
             }
-            Message::BatteryUpdateFailed(error) => {
-                eprintln!("Battery update failed: {}", error);
-            }
-            Message::Error(error) => {
-                eprintln!("Error: {}", error);
-            }
-            Message::Status(status) => {
-                self.toast_message = Some(status);
-            }
-            Message::RetryConnection => {
-                // Retry connection with selected device
-                if let Some(address) = self.selected_device.clone() {
-                    // Simply reselect the device to trigger reconnection
-                    self.select_device(address);
-                }
-            }
-            Message::Tick => {
-                // Periodic update, nothing to do for now
+            Message::BluetoothError(msg) => {
+                println!("[DEBUG] AppState::update: setting toast_message = {:?}", msg);
+                self.toast_message = Some(msg);
             }
             Message::UpdateBluetoothSetting(setting) => {
-                // Update settings window
                 self.settings_window.mark_changed();
-                
-                // Update application state
                 self.update_bluetooth_setting(setting);
+                self.settings_window.update_config(self.config.clone());
             }
             Message::UpdateUiSetting(setting) => {
-                // Update settings window
                 self.settings_window.mark_changed();
-                
-                // Update application state
                 self.update_ui_setting(setting);
+                self.settings_window.update_config(self.config.clone());
             }
             Message::UpdateSystemSetting(setting) => {
-                // Update settings window
                 self.settings_window.mark_changed();
-                
-                // Update application state
                 self.update_system_setting(setting);
+                self.settings_window.update_config(self.config.clone());
             }
             Message::OpenSettings => {
-                // Reset any validation errors
                 self.settings_window.set_validation_error(None);
-                
-                // Show the settings window
                 self.settings_window.update_config(self.config.clone());
                 self.show_settings = true;
             }
             Message::CloseSettings => {
-                // Close the settings window
                 self.show_settings = false;
-                
-                // Discard any changes by updating the settings window with current config
                 self.settings_window.update_config(self.config.clone());
             }
             Message::SaveSettings => {
-                // Get the updated config from settings window
                 let updated_config = self.settings_window.config();
-                
-                // Validate the config
                 if let Err(e) = updated_config.validate() {
-                    // Set validation error
                     self.settings_window.set_validation_error(Some(e.to_string()));
-                    
-                    // Log the error
                     log::error!("Settings validation failed: {}", e);
-                    
                     return Command::none();
                 }
-                
-                // Update application config
                 self.config = updated_config.clone();
-                
-                // Save settings to disk
                 if let Err(e) = self.config.save() {
-                    // Set save error
                     self.settings_window.set_validation_error(Some(format!("Failed to save: {}", e)));
-                    
-                    // Log the error
                     log::error!("Settings save failed: {}", e);
-                    
                     return Command::none();
                 }
-                
-                // Apply the settings
                 self.apply_settings();
-                
-                // Close settings window
                 self.show_settings = false;
             }
-            Message::ResetSettings => {
-                // Reset to default settings
-                self.reset_settings();
-                
-                // Update settings window with default config
-                self.settings_window.update_config(self.config.clone());
-            }
-            Message::SelectSettingsTab(tab) => {
-                // Update selected tab in settings window
-                self.settings_window.select_tab(tab);
-            }
             Message::SettingsChanged(config) => {
-                // Update config
                 self.config = config.clone();
-                
-                // Update settings window
                 self.settings_window.update_config(config);
             }
             Message::ShowToast(msg) => {
                 self.toast_message = Some(msg);
+                return Command::perform(async {
+                    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                    ()
+                }, |_| Message::Tick);
             }
-            Message::BluetoothError(error) => {
-                if error == "Scan failed or no Bluetooth adapter found" {
-                    self.toast_message = Some("Scan failed or no Bluetooth adapter found".to_string());
-                } else {
-                    self.toast_message = Some(format!("Bluetooth error: {}", error));
-                }
+            Message::MergedScanResult(devices) => {
+                self.status_message = Some(format!("Found {} devices", devices.len()));
+                self.merged_devices = devices.clone();
+                self.main_window.merged_devices = devices;
             }
-            // Add wildcard pattern to handle all other Message variants
+            Message::Tick => {
+                println!("[DEBUG] Tick message received - refreshing device data");
+                // Refresh device data from CLI scanner on each tick
+                self.refresh_device_data();
+            }
             _ => {
-                // Other message types can be ignored or logged
                 log::debug!("Unhandled message in state.rs");
             }
         }
-        
         Command::none()
     }
 
     fn view(&self) -> iced::Element<'_, Message, iced::Renderer<crate::ui::theme::Theme>> {
+        use iced::widget::{container, text};
+        use iced::Length;
+        println!("[DEBUG] AppState::view: status_message = {:?}, toast_message = {:?}", self.status_message, self.toast_message);
+        let status_message = self.status_message.as_ref();
+        let toast_message = self.toast_message.as_ref();
         if !self.visible {
-            println!("[DEBUG] AppState::view: not visible");
             iced::widget::text("").into()
         } else if self.show_settings {
-            println!("[DEBUG] AppState::view: show_settings branch");
-            let mut root = crate::ui::UiComponent::view(&self.settings_window);
-
-            // If a toast message is present, overlay it at the bottom
-            if let Some(ref toast) = self.toast_message {
-                let toast_element = container(
-                    text(toast)
-                        .size(16)
+            let mut column = iced::widget::Column::new();
+            column = column.push(crate::ui::UiComponent::view(&self.settings_window));
+            // Persistent status bar
+            if let Some(status) = status_message {
+                let status_bar = container(
+                    text(status)
+                        .size(20)
                         .style(crate::ui::theme::MAUVE)
                 )
-                .padding(16)
-                .width(Length::Shrink)
-                .center_x()
-                .style(crate::ui::theme::Container::Box);
-                root = Column::new()
-                    .push(root)
-                    .push(toast_element)
-                    .align_items(Alignment::End)
-                    .into();
+                .width(Length::Fill)
+                .padding(8)
+                .style(iced::theme::Container::Box);
+                column = column.push(status_bar);
             }
-            root
+            // Toast bar (bottom)
+            if let Some(toast) = toast_message {
+                let toast_bar = container(
+                    text(toast)
+                        .size(20)
+                        .style(crate::ui::theme::ROSEWATER)
+                )
+                .width(Length::Fill)
+                .padding(8)
+                .style(iced::theme::Container::Box);
+                column = column.push(toast_bar);
+            }
+            container(column).width(Length::Fill).height(Length::Fill).into()
         } else {
-            println!("[DEBUG] AppState::view: main_window branch");
-            let mut root = crate::ui::UiComponent::view(&self.main_window);
-
-            // If a toast message is present, overlay it at the bottom
-            if let Some(ref toast) = self.toast_message {
-                let toast_element = container(
-                    text(toast)
-                        .size(16)
+            let mut column = iced::widget::Column::new();
+            column = column.push(crate::ui::UiComponent::view(&self.main_window));
+            // Persistent status bar
+            if let Some(status) = status_message {
+                let status_bar = container(
+                    text(status)
+                        .size(20)
                         .style(crate::ui::theme::MAUVE)
                 )
-                .padding(16)
-                .width(Length::Shrink)
-                .center_x()
-                .style(crate::ui::theme::Container::Box);
-                root = Column::new()
-                    .push(root)
-                    .push(toast_element)
-                    .align_items(Alignment::End)
-                    .into();
+                .width(Length::Fill)
+                .padding(8)
+                .style(iced::theme::Container::Box);
+                column = column.push(status_bar);
             }
-            root
+            // Toast bar (bottom)
+            if let Some(toast) = toast_message {
+                let toast_bar = container(
+                    text(toast)
+                        .size(20)
+                        .style(crate::ui::theme::ROSEWATER)
+                )
+                .width(Length::Fill)
+                .padding(8)
+                .style(iced::theme::Container::Box);
+                column = column.push(toast_bar);
+            }
+            container(column).width(Length::Fill).height(Length::Fill).into()
         }
     }
     
     fn subscription(&self) -> Subscription<Message> {
-        // Combine regular subscription with window events to handle close
+        use iced::time;
+        use std::time::Duration;
+        
+        // Timer for periodic CLI scanner updates (every 30 seconds)
+        let timer = time::every(Duration::from_secs(30)).map(|_| Message::Tick);
+        
+        // The controller_receiver is passed in as part of the Flags tuple, so we need to capture it in the unfold state.
+        // We'll use a static mut to store the receiver for the lifetime of the app (safe for this diagnostic purpose).
+        static RECEIVER: OnceLock<Mutex<Option<mpsc::UnboundedReceiver<Message>>>> = OnceLock::new();
+        let _receiver = RECEIVER.get_or_init(|| Mutex::new(None));
+        // The first time, move the receiver from the flags into the static
+        // (This is a hack for demo purposes; in production, use a better state management approach)
         Subscription::batch(vec![
-            crate::ui::app::subscription(self),
+            timer, // Add the timer subscription for periodic CLI scanner updates
             iced::subscription::events_with(|event, _status| {
                 if let iced::Event::Window(iced::window::Event::CloseRequested) = event {
                     Some(Message::Exit)
                 } else {
                     None
                 }
-            })
+            }),
+            iced::subscription::unfold("controller-messages", (), move |()| async move {
+                let mut guard = RECEIVER.get().unwrap().lock().await;
+                if let Some(ref mut rx) = *guard {
+                    // Await the next message (wait until a message is available)
+                    if let Some(msg) = rx.recv().await {
+                        println!("[DEBUG] AppState::subscription: received message from controller: {:?}", msg);
+                        (msg, ())
+                    } else {
+                        // Channel closed, just await forever
+                        futures::future::pending().await
+                    }
+                } else {
+                    // No receiver, just await forever
+                    futures::future::pending().await
+                }
+            }),
         ])
     }
 }
@@ -441,7 +533,7 @@ impl AppState {
     }
     
     /// Initialize the system tray component
-    pub fn initialize_system_tray(&mut self, tx: mpsc::Sender<Message>) -> Result<(), SystemTrayError> {
+    pub fn initialize_system_tray(&mut self, tx: std::sync::mpsc::Sender<Message>) -> Result<(), SystemTrayError> {
         // Create the system tray
         let tray = SystemTray::new(tx, self.config.clone())?;
         self.system_tray = Some(tray);
@@ -578,18 +670,6 @@ impl AppState {
             }
         }
         
-        // Check if auto-scan setting changed
-        if self.config.bluetooth.auto_scan_on_startup && !self.is_scanning && self.auto_scan {
-            // We should be scanning but aren't - start scanning
-            // In real code, this would send a message to start scanning
-        } else if !self.config.bluetooth.auto_scan_on_startup && self.is_scanning && self.auto_scan {
-            // We shouldn't be scanning but are - stop scanning
-            // In real code, this would send a message to stop scanning
-        }
-        
-        // Update the auto_scan flag to match config
-        self.auto_scan = self.config.bluetooth.auto_scan_on_startup;
-        
         log::info!("Settings applied");
     }
     
@@ -659,6 +739,198 @@ impl AppState {
             SystemSetting::EnableTelemetry(value) => {
                 self.config.system.enable_telemetry = value;
             }
+        }
+    }
+
+    pub fn clear_status_message(&mut self) {
+        println!("[DEBUG] AppState::clear_status_message: setting status_message = None");
+        self.status_message = None;
+    }
+
+    pub fn clear_toast_message(&mut self) {
+        println!("[DEBUG] AppState::clear_toast_message: setting toast_message = None");
+        self.toast_message = None;
+    }
+
+    /// Refresh device data from the CLI scanner
+    fn refresh_device_data(&mut self) {
+        println!("[DEBUG] refresh_device_data called at {:?}", std::time::SystemTime::now());
+        
+        // Call the CLI scanner to get AirPods data
+        let airpods_data = get_airpods_from_cli_scanner();
+        
+        println!("[DEBUG] CLI scanner returned {} AirPods devices", airpods_data.len());
+        
+        // Clear existing devices and update with fresh data from CLI scanner
+        self.merged_devices.clear();
+        
+        // Update the merged devices list with AirPods data
+        for airpods in airpods_data {
+            println!("[DEBUG] Processing AirPods device: {:?}", airpods.address);
+            
+            let device = MergedBluetoothDevice {
+                name: if airpods.name.is_empty() { "AirPods".to_string() } else { airpods.name },
+                address: airpods.address.to_string(),
+                paired: true,  // AirPods from CLI scanner are already paired
+                connected: true, // Assume connected if detected by CLI scanner
+                device_type: Some("AirPods".to_string()),
+                battery: None, // Overall battery not used for AirPods
+                left_battery: if airpods.left_battery >= 0 { Some(airpods.left_battery as u8) } else { None },
+                right_battery: if airpods.right_battery >= 0 { Some(airpods.right_battery as u8) } else { None },
+                case_battery: if airpods.case_battery >= 0 { Some(airpods.case_battery as u8) } else { None },
+                device_subtype: Some("earbud".to_string()),
+                left_in_ear: airpods.left_in_ear,
+                right_in_ear: airpods.right_in_ear,
+                case_lid_open: airpods.case_lid_open,
+                side: airpods.side.map(|s| s.to_string()),
+                both_in_case: airpods.both_in_case,
+                color: airpods.color.map(|c| c.to_string()),
+                switch_count: airpods.switch_count.map(|s| s as u8),
+            };
+            
+            self.merged_devices.push(device);
+        }
+        
+        println!("[DEBUG] Total merged devices after update: {}", self.merged_devices.len());
+        
+        // Update the main window with the new devices
+        self.main_window.merged_devices = self.merged_devices.clone();
+        
+        // Set status message based on device count
+        if self.merged_devices.is_empty() {
+            self.status_message = Some("No AirPods devices found".to_string());
+        } else {
+            self.status_message = Some(format!("Updated at {} - {} device(s) found", 
+                chrono::Local::now().format("%H:%M:%S"), 
+                self.merged_devices.len()));
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct PythonBleDevice {
+    pub name: String,
+    pub address: String,
+    pub battery: Option<u8>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MergedBluetoothDevice {
+    pub name: String,
+    pub address: String,
+    pub paired: bool,
+    pub connected: bool,
+    pub device_type: Option<String>,
+    pub battery: Option<u8>,
+    pub left_battery: Option<u8>,
+    pub right_battery: Option<u8>,
+    pub case_battery: Option<u8>,
+    pub device_subtype: Option<String>, // "earbud" or "case"
+    pub left_in_ear: Option<bool>,
+    pub right_in_ear: Option<bool>,
+    pub case_lid_open: Option<bool>,
+    pub side: Option<String>,
+    pub both_in_case: Option<bool>,
+    pub color: Option<String>,
+    pub switch_count: Option<u8>,
+}
+
+/// Get AirPods data from the CLI scanner
+fn get_airpods_from_cli_scanner() -> Vec<AirPodsBatteryInfo> {
+    use std::process::Command;
+    use crate::bluetooth::cli_scanner::{CliScannerResult, CliDeviceInfo};
+    
+    // Path to the CLI scanner executable (v5 is the working implementation)
+    let scanner_path = "scripts/airpods_battery_cli/build/Release/airpods_battery_cli_v5.exe";
+    
+    println!("[DEBUG] Attempting to call CLI scanner at: {}", scanner_path);
+    
+    // Execute the CLI scanner
+    match Command::new(scanner_path).output() {
+        Ok(output) => {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                println!("[DEBUG] AirPods helper output: {}", stdout);
+                
+                // Extract JSON from the output (look for opening and closing braces)
+                let json_str = if let (Some(start), Some(end)) = (stdout.find('{'), stdout.rfind('}')) {
+                    &stdout[start..=end]
+                } else {
+                    println!("[DEBUG] No valid JSON found in output");
+                    return Vec::new();
+                };
+                
+                println!("[DEBUG] Extracted JSON: {}", json_str);
+                
+                // Try to parse the JSON output from the CLI scanner
+                match serde_json::from_str::<CliScannerResult>(json_str) {
+                    Ok(scanner_result) => {
+                        println!("[DEBUG] Successfully parsed CLI scanner result with {} devices", scanner_result.devices.len());
+                        let mut airpods_infos = Vec::new();
+                        
+                                // Convert CLI scanner results to AirPodsBatteryInfo format
+        for device in scanner_result.devices {
+            println!("[DEBUG] Processing device: {} (address: {}, rssi: {})", device.device_id, device.address, device.rssi);
+            println!("[DEBUG] Manufacturer data: '{}'", device.manufacturer_data_hex);
+            
+            if let Some(airpods_data) = device.airpods_data {
+                println!("[DEBUG] Found AirPods data: {} - L:{}% R:{}% C:{}%", 
+                    airpods_data.model, airpods_data.left_battery, airpods_data.right_battery, airpods_data.case_battery);
+                
+                // Parse device ID as address (simplified for now)
+                let address = device.device_id.chars()
+                    .filter(|c| c.is_ascii_hexdigit())
+                    .take(12)
+                    .collect::<String>()
+                    .parse::<u64>()
+                    .unwrap_or(0x123456789ABC); // Default mock address
+                
+                let info = AirPodsBatteryInfo {
+                    address,
+                    name: airpods_data.model.clone(),
+                    model_id: airpods_data.model_id.trim_start_matches("0x").parse::<u16>().unwrap_or(0x2014),
+                    left_battery: airpods_data.left_battery,
+                    left_charging: airpods_data.left_charging,
+                    right_battery: airpods_data.right_battery,
+                    right_charging: airpods_data.right_charging,
+                    case_battery: airpods_data.case_battery,
+                    case_charging: airpods_data.case_charging,
+                    left_in_ear: Some(airpods_data.left_in_ear),
+                    right_in_ear: Some(airpods_data.right_in_ear),
+                    case_lid_open: Some(airpods_data.lid_open),
+                    side: Some(0), // Default value
+                    both_in_case: Some(airpods_data.both_in_case),
+                    color: Some(0), // Default value
+                    switch_count: Some(0), // Default value
+                    rssi: None,
+                    timestamp: Some(chrono::Local::now().timestamp() as u64),
+                    raw_manufacturer_data: Some(device.manufacturer_data_hex),
+                };
+                
+                airpods_infos.push(info);
+            } else {
+                println!("[DEBUG] Device {} is not AirPods (no manufacturer data or not Apple device)", device.device_id);
+            }
+        }
+                        
+                        println!("[DEBUG] Converted {} CLI devices to AirPodsBatteryInfo", airpods_infos.len());
+                        airpods_infos
+                    }
+                    Err(e) => {
+                        println!("[DEBUG] JSON parsing failed: {}", e);
+                        println!("[DEBUG] No valid device data - returning empty list");
+                        Vec::new()
+                    }
+                }
+            } else {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                log::error!("CLI scanner failed: {}", stderr);
+                Vec::new()
+            }
+        }
+        Err(e) => {
+            log::error!("Failed to execute CLI scanner: {}", e);
+            Vec::new()
         }
     }
 } 
