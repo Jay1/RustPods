@@ -1,25 +1,19 @@
-use std::collections::HashMap;
-#[cfg(test)]
-use std::time::Instant;
-use iced::{Subscription, Application, Command};
-use std::convert::TryInto;
-use iced::executor;
-use tokio::sync::mpsc;
-use std::sync::OnceLock;
-use tokio::sync::Mutex;
 use serde::Deserialize;
+use iced::{Subscription, Application, Command, executor};
+use std::collections::HashMap;
+use tokio::sync::{mpsc, Mutex};
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
-use std::sync::Arc;
+use std::process::Command as ProcessCommand;
 
-use crate::bluetooth::DiscoveredDevice;
-use crate::bluetooth::cli_scanner::{CliScannerResult, CliAirPodsData};
 use crate::airpods::battery::AirPodsBatteryInfo;
+use crate::bluetooth::{DiscoveredDevice, AirPodsBatteryStatus};
 use crate::config::{AppConfig, ConfigManager, ConfigError};
-use crate::ui::Message;
-use crate::ui::components::{BluetoothSetting, UiSetting, SystemSetting};
-use crate::ui::{MainWindow, SettingsWindow};
-use crate::ui::SystemTray;
-use crate::ui::system_tray::SystemTrayError;
+use crate::ui::{
+    components::{BluetoothSetting, UiSetting, SystemSetting},
+    MainWindow, SettingsWindow, Message, 
+    system_tray::{SystemTray, SystemTrayError}
+};
 
 /// Main application state
 #[derive(Debug, Clone)]
@@ -74,6 +68,12 @@ pub struct AppState {
     
     /// Merged Bluetooth devices
     pub merged_devices: Vec<MergedBluetoothDevice>,
+    
+    /// AirPods data loaded from the CLI scanner
+    pub airpods_devices: Vec<AirPodsBatteryInfo>,
+    
+    /// Timestamp of the last AirPods data update
+    pub last_update: std::time::Instant,
 }
 
 // Global receiver for controller messages (needed for subscription)
@@ -128,6 +128,8 @@ impl AppState {
             toast_message: None,
             controller_sender,
             merged_devices: Vec::new(),
+            airpods_devices: Vec::new(),
+            last_update: std::time::Instant::now(),
         }
     }
 
@@ -157,6 +159,8 @@ impl AppState {
             toast_message: None,
             controller_sender,
             merged_devices: Vec::new(),
+            airpods_devices: Vec::new(),
+            last_update: std::time::Instant::now(),
         }
     }
 }
@@ -181,7 +185,11 @@ impl Application for AppState {
         log::info!("AppState::new: Creating new application state with system tray communication");
         
         let app_state = Self::new(controller_sender);
-        (app_state, Command::none())
+        
+        // Return a command that triggers async AirPods data loading
+        // This prevents blocking the UI on startup
+        log::info!("Scheduling async AirPods scan on startup");
+        (app_state, Command::perform(async_scan_for_airpods(), Message::AirPodsDataLoaded))
     }
     
     fn title(&self) -> String {
@@ -197,6 +205,7 @@ impl Application for AppState {
         match message {
             Message::ToggleVisibility => {
                 self.toggle_visibility();
+                Command::none()
             }
             Message::Exit => {
                 // Check if minimize to tray is enabled
@@ -205,25 +214,26 @@ impl Application for AppState {
                     self.visible = false;
                     // Save settings when minimizing to tray
                     if let Err(e) = self.config.save() {
-                        log::error!("Failed to save settings on minimize: {}", e);
+                        log::error!("Failed to save settings: {}", e);
                     }
-                    // Use Iced's proper window hiding command that doesn't close the event loop
                     return iced::window::change_mode(iced::window::Mode::Hidden);
                 } else {
-                    // Actually exit the application
-                    #[cfg(target_os = "windows")]
-                    if let Some(tray) = &mut self.system_tray {
-                        if let Err(e) = tray.cleanup() {
-                            log::error!("Failed to clean up system tray: {}", e);
-                        } else {
-                            log::info!("System tray resources cleaned up");
-                        }
-                    }
-                    if let Err(e) = self.config.save() {
-                        log::error!("Failed to save settings on exit: {}", e);
-                    }
+                    log::info!("Exiting application");
                     std::process::exit(0);
                 }
+            }
+            Message::ForceQuit => {
+                log::info!("ForceQuit message received - forcing application exit regardless of settings");
+                println!("[DEBUG] ForceQuit message received - about to call std::process::exit(0)");
+                // Save settings before force quitting
+                if let Err(e) = self.config.save() {
+                    log::error!("Failed to save settings before force quit: {}", e);
+                }
+                std::process::exit(0);
+            }
+            Message::NoOp => {
+                // No operation - used for subscription management, do nothing
+                Command::none()
             }
             Message::WindowCloseRequested => {
                 log::info!("Window close requested - handling based on minimize to tray setting");
@@ -264,12 +274,15 @@ impl Application for AppState {
             Message::DeviceDiscovered(device) => {
                 log::debug!("[UI] Device discovered: {:?}", device);
                 self.update_device(device);
+                Command::none()
             }
             Message::DeviceUpdated(device) => {
                 self.update_device(device);
+                Command::none()
             }
             Message::SelectDevice(address) => {
                 self.select_device(address.clone());
+                Command::none()
             }
             Message::BatteryStatusUpdated(status) => {
                 let status_clone = status.clone();
@@ -291,6 +304,7 @@ impl Application for AppState {
                         log::warn!("Failed to update tray tooltip: {}", e);
                     }
                 }
+                Command::none()
             }
             Message::AirPodsConnected(airpods) => {
                 println!("Connected to AirPods: {:?}", airpods);
@@ -299,34 +313,41 @@ impl Application for AppState {
                         device.is_potential_airpods = true;
                     }
                 }
+                Command::none()
             }
             Message::BluetoothError(msg) => {
                 println!("[DEBUG] AppState::update: setting toast_message = {:?}", msg);
                 self.toast_message = Some(msg);
+                Command::none()
             }
             Message::UpdateBluetoothSetting(setting) => {
                 self.settings_window.mark_changed();
                 self.update_bluetooth_setting(setting);
                 self.settings_window.update_config(self.config.clone());
+                Command::none()
             }
             Message::UpdateUiSetting(setting) => {
                 self.settings_window.mark_changed();
                 self.update_ui_setting(setting);
                 self.settings_window.update_config(self.config.clone());
+                Command::none()
             }
             Message::UpdateSystemSetting(setting) => {
                 self.settings_window.mark_changed();
                 self.update_system_setting(setting);
                 self.settings_window.update_config(self.config.clone());
+                Command::none()
             }
             Message::OpenSettings => {
                 self.settings_window.set_validation_error(None);
                 self.settings_window.update_config(self.config.clone());
                 self.show_settings = true;
+                Command::none()
             }
             Message::CloseSettings => {
                 self.show_settings = false;
                 self.settings_window.update_config(self.config.clone());
+                Command::none()
             }
             Message::SaveSettings => {
                 let updated_config = self.settings_window.config();
@@ -343,10 +364,12 @@ impl Application for AppState {
                 }
                 self.apply_settings();
                 self.show_settings = false;
+                Command::none()
             }
             Message::SettingsChanged(config) => {
                 self.config = config.clone();
                 self.settings_window.update_config(config);
+                Command::none()
             }
             Message::ShowToast(msg) => {
                 self.toast_message = Some(msg);
@@ -375,17 +398,31 @@ impl Application for AppState {
                 }
                 
                 println!("[DEBUG] Total merged devices after async update: {}", self.merged_devices.len());
+                Command::none()
             }
             Message::Tick => {
                 println!("[DEBUG] Tick message received - refreshing device data");
-                // Refresh device data from CLI scanner on each tick
-                self.refresh_device_data();
+                // Refresh device data from CLI scanner on each tick using fast command approach
+                return Self::refresh_device_data_command();
+            }
+            Message::AirPodsDataLoaded(airpods_data) => {
+                // Handle the result of the async AirPods data loading
+                log::info!("AirPods data loaded: {} devices found", airpods_data.len());
+                
+                // Update the state with the loaded AirPods data
+                self.airpods_devices = airpods_data;
+                self.last_update = std::time::Instant::now();
+                
+                // Update the merged devices to include the new AirPods data
+                self.update_merged_devices();
+                
+                Command::none()
             }
             _ => {
                 log::debug!("Unhandled message in state.rs");
+                Command::none()
             }
         }
-        Command::none()
     }
 
     fn view(&self) -> iced::Element<'_, Message, iced::Renderer<crate::ui::theme::Theme>> {
@@ -467,33 +504,40 @@ impl Application for AppState {
             "controller-messages",
             (),
             |_state| async move {
+                println!("[DEBUG] Controller subscription: Checking for messages from system tray");
                 // Access the global receiver safely
                 if let Some(receiver_arc) = CONTROLLER_RECEIVER.get() {
                     let mut guard = receiver_arc.lock().await;
                     if let Some(ref mut receiver) = *guard {
-                        // Wait for the next message from system tray
                         match receiver.recv().await {
-                            Some(msg) => {
-                                log::debug!("Controller subscription received message: {:?}", msg);
-                                (msg, ())
+                            Some(message) => {
+                                println!("[DEBUG] Controller subscription: Received message: {:?}", message);
+                                log::info!("Controller subscription received message from system tray: {:?}", message);
+                                (message, ())
                             }
                             None => {
+                                println!("[DEBUG] Controller subscription: Channel closed, no more messages");
+                                log::warn!("Controller channel closed - system tray communication lost");
                                 // Channel closed, wait and try again
                                 tokio::time::sleep(Duration::from_millis(100)).await;
-                                (Message::Tick, ()) // Keep subscription alive
+                                (Message::NoOp, ())
                             }
                         }
                     } else {
+                        println!("[DEBUG] Controller subscription: No receiver available");
+                        log::warn!("No controller receiver available");
                         // No receiver, wait and try again
                         tokio::time::sleep(Duration::from_millis(100)).await;
-                        (Message::Tick, ())
+                        (Message::NoOp, ())
                     }
                 } else {
-                    // CONTROLLER_RECEIVER not initialized, wait and try again
+                    println!("[DEBUG] Controller subscription: CONTROLLER_RECEIVER not set");
+                    log::warn!("CONTROLLER_RECEIVER not initialized");
+                    // Not initialized yet, wait and try again
                     tokio::time::sleep(Duration::from_millis(100)).await;
-                    (Message::Tick, ())
+                    (Message::NoOp, ())
                 }
-            }
+            },
         );
         
         Subscription::batch(vec![
@@ -739,18 +783,24 @@ impl AppState {
         self.toast_message = None;
     }
 
-    /// Refresh device data from the CLI scanner (async to prevent UI blocking)
+    /// Refresh device data from the CLI scanner (fast synchronous call in async command)
     fn refresh_device_data(&mut self) {
         println!("[DEBUG] refresh_device_data called at {:?}", std::time::SystemTime::now());
         
-        // Spawn async task to avoid blocking the UI thread
-        let controller_sender = self.controller_sender.clone();
-        tokio::spawn(async move {
-            let airpods_data = get_airpods_from_cli_scanner_async().await;
-            println!("[DEBUG] Async CLI scanner returned {} AirPods devices", airpods_data.len());
-            
-            // Send the result back to the UI thread via the controller
-            if let Err(e) = controller_sender.send(Message::MergedScanResult(
+        // Use Command::perform to run the CLI scanner without blocking the UI
+        // This is much faster than tokio::spawn and still prevents UI freezing
+    }
+    
+    /// Create a command to refresh device data from CLI scanner
+    pub fn refresh_device_data_command() -> Command<Message> {
+        Command::perform(
+            async {
+                // Call the synchronous CLI scanner - it's fast enough that it won't block
+                // but we still run it in an async command to prevent any UI freezing
+                let airpods_data = get_airpods_from_cli_scanner();
+                println!("[DEBUG] CLI scanner returned {} AirPods devices", airpods_data.len());
+                
+                // Convert to MergedBluetoothDevice format
                 airpods_data.into_iter().map(|airpods| {
                     MergedBluetoothDevice {
                         name: if airpods.name.is_empty() { "AirPods".to_string() } else { airpods.name },
@@ -758,7 +808,8 @@ impl AppState {
                         paired: true,
                         connected: true,
                         device_type: Some("AirPods".to_string()),
-                        battery: None,
+                        battery: if airpods.left_battery >= 0 { Some(airpods.left_battery as u8) } else { None }
+                            .or(if airpods.right_battery >= 0 { Some(airpods.right_battery as u8) } else { None }),
                         left_battery: if airpods.left_battery >= 0 { Some(airpods.left_battery as u8) } else { None },
                         right_battery: if airpods.right_battery >= 0 { Some(airpods.right_battery as u8) } else { None },
                         case_battery: if airpods.case_battery >= 0 { Some(airpods.case_battery as u8) } else { None },
@@ -772,18 +823,54 @@ impl AppState {
                         switch_count: airpods.switch_count.map(|s| s as u8),
                     }
                 }).collect()
-            )) {
-                log::error!("Failed to send MergedScanResult message: {}", e);
-            }
-        });
+            },
+            Message::MergedScanResult
+        )
     }
-}
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct PythonBleDevice {
-    pub name: String,
-    pub address: String,
-    pub battery: Option<u8>,
+    /// Update the merged devices with the loaded AirPods data
+    fn update_merged_devices(&mut self) {
+        // Clear existing merged devices
+        self.merged_devices.clear();
+        
+        // Add AirPods devices to the merged devices
+        self.merged_devices.extend(self.airpods_devices.iter().map(|airpods| {
+            MergedBluetoothDevice {
+                name: airpods.name.clone(),
+                address: airpods.address.to_string(),
+                paired: true,
+                connected: true,
+                device_type: Some("AirPods".to_string()),
+                battery: if airpods.left_battery >= 0 { Some(airpods.left_battery as u8) } else { None }
+                    .or(if airpods.right_battery >= 0 { Some(airpods.right_battery as u8) } else { None }),
+                left_battery: if airpods.left_battery >= 0 { Some(airpods.left_battery as u8) } else { None },
+                right_battery: if airpods.right_battery >= 0 { Some(airpods.right_battery as u8) } else { None },
+                case_battery: if airpods.case_battery >= 0 { Some(airpods.case_battery as u8) } else { None },
+                device_subtype: Some("earbud".to_string()),
+                left_in_ear: airpods.left_in_ear,
+                right_in_ear: airpods.right_in_ear,
+                case_lid_open: airpods.case_lid_open,
+                side: airpods.side.map(|s| s.to_string()),
+                both_in_case: airpods.both_in_case,
+                color: airpods.color.map(|c| c.to_string()),
+                switch_count: airpods.switch_count.map(|s| s as u8),
+            }
+        }));
+        
+        // Update the main window with the new merged devices
+        self.main_window.merged_devices = self.merged_devices.clone();
+        
+        // Set status message based on device count with timing info
+        if self.merged_devices.is_empty() {
+            self.status_message = Some("No AirPods devices found".to_string());
+        } else {
+            self.status_message = Some(format!("Updated at {} - {} device(s) found", 
+                chrono::Local::now().format("%H:%M:%S"), 
+                self.merged_devices.len()));
+        }
+        
+        println!("[DEBUG] Total merged devices after async update: {}", self.merged_devices.len());
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -807,109 +894,99 @@ pub struct MergedBluetoothDevice {
     pub switch_count: Option<u8>,
 }
 
-/// Get AirPods data from the CLI scanner (async version to prevent UI blocking)
-async fn get_airpods_from_cli_scanner_async() -> Vec<AirPodsBatteryInfo> {
-    use tokio::process::Command;
-    use crate::bluetooth::cli_scanner::{CliScannerResult, CliDeviceInfo};
+/// Async function to scan for AirPods without blocking the UI
+async fn async_scan_for_airpods() -> Vec<AirPodsBatteryInfo> {
+    use tokio::task;
     
-    // Path to the CLI scanner executable (v5 is the working implementation)
-    let scanner_path = "scripts/airpods_battery_cli/build/Release/airpods_battery_cli_v5.exe";
+    // Run the CLI scanner in a blocking task to avoid blocking the async runtime
+    task::spawn_blocking(|| {
+        get_airpods_from_cli_scanner()
+    }).await.unwrap_or_else(|_| {
+        log::error!("Failed to execute CLI scanner task");
+        Vec::new()
+    })
+}
+
+/// Get AirPods data from the CLI scanner 
+fn get_airpods_from_cli_scanner() -> Vec<AirPodsBatteryInfo> {
+    // Path to the CLI scanner executable
+    let cli_path = "scripts/airpods_battery_cli/build/Debug/airpods_battery_cli_v5.exe";
     
-    println!("[DEBUG] Attempting to call CLI scanner async at: {}", scanner_path);
+    println!("[DEBUG] Calling CLI scanner at: {}", cli_path);
     
-    // Execute the CLI scanner asynchronously to avoid blocking the UI
-    match Command::new(scanner_path).output().await {
+    match ProcessCommand::new(cli_path)
+        .output()
+    {
         Ok(output) => {
             if output.status.success() {
                 let stdout = String::from_utf8_lossy(&output.stdout);
-                println!("[DEBUG] AirPods helper output: {}", stdout);
+                println!("[DEBUG] CLI scanner output length: {} chars", stdout.len());
                 
-                // Extract JSON from the output (look for opening and closing braces)
-                let json_str = if let (Some(start), Some(end)) = (stdout.find('{'), stdout.rfind('}')) {
-                    &stdout[start..=end]
-                } else {
-                    println!("[DEBUG] No valid JSON found in output");
-                    return Vec::new();
-                };
-                
-                println!("[DEBUG] Extracted JSON: {}", json_str);
-                
-                // Try to parse the JSON output from the CLI scanner
-                match serde_json::from_str::<CliScannerResult>(json_str) {
-                    Ok(scanner_result) => {
-                        println!("[DEBUG] Successfully parsed CLI scanner result with {} devices", scanner_result.devices.len());
-                        let mut airpods_infos = Vec::new();
-                        
-                        // Convert CLI scanner results to AirPodsBatteryInfo format
-                        for device in scanner_result.devices {
-                            println!("[DEBUG] Processing device: {} (address: {}, rssi: {})", device.device_id, device.address, device.rssi);
-                            println!("[DEBUG] Manufacturer data: '{}'", device.manufacturer_data_hex);
+                // Parse the JSON output from the CLI scanner
+                match serde_json::from_str::<crate::bluetooth::cli_scanner::CliScannerResult>(&stdout) {
+                    Ok(scan_result) => {
+                        // Extract AirPods devices from the scan result and convert them
+                        let airpods_devices: Vec<AirPodsBatteryInfo> = scan_result.devices
+                            .into_iter()
+                            .filter_map(|device| {
+                                if let Some(airpods_data) = device.airpods_data {
+                                    // Parse model_id from hex string (e.g. "0x2014" -> 0x2014)
+                                    let model_id = if let Some(stripped) = airpods_data.model_id.strip_prefix("0x") {
+                                        u16::from_str_radix(stripped, 16).unwrap_or(0)
+                                    } else {
+                                        airpods_data.model_id.parse::<u16>().unwrap_or(0)
+                                    };
+                                    
+                                    // Parse address from string to u64
+                                    let address = device.address.parse::<u64>().unwrap_or(0);
+                                    
+                                    Some(AirPodsBatteryInfo {
+                                        address,
+                                        name: airpods_data.model,
+                                        model_id,
+                                        left_battery: airpods_data.left_battery,
+                                        left_charging: airpods_data.left_charging,
+                                        right_battery: airpods_data.right_battery,
+                                        right_charging: airpods_data.right_charging,
+                                        case_battery: airpods_data.case_battery,
+                                        case_charging: airpods_data.case_charging,
+                                        left_in_ear: Some(airpods_data.left_in_ear),
+                                        right_in_ear: Some(airpods_data.right_in_ear),
+                                        case_lid_open: Some(airpods_data.lid_open),
+                                        side: None, // Not provided in current CLI output format
+                                        both_in_case: Some(airpods_data.both_in_case),
+                                        color: None, // Not provided in current CLI output format
+                                        switch_count: None, // Not provided in current CLI output format
+                                        rssi: Some(device.rssi),
+                                        timestamp: Some(scan_result.scan_timestamp.parse::<u64>().unwrap_or(0)),
+                                        raw_manufacturer_data: Some(device.manufacturer_data_hex),
+                                    })
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect();
                             
-                            if let Some(airpods_data) = device.airpods_data {
-                                println!("[DEBUG] Found AirPods data: {} - L:{}% R:{}% C:{}%", 
-                                    airpods_data.model, airpods_data.left_battery, airpods_data.right_battery, airpods_data.case_battery);
-                                
-                                // Parse device ID as address (simplified for now)
-                                let address = device.device_id.chars()
-                                    .filter(|c| c.is_ascii_hexdigit())
-                                    .take(12)
-                                    .collect::<String>()
-                                    .parse::<u64>()
-                                    .unwrap_or(0x123456789ABC); // Default mock address
-                                
-                                let info = AirPodsBatteryInfo {
-                                    address,
-                                    name: airpods_data.model.clone(),
-                                    model_id: airpods_data.model_id.trim_start_matches("0x").parse::<u16>().unwrap_or(0x2014),
-                                    left_battery: airpods_data.left_battery,
-                                    left_charging: airpods_data.left_charging,
-                                    right_battery: airpods_data.right_battery,
-                                    right_charging: airpods_data.right_charging,
-                                    case_battery: airpods_data.case_battery,
-                                    case_charging: airpods_data.case_charging,
-                                    left_in_ear: Some(airpods_data.left_in_ear),
-                                    right_in_ear: Some(airpods_data.right_in_ear),
-                                    case_lid_open: Some(airpods_data.lid_open),
-                                    side: Some(0), // Default value
-                                    both_in_case: Some(airpods_data.both_in_case),
-                                    color: Some(0), // Default value
-                                    switch_count: Some(0), // Default value
-                                    rssi: None,
-                                    timestamp: Some(chrono::Local::now().timestamp() as u64),
-                                    raw_manufacturer_data: Some(device.manufacturer_data_hex),
-                                };
-                                
-                                airpods_infos.push(info);
-                            } else {
-                                println!("[DEBUG] Device {} is not AirPods (no manufacturer data or not Apple device)", device.device_id);
-                            }
-                        }
-                        
-                        println!("[DEBUG] Converted {} CLI devices to AirPodsBatteryInfo", airpods_infos.len());
-                        airpods_infos
-                    }
+                        println!("[DEBUG] Parsed {} AirPods devices from CLI scanner", airpods_devices.len());
+                        airpods_devices
+                    },
                     Err(e) => {
-                        println!("[DEBUG] JSON parsing failed: {}", e);
-                        println!("[DEBUG] No valid device data - returning empty list");
+                        log::error!("Failed to parse CLI scanner JSON output: {}", e);
+                        println!("[DEBUG] CLI scanner JSON parse error: {}", e);
+                        println!("[DEBUG] Raw output preview: {}", stdout.chars().take(200).collect::<String>());
                         Vec::new()
                     }
                 }
             } else {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                log::error!("CLI scanner failed: {}", stderr);
+                log::error!("CLI scanner failed with exit code: {:?}", output.status.code());
+                println!("[DEBUG] CLI scanner stderr: {}", String::from_utf8_lossy(&output.stderr));
                 Vec::new()
             }
-        }
+        },
         Err(e) => {
             log::error!("Failed to execute CLI scanner: {}", e);
+            println!("[DEBUG] CLI scanner execution error: {}", e);
             Vec::new()
         }
     }
-}
-
-/// Get AirPods data from the CLI scanner (synchronous fallback - deprecated)
-fn get_airpods_from_cli_scanner() -> Vec<AirPodsBatteryInfo> {
-    // This function is now deprecated - the async version should be used instead
-    log::warn!("Using deprecated synchronous CLI scanner call - this can freeze the UI");
-    Vec::new()
 } 

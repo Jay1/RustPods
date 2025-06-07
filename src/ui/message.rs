@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use crate::bluetooth::DiscoveredDevice;
 use crate::bluetooth::AirPodsBatteryStatus;
-use crate::airpods::DetectedAirPods;
+use crate::airpods::{DetectedAirPods, battery::AirPodsBatteryInfo};
 use crate::config::AppConfig;
 use crate::ui::components::{BluetoothSetting, UiSetting, SystemSetting};
 use crate::ui::state_manager::ConnectionState;
@@ -17,6 +17,12 @@ pub enum Message {
     
     /// Exit the application
     Exit,
+    
+    /// Force quit the application (ignores minimize to tray setting)
+    ForceQuit,
+    
+    /// No operation - used internally for subscription management
+    NoOp,
     
     /// New Bluetooth device discovered
     DeviceDiscovered(DiscoveredDevice),
@@ -140,6 +146,9 @@ pub enum Message {
     
     /// Unpair the current device
     UnpairDevice,
+    
+    /// AirPods data loaded from CLI scanner (async)
+    AirPodsDataLoaded(Vec<AirPodsBatteryInfo>),
 }
 
 impl PartialEq for Message {
@@ -147,6 +156,8 @@ impl PartialEq for Message {
         match (self, other) {
             (Self::ToggleVisibility, Self::ToggleVisibility) => true,
             (Self::Exit, Self::Exit) => true,
+            (Self::ForceQuit, Self::ForceQuit) => true,
+            (Self::NoOp, Self::NoOp) => true,
             (Self::DeviceDiscovered(a), Self::DeviceDiscovered(b)) => a == b,
             (Self::DeviceUpdated(a), Self::DeviceUpdated(b)) => a == b,
             (Self::SelectDevice(a), Self::SelectDevice(b)) => a == b,
@@ -188,6 +199,7 @@ impl PartialEq for Message {
             (Self::BatteryUpdateFailed(a), Self::BatteryUpdateFailed(b)) => a == b,
             (Self::ToggleAutoScan(a), Self::ToggleAutoScan(b)) => a == b,
             (Self::UnpairDevice, Self::UnpairDevice) => true,
+            (Self::AirPodsDataLoaded(a), Self::AirPodsDataLoaded(b)) => a.len() == b.len(),
             _ => false,
         }
     }

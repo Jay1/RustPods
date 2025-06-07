@@ -192,9 +192,14 @@ impl DirectWindowController {
     }
 
     pub fn exit_application(&self) -> Result<(), SystemTrayError> {
+        log::info!("DirectWindowController: Sending ForceQuit message to UI");
         if let Some(ref sender) = self.ui_sender {
-            sender.send(Message::Exit)
-                .map_err(|e| SystemTrayError::WindowsApi(format!("Failed to send exit message: {}", e)))?;
+            sender.send(Message::ForceQuit)
+                .map_err(|e| SystemTrayError::WindowsApi(format!("Failed to send force quit message: {}", e)))?;
+        } else {
+            log::warn!("No UI sender available, forcing process exit");
+            // Fallback: force exit using process::exit if no UI channel available
+            std::process::exit(0);
         }
         Ok(())
     }
@@ -324,13 +329,13 @@ impl SystemTray {
                 if let Ok(event) = event_receiver.recv() {
                     log::debug!("Menu event received: {:?}", event.id.0);
                     match event.id.0.as_str() {
-                        "Show/Hide Window" => {
+                        "Show/Hide Window" | "1000" => {
                             log::debug!("Tray menu: Show/Hide Window clicked");
                             if let Err(e) = window_controller.toggle_window() {
                                 log::error!("Failed to toggle window from menu: {}", e);
                             }
                         }
-                        "Quit" => {
+                        "Quit" | "1001" => {
                             log::debug!("Tray menu: Quit clicked");
                             if let Err(e) = window_controller.exit_application() {
                                 log::error!("Failed to exit application from menu: {}", e);
