@@ -25,7 +25,7 @@ env:
 jobs:
   coverage:
     name: Test Coverage
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       
@@ -48,11 +48,11 @@ jobs:
       
       - name: List coverage directory contents
         run: |
-          ls -l ./coverage
-          echo "Cobertura.xml size:"
-          wc -l ./coverage/cobertura.xml
-          echo "First 10 lines of cobertura.xml:"
-          head -10 ./coverage/cobertura.xml
+          Get-ChildItem ./coverage
+          Write-Output "Cobertura.xml size:"
+          (Get-Content ./coverage/cobertura.xml | Measure-Object -Line).Lines
+          Write-Output "First 10 lines of cobertura.xml:"
+          Get-Content ./coverage/cobertura.xml | Select-Object -First 10
       
       - name: Set up Python (required for Codecov)
         uses: actions/setup-python@v5
