@@ -6,10 +6,14 @@ use tokio::sync::mpsc;
 use std::{sync::Arc, time::Duration};
 
 use crate::ui::{Message, UiComponent, MainWindow, SettingsWindow};
-use crate::ui::system_tray_controller::SystemTrayController;
+// Temporarily disable system tray
+// use crate::ui::system_tray_controller::SystemTrayController;
 use crate::ui::state_manager::StateManager;
 use crate::ui::window_visibility::WindowVisibilityManager;
 use crate::ui::theme::Theme;
+use crate::config::AppConfig;
+use crate::config::ConfigManager;
+use crate::bluetooth::DiscoveredDevice;
 // Import the AppController from the appropriate path
 
 /// State-based application implementation with improved state management
@@ -29,8 +33,8 @@ pub struct StateApp {
     /// Current application bounds
     bounds: iced::Rectangle,
     
-    /// System tray controller
-    system_tray_controller: Option<SystemTrayController>,
+    // System tray controller (temporarily disabled)
+    // system_tray_controller: Option<SystemTrayController>,
 }
 
 impl Application for StateApp {
@@ -65,15 +69,15 @@ impl Application for StateApp {
             Command::none()
         };
         
-        // Create a system tray controller
-        let (tray_tx, _tray_rx) = std::sync::mpsc::channel();
-        let mut system_tray_controller = Some(SystemTrayController::new(tray_tx, _config.clone(), Arc::clone(&state_manager)).unwrap());
-        if let Some(controller) = &mut system_tray_controller {
-            match controller.start() {
-                Ok(_) => log::info!("System tray controller started successfully"),
-                Err(e) => log::error!("Failed to start system tray controller: {}", e),
-            }
-        }
+        // Temporarily disable system tray controller
+        // let (tray_tx, _tray_rx) = std::sync::mpsc::channel();
+        // let mut system_tray_controller = Some(SystemTrayController::new(tray_tx, _config.clone(), Arc::clone(&state_manager)).unwrap());
+        // if let Some(controller) = &mut system_tray_controller {
+        //     match controller.start() {
+        //         Ok(_) => log::info!("System tray controller started successfully"),
+        //         Err(e) => log::error!("Failed to start system tray controller: {}", e),
+        //     }
+        // }
         
         (
             Self {
@@ -82,7 +86,7 @@ impl Application for StateApp {
                 settings_window,
                 visibility_manager,
                 bounds: iced::Rectangle::default(),
-                system_tray_controller,
+                // system_tray_controller, // Temporarily disabled
             },
             start_command
         )
@@ -122,9 +126,10 @@ impl Application for StateApp {
                 self.visibility_manager.toggle(bounds)
             },
             Message::Exit => {
-                if let Some(controller) = &mut self.system_tray_controller {
-                    let _ = controller.stop();
-                }
+                // Temporarily disable system tray controller cleanup
+                // if let Some(controller) = &mut self.system_tray_controller {
+                //     let _ = controller.stop();
+                // }
                 let config = self.state_manager.get_config();
                 if let Err(e) = config.save() {
                     log::error!("Failed to save settings on exit: {}", e);

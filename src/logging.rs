@@ -1,10 +1,10 @@
 //! Structured logging for RustPods
 //!
 //! This module provides a structured logging setup that integrates with the 
-//! error handling system and provides context-aware logs.
+//! error handling system and provides context-aware logs with selective debug categories.
 
 use std::path::PathBuf;
-use std::sync::Once;
+use std::sync::{Once, Arc, RwLock};
 use log::{LevelFilter, Record, Metadata};
 use log::Level;
 use chrono::Local;
@@ -22,6 +22,40 @@ const TIMESTAMP_FORMAT: &str = "%Y-%m-%d %H:%M:%S%.3f";
 /// Global initialization guard
 static INIT_LOGGER: Once = Once::new();
 
+/// Debug flag categories for selective logging
+#[derive(Debug, Clone)]
+pub struct DebugFlags {
+    pub ui: bool,              // UI events, window management, system tray
+    pub bluetooth: bool,       // Bluetooth scanning, device discovery, CLI scanner
+    pub airpods: bool,         // AirPods detection, battery parsing
+    pub config: bool,          // Configuration loading, saving, validation
+    pub system: bool,          // System-level operations, lifecycle, persistence
+    pub all: bool,             // Enable all debug output
+}
+
+impl Default for DebugFlags {
+    fn default() -> Self {
+        Self {
+            ui: false,
+            bluetooth: false,
+            airpods: false,
+            config: false,
+            system: false,
+            all: false,
+        }
+    }
+}
+
+/// Global debug flags storage
+static DEBUG_FLAGS: RwLock<DebugFlags> = RwLock::new(DebugFlags {
+    ui: false,
+    bluetooth: false,
+    airpods: false,
+    config: false,
+    system: false,
+    all: false,
+});
+
 /// Custom logger implementation for RustPods
 pub struct RustPodsLogger {
     /// File output for logs
@@ -34,7 +68,24 @@ pub struct RustPodsLogger {
 
 impl log::Log for RustPodsLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
-        metadata.level() <= self.level
+        // Always allow warn and error
+        if metadata.level() <= Level::Warn {
+            return metadata.level() <= self.level;
+        }
+        
+        // For debug/info/trace levels, check if enabled by log level
+        if metadata.level() > self.level {
+            return false;
+        }
+        
+        // For debug level, also check debug flags
+        if metadata.level() == Level::Debug {
+            let module_path = metadata.target();
+            return should_log_debug(module_path);
+        }
+        
+        // Info and trace follow normal level filtering
+        true
     }
 
     fn log(&self, record: &Record) {
@@ -162,6 +213,60 @@ pub fn configure_logging(
     });
     
     result
+}
+
+/// Set global debug flags for selective logging
+pub fn set_debug_flags(flags: DebugFlags) {
+    if let Ok(mut debug_flags) = DEBUG_FLAGS.write() {
+        *debug_flags = flags;
+    }
+}
+
+/// Check if a debug category should log based on the module path and global flags
+pub fn should_log_debug(module_path: &str) -> bool {
+    if let Ok(flags) = DEBUG_FLAGS.read() {
+        if flags.all {
+            return true;
+        }
+        
+        // Check module path against debug categories
+        if module_path.contains("::ui") || module_path.contains("system_tray") || module_path.contains("window") {
+            return flags.ui;
+        }
+        if module_path.contains("::bluetooth") || module_path.contains("cli_scanner") || module_path.contains("adapter") {
+            return flags.bluetooth;
+        }
+        if module_path.contains("::airpods") || module_path.contains("battery") {
+            return flags.airpods;
+        }
+        if module_path.contains("::config") || module_path.contains("validation") {
+            return flags.config;
+        }
+        if module_path.contains("lifecycle") || module_path.contains("persistence") || module_path.contains("telemetry") || module_path.contains("diagnostics") {
+            return flags.system;
+        }
+    }
+    false
+}
+
+/// Conditional debug logging macro that respects debug flags
+#[macro_export]
+macro_rules! debug_log {
+    ($category:expr, $($arg:tt)*) => {
+        if $crate::logging::should_log_debug(module_path!()) {
+            log::debug!($($arg)*);
+        }
+    };
+}
+
+/// Conditional info logging for selected debug categories
+#[macro_export]
+macro_rules! debug_info {
+    ($category:expr, $($arg:tt)*) => {
+        if $crate::logging::should_log_debug(module_path!()) {
+            log::info!($($arg)*);
+        }
+    };
 }
 
 /// Log an error with context

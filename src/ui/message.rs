@@ -1,9 +1,10 @@
+use std::fmt::Debug;
+
 use crate::bluetooth::DiscoveredDevice;
 use crate::bluetooth::AirPodsBatteryStatus;
 use crate::airpods::DetectedAirPods;
 use crate::config::AppConfig;
 use crate::ui::components::{BluetoothSetting, UiSetting, SystemSetting};
-use crate::ui::settings_window::SettingsTab;
 use crate::ui::state_manager::ConnectionState;
 use iced::Point;
 use crate::ui::state::MergedBluetoothDevice;
@@ -83,9 +84,6 @@ pub enum Message {
     /// Save settings
     SaveSettings,
     
-    /// Select a settings tab
-    SelectSettingsTab(SettingsTab),
-    
     /// Window drag started
     WindowDragStart(Point),
     
@@ -139,6 +137,9 @@ pub enum Message {
     
     /// Toggle auto scan setting
     ToggleAutoScan(bool),
+    
+    /// Unpair the current device
+    UnpairDevice,
 }
 
 impl PartialEq for Message {
@@ -168,7 +169,6 @@ impl PartialEq for Message {
             (Self::OpenSettings, Self::OpenSettings) => true,
             (Self::SaveSettings, Self::SaveSettings) => true,
             (Self::CloseSettings, Self::CloseSettings) => true,
-            (Self::SelectSettingsTab(a), Self::SelectSettingsTab(b)) => a == b,
             (Self::WindowDragStart(a), Self::WindowDragStart(b)) => a == b,
             (Self::WindowDragEnd, Self::WindowDragEnd) => true,
             (Self::WindowDragMove(a), Self::WindowDragMove(b)) => a == b,
@@ -187,6 +187,7 @@ impl PartialEq for Message {
             (Self::StopScan, Self::StopScan) => true,
             (Self::BatteryUpdateFailed(a), Self::BatteryUpdateFailed(b)) => a == b,
             (Self::ToggleAutoScan(a), Self::ToggleAutoScan(b)) => a == b,
+            (Self::UnpairDevice, Self::UnpairDevice) => true,
             _ => false,
         }
     }

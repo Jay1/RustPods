@@ -108,7 +108,7 @@ impl CliScannerConfig {
     pub fn from_app_config(config: &AppConfig) -> Self {
         Self {
             scanner_path: Self::resolve_scanner_path(&std::env::current_dir().unwrap_or_else(|_| ".".into())),
-            poll_interval: Duration::from_secs(config.bluetooth.battery_refresh_interval.max(MIN_POLL_INTERVAL.as_secs())),
+            poll_interval: config.bluetooth.battery_refresh_interval.max(MIN_POLL_INTERVAL),
             adaptive_polling: config.bluetooth.adaptive_polling,
             max_errors: 5,
             verbose_logging: config.system.log_level == crate::config::LogLevel::Debug || config.system.log_level == crate::config::LogLevel::Trace,

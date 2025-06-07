@@ -4,17 +4,25 @@
 
 use crate::ui::state::AppState;
 use crate::ui::window_management::{DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH};
+use crate::ui::utils::load_window_icon;
 use iced::Application;
 
-/// Runs the UI application
+
+
+/// Runs the UI application with system tray support
 pub fn run_ui() -> iced::Result {
     // Create a channel for communication between UI and controller
     let (controller_sender, controller_receiver) = tokio::sync::mpsc::unbounded_channel();
+
+    // Load the application icon with error handling
+    let icon = load_window_icon();
 
     // Run the Iced application using AppState
     AppState::run(iced::Settings {
         window: iced::window::Settings {
             size: (DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT),
+            icon,
+            min_size: Some((400, 300)),
             ..Default::default()
         },
         flags: (controller_sender, controller_receiver),
@@ -22,6 +30,6 @@ pub fn run_ui() -> iced::Result {
         default_font: iced::Font::default(),
         default_text_size: 16.0,
         antialiasing: false,
-        exit_on_close_request: true,
+        exit_on_close_request: false, // Allow custom handling of close requests for system tray
     })
 }

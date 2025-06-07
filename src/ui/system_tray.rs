@@ -1,6 +1,10 @@
 use std::sync::mpsc;
-use tray_item::TrayItem;
+use tokio::sync::mpsc::UnboundedSender;
+use tray_icon::{TrayIcon, TrayIconBuilder, TrayIconEvent, MouseButton, menu::{Menu, MenuEvent}};
+use tray_icon::menu::MenuItem as TrayMenuItem;
+use tray_icon::Icon;
 use std::io;
+use std::path::Path;
 
 use crate::ui::Message;
 use crate::config::{AppConfig, Theme as ConfigTheme};
@@ -8,8 +12,9 @@ use crate::ui::state_manager::StateManager;
 use crate::bluetooth::AirPodsBatteryStatus;
 use crate::error::{RustPodsError, ErrorContext};
 use std::sync::Arc;
+use std::sync::{Mutex};
 
-/// Menu item information for system tray
+/// Menu item configuration
 struct MenuItem {
     /// Label to display in the menu
     label: String,
@@ -19,836 +24,572 @@ struct MenuItem {
     message: Option<Message>,
 }
 
-/// Theme mode for the system tray
+/// Light or dark theme mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ThemeMode {
-    /// Light theme mode
+pub enum ThemeMode {
     Light,
-    /// Dark theme mode
     Dark,
 }
 
-impl From<ThemeMode> for ConfigTheme {
-    fn from(mode: ThemeMode) -> Self {
-        match mode {
-            ThemeMode::Light => ConfigTheme::Light,
-            ThemeMode::Dark => ConfigTheme::Dark,
+impl From<ConfigTheme> for ThemeMode {
+    fn from(theme: ConfigTheme) -> Self {
+        match theme {
+            ConfigTheme::Dark => ThemeMode::Dark,
+            ConfigTheme::Light => ThemeMode::Light,
+            _ => ThemeMode::Dark, // Default to dark
+        }
+    }
+}
+
+/// System tray related errors
+#[derive(Debug, thiserror::Error)]
+pub enum SystemTrayError {
+    #[error("Failed to create system tray: {0}")]
+    Creation(String),
+    
+    #[error("Failed to set tray icon: {0}")]
+    SetIcon(String),
+    
+    #[error("Failed to add menu item: {0}")]
+    MenuItem(String),
+    
+    #[error("Failed to update tooltip: {0}")]
+    Tooltip(String),
+    
+    #[error("IO error: {0}")]
+    IoError(#[from] std::io::Error),
+    
+    #[error("Image error: {0}")]
+    ImageError(String),
+
+    #[error("Windows API error: {0}")]
+    WindowsApi(String),
+}
+
+/// Window control commands
+#[derive(Debug, Clone)]
+pub enum WindowCommand {
+    Show,
+    Hide,
+    Toggle,
+    Exit,
+}
+
+/// Direct Windows window controller
+pub struct DirectWindowController {
+    window_handle: Arc<Mutex<Option<isize>>>,
+    ui_sender: Option<UnboundedSender<Message>>,
+}
+
+impl DirectWindowController {
+    pub fn new() -> Self {
+        Self {
+            window_handle: Arc::new(Mutex::new(None)),
+            ui_sender: None,
+        }
+    }
+
+    pub fn set_ui_sender(&mut self, sender: UnboundedSender<Message>) {
+        self.ui_sender = Some(sender);
+    }
+
+    pub fn set_window_handle(&self, handle: isize) {
+        if let Ok(mut guard) = self.window_handle.lock() {
+            *guard = Some(handle);
+            log::info!("Window handle set: {}", handle);
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    pub fn show_window(&self) -> Result<(), SystemTrayError> {
+        log::info!("System tray: Requesting window show via UI message (avoiding Windows API)");
+        
+        // Only use UI messages - let Iced handle the actual window operations
+        if let Some(ref sender) = self.ui_sender {
+            match sender.send(Message::ShowWindow) {
+                Ok(_) => {
+                    log::debug!("ShowWindow message sent successfully to UI");
+                    Ok(())
+                },
+                Err(e) => {
+                    log::error!("Failed to send ShowWindow message: {}", e);
+                    Err(SystemTrayError::WindowsApi(format!("Failed to send show message: {}", e)))
+                }
+            }
+        } else {
+            log::error!("No UI sender available for ShowWindow message");
+            Err(SystemTrayError::WindowsApi("No UI sender available".to_string()))
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    pub fn hide_window(&self) -> Result<(), SystemTrayError> {
+        log::info!("System tray: Requesting window hide via UI message (avoiding Windows API)");
+        
+        // Only use UI messages - let Iced handle the actual window operations
+        if let Some(ref sender) = self.ui_sender {
+            match sender.send(Message::HideWindow) {
+                Ok(_) => {
+                    log::debug!("HideWindow message sent successfully to UI");
+                    Ok(())
+                },
+                Err(e) => {
+                    log::error!("Failed to send HideWindow message: {}", e);
+                    Err(SystemTrayError::WindowsApi(format!("Failed to send hide message: {}", e)))
+                }
+            }
+        } else {
+            log::error!("No UI sender available for HideWindow message");
+            Err(SystemTrayError::WindowsApi("No UI sender available".to_string()))
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    pub fn is_window_visible(&self) -> bool {
+        // Since we're avoiding Windows API calls that cause channel issues,
+        // we'll assume the window needs to be shown when clicked
+        // The toggle logic will be simplified to always show
+        log::debug!("Visibility check: assuming window needs to be shown");
+        false
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    pub fn show_window(&self) -> Result<(), SystemTrayError> {
+        // Non-Windows fallback
+        if let Some(ref sender) = self.ui_sender {
+            sender.send(Message::ToggleVisibility)
+                .map_err(|e| SystemTrayError::WindowsApi(format!("Failed to send show message: {}", e)))?;
+        }
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    pub fn hide_window(&self) -> Result<(), SystemTrayError> {
+        // Non-Windows fallback
+        if let Some(ref sender) = self.ui_sender {
+            sender.send(Message::ToggleVisibility)
+                .map_err(|e| SystemTrayError::WindowsApi(format!("Failed to send hide message: {}", e)))?;
+        }
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    pub fn is_window_visible(&self) -> bool {
+        true // Assume visible on non-Windows
+    }
+
+    pub fn toggle_window(&self) -> Result<(), SystemTrayError> {
+        let is_visible = self.is_window_visible();
+        log::debug!("Toggle window called: window visible = {}", is_visible);
+        
+        if is_visible {
+            log::debug!("Window is visible, hiding it");
+            self.hide_window()
+        } else {
+            log::debug!("Window is not visible, showing it");
+            self.show_window()
+        }
+    }
+
+    pub fn exit_application(&self) -> Result<(), SystemTrayError> {
+        if let Some(ref sender) = self.ui_sender {
+            sender.send(Message::Exit)
+                .map_err(|e| SystemTrayError::WindowsApi(format!("Failed to send exit message: {}", e)))?;
+        }
+        Ok(())
+    }
+}
+
+impl Clone for DirectWindowController {
+    fn clone(&self) -> Self {
+        Self {
+            window_handle: Arc::clone(&self.window_handle),
+            ui_sender: self.ui_sender.clone(),
         }
     }
 }
 
 /// Manages the system tray icon and menu
 pub struct SystemTray {
-    /// The system tray item
-    tray: TrayItem,
-    /// Sender for UI messages
-    #[allow(dead_code)]
-    tx: mpsc::Sender<Message>,
+    /// The system tray icon
+    tray: Option<TrayIcon>,
+    /// Direct window controller
+    window_controller: DirectWindowController,
     /// Application configuration
     config: AppConfig,
     /// Last known connection status
     is_connected: bool,
     /// Current theme mode
     theme_mode: ThemeMode,
-    /// Whether the tray is registered for startup
-    startup_registered: bool,
-    /// Optional reference to state manager
-    state_manager: Option<Arc<StateManager>>,
-    /// Last known battery status
-    last_battery_status: Option<AirPodsBatteryStatus>,
+    /// Whether the tray is initialized
+    initialized: bool,
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum SystemTrayError {
-    #[error("Failed to create tray item: {0}")]
-    Creation(String),
-    
-    #[error("Failed to add menu item: {0}")]
-    MenuItem(String),
-    
-    #[error("Failed to set icon: {0}")]
-    SetIcon(String),
-    
-    #[error("Failed to set tooltip: {0}")]
-    SetTooltip(String),
-    
-    #[error("Failed to handle tray event: {0}")]
-    EventHandling(String),
-    
-    #[error("Registry error: {0}")]
-    Registry(String),
-    
-    #[error("Windows-specific error: {0}")]
-    WindowsError(#[from] io::Error),
-    
-    #[error("Failed to connect to state manager: {0}")]
-    StateManagerError(String),
-    
-    #[error("Failed to update battery status: {0}")]
-    BatteryUpdateError(String),
-    
-    #[error("Failed to clean up resources: {0}")]
-    CleanupError(String),
-    
-    #[error("Notification error: {0}")]
-    NotificationError(String),
-    
-    #[error("Icon resource error: {0}")]
-    ResourceError(String),
-}
-
-impl From<SystemTrayError> for RustPodsError {
-    fn from(err: SystemTrayError) -> Self {
-        match err {
-            SystemTrayError::Creation(msg) => RustPodsError::Ui(format!("Failed to create system tray: {}", msg)),
-            SystemTrayError::MenuItem(msg) => RustPodsError::Ui(format!("Failed to add menu item: {}", msg)),
-            SystemTrayError::SetIcon(msg) => RustPodsError::Ui(format!("Failed to set system tray icon: {}", msg)),
-            SystemTrayError::SetTooltip(msg) => RustPodsError::Ui(format!("Failed to set system tray tooltip: {}", msg)),
-            SystemTrayError::EventHandling(msg) => RustPodsError::Ui(format!("Failed to handle system tray event: {}", msg)),
-            SystemTrayError::Registry(msg) => RustPodsError::System(msg),
-            SystemTrayError::WindowsError(err) => RustPodsError::System(format!("Windows API error: {}", err)),
-            SystemTrayError::StateManagerError(msg) => RustPodsError::State(msg),
-            SystemTrayError::BatteryUpdateError(msg) => RustPodsError::BatteryMonitor(msg),
-            SystemTrayError::CleanupError(msg) => RustPodsError::Lifecycle(msg),
-            SystemTrayError::NotificationError(msg) => RustPodsError::Ui(format!("Notification error: {}", msg)),
-            SystemTrayError::ResourceError(msg) => RustPodsError::Ui(format!("Resource error: {}", msg)),
-        }
-    }
-}
-
-impl SystemTray {
-    /// Create a new system tray
-    pub fn new(tx: mpsc::Sender<Message>, config: AppConfig) -> Result<Self, SystemTrayError> {
-        // Create error context for this operation
-        #[allow(unused_variables)]
-        let _ctx = ErrorContext::new("SystemTray", "new")
-            .with_metadata("config", format!("{:?}", config.ui.theme));
-        
-        log::debug!("Creating system tray with theme: {:?}", config.ui.theme);
-        
-        // Determine theme mode from config
-        let theme_mode = Self::detect_theme_mode(&config);
-        
-        // Create the tray item with a proper application name
-        let app_name = "RustPods";
-        
-        // Temporary dummy icon path - replace with actual icon path later
-        let icon_path = "C:\\Windows\\System32\\shell32.dll,0";
-        
-        // Create the tray item with better error handling
-        let mut tray = TrayItem::new(app_name, icon_path)
-            .map_err(|e| {
-                let msg = format!("Failed to create tray item: {}", e);
-                log::error!("{}", msg);
-                SystemTrayError::Creation(msg)
-            })?;
-        
-        // Set a tooltip for the tray icon
-        #[cfg(target_os = "windows")]
-        {
-            log::info!("Setting initial tooltip: RustPods - Disconnected");
-        }
-        
-        // Define menu groups with better error handling
-        let main_actions = vec![
-            MenuItem { 
-                label: "Show/Hide Window".to_string(), 
-                shortcut: Some("Alt+W".to_string()), 
-                message: Some(Message::ToggleVisibility) 
-            },
-        ];
-        
-        let settings_actions = vec![
-            MenuItem { 
-                label: "Settings".to_string(), 
-                shortcut: Some("Ctrl+P".to_string()), 
-                message: Some(Message::OpenSettings) 
-            },
-        ];
-        
-        let about_actions = vec![
-            MenuItem { 
-                label: "About RustPods".to_string(), 
-                shortcut: None, 
-                message: None  // We'll handle this differently
-            },
-        ];
-        
-        let exit_actions = vec![
-            MenuItem { 
-                label: "Exit".to_string(), 
-                shortcut: Some("Alt+F4".to_string()), 
-                message: Some(Message::Exit) 
-            },
-        ];
-        
-        // Try to add menu items with better error handling
-        Self::add_menu_group(&mut tray, &tx, &main_actions)
-            .map_err(|e| {
-                log::error!("Failed to add main actions to tray: {}", e);
-                SystemTrayError::MenuItem(e)
-            })?;
-        
-        // Add separator
-        tray.add_menu_item("-", || {})
-            .map_err(|e| {
-                let msg = format!("Failed to add separator: {}", e);
-                log::error!("{}", msg);
-                SystemTrayError::MenuItem(msg)
-            })?;
-        
-        // Rest of menu adding with better error handling
-        Self::add_menu_group(&mut tray, &tx, &settings_actions)
-            .map_err(|e| {
-                log::error!("Failed to add settings actions to tray: {}", e);
-                SystemTrayError::MenuItem(e)
-            })?;
-        
-        tray.add_menu_item("-", || {})
-            .map_err(|e| {
-                let msg = format!("Failed to add separator: {}", e);
-                log::error!("{}", msg);
-                SystemTrayError::MenuItem(msg)
-            })?;
-        
-        // Special about section with better error handling
-        let tx_clone = tx.clone();
-        let about_label = if let Some(shortcut) = &about_actions[0].shortcut {
-            format!("{}\t{}", about_actions[0].label, shortcut)
-        } else {
-            about_actions[0].label.clone()
-        };
-        
-        tray.add_menu_item(&about_label, move || {
-            let version = env!("CARGO_PKG_VERSION", "0.1.0");
-            let about_message = format!(
-                "RustPods v{}\nA simple AirPods battery monitor for Windows\nDeveloped with Rust and Iced", 
-                version
-            );
-            let _ = tx_clone.send(Message::ShowToast(about_message));
-        })
-        .map_err(|e| {
-            let msg = format!("Failed to add about menu item: {}", e);
-            log::error!("{}", msg);
-            SystemTrayError::MenuItem(msg)
-        })?;
-        
-        // Exit section with better error handling
-        tray.add_menu_item("-", || {})
-            .map_err(|e| {
-                let msg = format!("Failed to add separator: {}", e);
-                log::error!("{}", msg);
-                SystemTrayError::MenuItem(msg)
-            })?;
-        
-        Self::add_menu_group(&mut tray, &tx, &exit_actions)
-            .map_err(|e| {
-                log::error!("Failed to add exit actions to tray: {}", e);
-                SystemTrayError::MenuItem(e)
-            })?;
-        
-        // Create the system tray
-        let mut system_tray = SystemTray {
-            tray,
-            tx,
-            config,
-            is_connected: false,
-            theme_mode,
-            startup_registered: false,
-            state_manager: None,
-            last_battery_status: None,
-        };
-        
-        // Update the icon based on the initial theme
-        system_tray.update_icon(false)?;
-        
-        log::info!("System tray created successfully");
-        Ok(system_tray)
-    }
-    
-    /// Set up Windows-specific event handling
-    #[cfg(target_os = "windows")]
-    fn setup_system_event_handling(&self) -> Result<(), SystemTrayError> {
-        // This would be implemented in a real application to register
-        // for Windows specific events like:
-        // - System shutdown
-        // - Sleep/wake events
-        // - Monitor topology changes (for handling multi-monitor setups)
-        // - Power status changes (for laptops)
-        
-        // For this prototype, we'll just log that we would register handlers
-        log::info!("Registered for Windows system events");
-        
-        Ok(())
-    }
-    
-    /// Enable or disable startup registration with Windows
-    #[cfg(target_os = "windows")]
-    pub fn set_startup_enabled(&mut self, enabled: bool) -> Result<(), SystemTrayError> {
-        // Get the path to the executable
-        let exe_path = std::env::current_exe()
-            .map_err(SystemTrayError::WindowsError)?;
-        
-        // Convert path to string
-        let exe_path_str = exe_path.to_string_lossy().to_string();
-        
-        // This would use the Windows registry to set or remove the startup entry
-        if enabled {
-            // In a real implementation, we'd use winreg crate to add a registry entry:
-            // HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run
-            log::info!("Added startup registry entry for: {}", exe_path_str);
-            self.startup_registered = true;
-        } else {
-            // Remove registry entry
-            log::info!("Removed startup registry entry");
-            self.startup_registered = false;
-        }
-        
-        Ok(())
-    }
-    
-    /// Get the startup registration status
-    pub fn is_startup_registered(&self) -> bool {
-        self.startup_registered
-    }
-    
-    /// Detect the current theme mode based on configuration
-    fn detect_theme_mode(config: &AppConfig) -> ThemeMode {
-        match config.ui.theme {
-            ConfigTheme::Light => ThemeMode::Light,
-            ConfigTheme::Dark => ThemeMode::Dark,
-            ConfigTheme::System => {
-                // Check system theme preference
-                // This is a simplified implementation - in a real app,
-                // you would query the actual system theme
-                #[cfg(target_os = "windows")]
-                {
-                    // On Windows, attempt to detect system theme
-                    // This is a placeholder - in a real implementation,
-                    // you would use the Windows API to check the actual theme
-                    let is_dark_mode = Self::is_system_using_dark_mode();
-                    if is_dark_mode {
-                        ThemeMode::Dark
-                    } else {
-                        ThemeMode::Light
-                    }
-                }
-                
-                // Default to dark mode on other platforms or if detection fails
-                #[cfg(not(target_os = "windows"))]
-                {
-                    ThemeMode::Dark
-                }
-            }
-        }
-    }
-    
-    /// Check if the system is using dark mode
-    /// This is a placeholder implementation - in a real app, you would
-    /// use platform-specific APIs to detect the actual system theme
-    #[cfg(target_os = "windows")]
-    fn is_system_using_dark_mode() -> bool {
-        // In a real implementation, you would use Windows Registry or API
-        // to determine if dark mode is enabled
-        // For now, we'll default to dark mode
-        true
-    }
-    
-    /// Add a group of menu items to the tray
-    fn add_menu_group(
-        tray: &mut TrayItem,
-        tx: &mpsc::Sender<Message>,
-        items: &[MenuItem]
-    ) -> Result<(), String> {
-        for item in items {
-            // Skip separators (handled separately)
-            if item.label == "-" {
-                tray.add_menu_item("-", || {})
-                    .map_err(|e| e.to_string())?;
-                continue;
-            }
-            
-            // Format label with shortcut if available
-            let label = if let Some(shortcut) = &item.shortcut {
-                format!("{}\t{}", item.label, shortcut)
-            } else {
-                item.label.clone()
-            };
-            
-            // Add menu item with appropriate handler
-            if let Some(message) = &item.message {
-                let tx_clone = tx.clone();
-                let message_clone = message.clone();
-                let label_for_closure = label.clone();
-                tray.add_menu_item(&label, move || {
-                    log::info!("SystemTray: Tray menu action '{}' triggered", label_for_closure);
-                    let _ = tx_clone.send(message_clone.clone());
-                })
-                .map_err(|e| e.to_string())?;
-            }
-        }
-        
-        Ok(())
-    }
-    
-    /// Cleanup resources before exit
-    #[cfg(target_os = "windows")]
-    pub fn cleanup(&mut self) -> Result<(), SystemTrayError> {
-        #[allow(unused_variables)]
-        let _ctx = ErrorContext::new("SystemTray", "cleanup");
-        
-        log::debug!("Cleaning up system tray resources");
-        
-        // Perform any cleanup actions here
-        // For example, unregister from Windows registry if needed
-        
-        #[cfg(target_os = "windows")]
-        {
-            // Windows-specific cleanup code would go here
-            log::debug!("Performing Windows-specific cleanup");
-        }
-        
-        log::info!("System tray resources cleaned up successfully");
-        Ok(())
-    }
-    
-    /// Update the system tray icon based on connection status
-    pub fn update_icon(&mut self, connected: bool) -> Result<(), SystemTrayError> {
-        // Only update if the status changed
-        if self.is_connected == connected {
-            return Ok(());
-        }
-        
-        self.is_connected = connected;
-        
-        // Temporary dummy icon path - replace with actual icon path later
-        let icon_path = "C:\\Windows\\System32\\shell32.dll,0";
-        
-        self.tray.set_icon(icon_path)
-            .map_err(|e| SystemTrayError::SetIcon(e.to_string()))?;
-        
-        // Log tooltip update instead of setting it directly
-        #[cfg(target_os = "windows")]
-        {
-            let tooltip = if connected {
-                "RustPods - Connected"
-            } else {
-                "RustPods - Disconnected"
-            };
-            
-            log::debug!("Icon tooltip updated: {}", tooltip);
-        }
-        
-        Ok(())
-    }
-    
-    /// Update the tooltip with battery information
-    pub fn update_tooltip_with_battery(&mut self, left: Option<u8>, right: Option<u8>, case: Option<u8>) -> Result<(), SystemTrayError> {
-        #[cfg(target_os = "windows")]
-        {
-            // Skip updating if we shouldn't show percentages
-            if !self.config.ui.show_percentage_in_tray {
-                return Ok(());
-            }
-            
-            let left_text = left.map_or("N/A".to_string(), |v| format!("{}%", v));
-            let right_text = right.map_or("N/A".to_string(), |v| format!("{}%", v));
-            let case_text = case.map_or("N/A".to_string(), |v| format!("{}%", v));
-            
-            let tooltip = format!("RustPods - Left: {}, Right: {}, Case: {}", left_text, right_text, case_text);
-            
-            // Instead of calling set_tooltip which might not be available,
-            // we'll just log the tooltip update for now
-            log::debug!("Tooltip updated: {}", tooltip);
-            
-            // Check for low battery and show warning if needed
-            if self.config.ui.show_low_battery_warning {
-                let threshold = self.config.ui.low_battery_threshold;
-                let left_low = left.is_some_and(|v| v <= threshold);
-                let right_low = right.is_some_and(|v| v <= threshold);
-                
-                if left_low || right_low {
-                    // In a real implementation, we'd show a notification
-                    // For now, just log it
-                    log::info!("Low battery warning: Left: {}, Right: {}", left_text, right_text);
-                    
-                    // We could also send a message to show a notification in the UI
-                    let _ = self.tx.send(Message::ShowToast(format!(
-                        "Low Battery Warning - Left: {}, Right: {}", 
-                        left_text, right_text
-                    )));
-                    
-                    // On Windows, we could use the Windows notification system
-                    #[cfg(target_os = "windows")]
-                    self.show_windows_notification(&format!(
-                        "Low Battery Warning\nLeft: {}, Right: {}", 
-                        left_text, right_text
-                    ))?;
-                }
-            }
-        }
-        
-        Ok(())
-    }
-    
-    /// Show a Windows notification
-    #[cfg(target_os = "windows")]
-    fn show_windows_notification(&self, message: &str) -> Result<(), SystemTrayError> {
-        // In a real implementation, this would use Windows toast notifications
-        // For the prototype, we'll just log that we would show a notification
-        log::info!("Windows notification: {}", message);
-        
-        Ok(())
-    }
-    
-    /// Connect the system tray to the state manager
-    pub fn connect_state_manager(&mut self, state_manager: Arc<StateManager>) -> Result<(), SystemTrayError> {
-        #[allow(unused_variables)]
-        let _ctx = ErrorContext::new("SystemTray", "connect_state_manager");
-        
-        log::debug!("Connecting system tray to state manager");
-        
-        self.state_manager = Some(state_manager);
-        
-        // Initialize from current state if available
-        if let Some(state_manager) = &self.state_manager {
-            let device_state = state_manager.get_device_state();
-            
-            // Update connected status based on state
-            if device_state.selected_device.is_some() {
-                self.is_connected = true;
-                self.update_icon(true)?;
-            }
-            
-            // Update battery status if available
-            if let Some(battery_status) = device_state.battery_status {
-                self.last_battery_status = Some(battery_status.clone());
-                
-                // Update tooltip with battery information
-                let left = battery_status.battery.left;
-                let right = battery_status.battery.right;
-                let case = battery_status.battery.case;
-                
-                self.update_tooltip_with_battery(left, right, case)?;
-                
-                // Show low battery notification if needed
-                self.check_low_battery_notification(&battery_status);
-            }
-        }
-        
-        log::info!("System tray connected to state manager successfully");
-        Ok(())
-    }
-    
-    /// Check for low battery and show notification if needed
-    fn check_low_battery_notification(&self, status: &AirPodsBatteryStatus) {
-        // Only show notifications if enabled
-        if !self.config.ui.show_low_battery_warning {
-            return;
-        }
-        
-        let threshold = self.config.ui.low_battery_threshold;
-        let mut low_battery_components = Vec::new();
-        
-        // Check left earbud
-        if let Some(left) = status.battery.left {
-            if left <= threshold {
-                low_battery_components.push(format!("Left earbud: {}%", left));
-            }
-        }
-        
-        // Check right earbud
-        if let Some(right) = status.battery.right {
-            if right <= threshold {
-                low_battery_components.push(format!("Right earbud: {}%", right));
-            }
-        }
-        
-        // Check case
-        if let Some(case) = status.battery.case {
-            if case <= threshold {
-                low_battery_components.push(format!("Case: {}%", case));
-            }
-        }
-        
-        // Show notification if any component is low
-        if !low_battery_components.is_empty() {
-            let message = format!(
-                "Low battery warning: {}",
-                low_battery_components.join(", ")
-            );
-            
-            #[cfg(target_os = "windows")]
-            {
-                let _ = self.show_windows_notification(&message);
-            }
-        }
-    }
-
-    /// Handle battery status update
-    pub fn handle_battery_update(&mut self, status: AirPodsBatteryStatus) -> Result<(), SystemTrayError> {
-        #[allow(unused_variables)]
-        let _ctx = ErrorContext::new("SystemTray", "handle_battery_update");
-        
-        // Save the battery status
-        self.last_battery_status = Some(status.clone());
-        
-        // Update the tooltip with the battery values
-        let left = status.battery.left;
-        let right = status.battery.right;
-        let case = status.battery.case;
-        self.update_tooltip_with_battery(left, right, case)?;
-        
-        // Check if we should show low battery notification
-        self.check_low_battery_notification(&status);
-        
-        // Update state manager if available
-        if let Some(_state_manager) = &self.state_manager {
-            // Notify state manager of battery update
-            // This is just a placeholder - actual implementation would depend on StateManager API
-            log::debug!("Notifying state manager of battery update");
-        }
-        
-        Ok(())
-    }
-
-    /// Update application configuration
-    pub fn update_config(&mut self, config: AppConfig) -> Result<(), SystemTrayError> {
-        // Save old value to compare
-        let old_launch_at_startup = self.config.system.launch_at_startup;
-        let _old_theme = self.config.ui.theme.clone();
-        
-        // Update the config
-        self.config = config;
-        
-        // Check if we need to update startup registration
-        #[cfg(target_os = "windows")]
-        if old_launch_at_startup != self.config.system.launch_at_startup {
-            if let Err(e) = self.set_startup_enabled(self.config.system.launch_at_startup) {
-                log::error!("Failed to update startup setting: {}", e);
-                // Continue despite error to avoid breaking other functionality
-            }
-        }
-        
-        // Check if theme changed
-        let new_theme_mode = Self::detect_theme_mode(&self.config);
-        if self.theme_mode != new_theme_mode {
-            self.theme_mode = new_theme_mode;
-            // Update icon without changing connection status
-            self.update_icon(self.is_connected)?;
-        }
-        
-        // If we have battery status, update the tooltip with new preferences
-        if let Some(status) = &self.last_battery_status {
-            let left = status.battery.left;
-            let right = status.battery.right;
-            let case = status.battery.case;
-            self.update_tooltip_with_battery(left, right, case)?;
-        }
-        
-        Ok(())
-    }
-
-    /// Process state updates
-    pub fn process_state_update(&mut self) -> Result<(), SystemTrayError> {
-        if let Some(state_manager) = &self.state_manager {
-            // Get a copy of all the state data we need first
-            let device_state = state_manager.get_device_state();
-            let config = state_manager.get_config();
-            
-            // Update connection status
-            let is_connected = device_state.selected_device.is_some();
-            let connection_changed = is_connected != self.is_connected;
-            self.is_connected = is_connected;
-            
-            // Update connection if changed
-            if connection_changed {
-                self.update_icon(is_connected)?;
-            }
-            
-            // Update battery status if available and changed
-            if let Some(battery_status) = device_state.battery_status.clone() {
-                // Only update if status is different from last known
-                let should_update = match &self.last_battery_status {
-                    None => true,
-                    Some(last) => last != &battery_status,
-                };
-                
-                if should_update {
-                    let battery_clone = battery_status.clone();
-                    let left = battery_clone.battery.left;
-                    let right = battery_clone.battery.right;
-                    let case = battery_clone.battery.case;
-                    
-                    // Update tooltip
-                    self.update_tooltip_with_battery(left, right, case)?;
-                    
-                    // Store the new status
-                    self.last_battery_status = Some(battery_status);
-                    
-                    // Check for low battery
-                    if let Some(status) = &self.last_battery_status {
-                        self.check_low_battery_notification(status);
-                    }
-                }
-            }
-            
-            // Update theme if changed
-            let theme_changed = config.ui.theme != self.theme_mode.into();
-            if theme_changed {
-                self.theme_mode = Self::map_theme_mode(&config.ui.theme);
-                self.update_theme()?;
-            }
-        }
-        
-        Ok(())
-    }
-
-    /// Convert from config theme to ThemeMode
-    fn map_theme_mode(theme: &ConfigTheme) -> ThemeMode {
-        match theme {
-            ConfigTheme::Light => ThemeMode::Light,
-            ConfigTheme::Dark => ThemeMode::Dark,
-            ConfigTheme::System => {
-                if Self::is_system_using_dark_mode() {
-                    ThemeMode::Dark
-                } else {
-                    ThemeMode::Light
-                }
-            }
-        }
-    }
-
-    /// Update the theme of the system tray
-    pub fn update_theme(&mut self) -> Result<(), SystemTrayError> {
-        self.update_icon(self.is_connected)
-    }
-}
-
-// Drop implementation to ensure proper cleanup on application exit
-impl Drop for SystemTray {
-    fn drop(&mut self) {
-        // Cleanup tray icon before dropping to avoid lingering icons
-        #[cfg(target_os = "windows")]
-        {
-            if let Err(e) = self.cleanup() {
-                log::error!("Error cleaning up system tray: {}", e);
-            }
-        }
-        
-        log::debug!("SystemTray dropped");
-    }
-}
-
-// Custom Clone implementation because TrayItem doesn't implement Clone
-impl Clone for SystemTray {
-    fn clone(&self) -> Self {
-        // Create a new system tray with the same parameters
-        let config = self.config.clone();
-        let theme_mode = self.theme_mode;
-        let startup_registered = self.startup_registered;
-        let is_connected = self.is_connected;
-        let last_battery_status = self.last_battery_status.clone();
-        
-        // Create a dummy tray item to satisfy requirements
-        // This isn't ideal, but necessary for our Clone implementation
-        let app_name = "RustPods";
-        let icon_path = "C:\\Windows\\System32\\shell32.dll,0";
-        let tray = TrayItem::new(app_name, icon_path)
-            .expect("Failed to create clone of tray item");
-            
-        Self {
-            tray,
-            tx: self.tx.clone(),
-            config,
-            is_connected,
-            theme_mode,
-            startup_registered,
-            state_manager: self.state_manager.clone(),
-            last_battery_status,
-        }
-    }
-}
-
-// Custom Debug implementation because TrayItem doesn't implement Debug
 impl std::fmt::Debug for SystemTray {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SystemTray")
             .field("is_connected", &self.is_connected)
             .field("theme_mode", &self.theme_mode)
-            .field("startup_registered", &self.startup_registered)
-            .field("last_battery_status", &self.last_battery_status)
-            .field("config", &self.config)
-            .finish_non_exhaustive() // Skip tray and tx fields
+            .field("initialized", &self.initialized)
+            .finish()
+    }
+}
+
+impl Clone for SystemTray {
+    fn clone(&self) -> Self {
+        // Create a new SystemTray with the same configuration
+        // Note: The tray itself cannot be cloned, so we create a new uninitialized one
+        Self {
+            tray: None,
+            window_controller: self.window_controller.clone(),
+            config: self.config.clone(),
+            is_connected: self.is_connected,
+            theme_mode: self.theme_mode,
+            initialized: false,
+        }
+    }
+}
+
+impl SystemTray {
+    /// Create a new system tray with direct window controller
+    pub fn new(config: AppConfig) -> Result<Self, SystemTrayError> {
+        let theme_mode = ThemeMode::from(config.ui.theme.clone());
+        let window_controller = DirectWindowController::new();
+        
+        log::info!("Creating system tray with direct window controller and theme mode: {:?}", theme_mode);
+        
+        Ok(Self {
+            tray: None,
+            window_controller,
+            config,
+            is_connected: false,
+            theme_mode,
+            initialized: false,
+        })
+    }
+
+    /// Set the UI sender for fallback communication
+    pub fn set_ui_sender(&mut self, sender: UnboundedSender<Message>) {
+        self.window_controller.set_ui_sender(sender);
+    }
+
+    /// Set the window handle for direct Windows API control
+    pub fn set_window_handle(&self, handle: isize) {
+        self.window_controller.set_window_handle(handle);
+    }
+
+    /// Initialize the system tray (creates the actual icon and menu)
+    pub fn initialize(&mut self) -> Result<(), SystemTrayError> {
+        log::info!("Initializing system tray...");
+        
+        // Create the menu
+        let show_hide_item = TrayMenuItem::new("Show/Hide Window", true, None);
+        let quit_item = TrayMenuItem::new("Quit", true, None);
+        
+        let menu = Menu::new();
+        menu.append(&show_hide_item)
+            .map_err(|e| SystemTrayError::MenuItem(format!("Failed to add show/hide item: {}", e)))?;
+        menu.append(&quit_item)
+            .map_err(|e| SystemTrayError::MenuItem(format!("Failed to add quit item: {}", e)))?;
+        
+        // Load initial icon
+        let icon = self.load_icon(false)?;
+        
+        // Create the tray icon
+        let tray = TrayIconBuilder::new()
+            .with_menu(Box::new(menu))
+            .with_tooltip("RustPods - AirPods Battery Monitor")
+            .with_icon(icon)
+            .build()
+            .map_err(|e| SystemTrayError::Creation(format!("Failed to build tray icon: {}", e)))?;
+        
+        self.tray = Some(tray);
+        self.initialized = true;
+        
+        // Set up event handling with direct window control
+        self.setup_direct_window_events()?;
+        
+        log::info!("System tray initialized successfully");
+        Ok(())
+    }
+    
+    /// Set up menu and icon event handling with direct window control
+    fn setup_direct_window_events(&self) -> Result<(), SystemTrayError> {
+        let window_controller = self.window_controller.clone();
+        
+        // Handle menu events
+        std::thread::spawn(move || {
+            let event_receiver = MenuEvent::receiver();
+            loop {
+                if let Ok(event) = event_receiver.recv() {
+                    log::debug!("Menu event received: {:?}", event.id.0);
+                    match event.id.0.as_str() {
+                        "Show/Hide Window" => {
+                            log::debug!("Tray menu: Show/Hide Window clicked");
+                            if let Err(e) = window_controller.toggle_window() {
+                                log::error!("Failed to toggle window from menu: {}", e);
+                            }
+                        }
+                        "Quit" => {
+                            log::debug!("Tray menu: Quit clicked");
+                            if let Err(e) = window_controller.exit_application() {
+                                log::error!("Failed to exit application from menu: {}", e);
+                            }
+                        }
+                        _ => {
+                            log::debug!("Unknown menu item clicked: {}", event.id.0);
+                        }
+                    }
+                } else {
+                    // Channel closed, exit thread
+                    log::debug!("Menu event channel closed, exiting thread");
+                    break;
+                }
+            }
+        });
+        
+        // Handle tray icon events (clicks on the icon itself)
+        let window_controller2 = self.window_controller.clone();
+        std::thread::spawn(move || {
+            let event_receiver = TrayIconEvent::receiver();
+            loop {
+                if let Ok(event) = event_receiver.recv() {
+                    log::debug!("Tray icon event received: {:?}", event);
+                    match event {
+                        TrayIconEvent::Click { 
+                            button: MouseButton::Left,
+                            ..
+                        } => {
+                            log::debug!("Tray icon: Left click detected - always showing window");
+                            if let Err(e) = window_controller2.show_window() {
+                                log::error!("Failed to show window from icon click: {}", e);
+                            }
+                        }
+                        _ => {
+                            log::debug!("Other tray icon event: {:?}", event);
+                        }
+                    }
+                } else {
+                    // Channel closed, exit thread
+                    log::debug!("Tray icon event channel closed, exiting thread");
+                    break;
+                }
+            }
+        });
+        
+        Ok(())
+    }
+    
+    /// Load the appropriate icon based on theme and connection status
+    fn load_icon(&self, connected: bool) -> Result<Icon, SystemTrayError> {
+        let icon_filename = match (self.theme_mode, connected) {
+            (ThemeMode::Light, false) => "rustpods-tray-light-disconnected.ico",
+            (ThemeMode::Light, true) => "rustpods-tray-light-connected.ico",
+            (ThemeMode::Dark, false) => "rustpods-tray-dark-disconnected.ico",
+            (ThemeMode::Dark, true) => "rustpods-tray-dark-connected.ico",
+        };
+        
+        let icon_path = format!("assets/icons/tray/{}", icon_filename);
+        
+        log::debug!("Loading tray icon from: {}", icon_path);
+        
+        if !Path::new(&icon_path).exists() {
+            log::warn!("Icon file not found: {}, using fallback", icon_path);
+            return self.create_fallback_icon();
+        }
+        
+        // Use the correct method to load icon from path
+        let icon = Icon::from_path(&icon_path, Some((32, 32)))
+            .map_err(|e| SystemTrayError::ImageError(format!("Failed to load icon from path: {}", e)))?;
+        
+        Ok(icon)
+    }
+    
+    /// Create a simple fallback icon if files are missing
+    fn create_fallback_icon(&self) -> Result<Icon, SystemTrayError> {
+        log::info!("Creating fallback icon");
+        
+        // Create a simple 32x32 RGBA icon
+        let size = 32u32;
+        let mut rgba_data = Vec::with_capacity((size * size * 4) as usize);
+        
+        for y in 0..size {
+            for x in 0..size {
+                // Create a simple circle pattern
+                let center_x = size as f32 / 2.0;
+                let center_y = size as f32 / 2.0;
+                let distance = ((x as f32 - center_x).powi(2) + (y as f32 - center_y).powi(2)).sqrt();
+                
+                if distance < size as f32 / 3.0 {
+                    // Inner circle - blue for connected, gray for disconnected
+                    if self.is_connected {
+                        rgba_data.extend_from_slice(&[70, 130, 255, 255]); // Blue
+                    } else {
+                        rgba_data.extend_from_slice(&[128, 128, 128, 255]); // Gray
+                    }
+                } else if distance < size as f32 / 2.5 {
+                    // Border
+                    rgba_data.extend_from_slice(&[64, 64, 64, 255]); // Dark gray
+                } else {
+                    // Transparent background
+                    rgba_data.extend_from_slice(&[0, 0, 0, 0]);
+                }
+            }
+        }
+        
+        Icon::from_rgba(rgba_data, size, size)
+            .map_err(|e| SystemTrayError::ImageError(format!("Failed to create fallback icon: {}", e)))
+    }
+    
+    /// Update the tray icon based on connection status
+    pub fn update_icon(&mut self, connected: bool) -> Result<(), SystemTrayError> {
+        if !self.initialized {
+            log::debug!("System tray not initialized, skipping icon update");
+            return Ok(());
+        }
+        
+        if self.is_connected == connected {
+            log::debug!("Connection status unchanged, skipping icon update");
+            return Ok(());
+        }
+        
+        self.is_connected = connected;
+        
+        log::debug!("Updating tray icon for connection status: {}", connected);
+        
+        let icon = self.load_icon(connected)?;
+        
+        if let Some(ref tray) = self.tray {
+            tray.set_icon(Some(icon))
+                .map_err(|e| SystemTrayError::SetIcon(format!("Failed to update icon: {}", e)))?;
+        }
+        
+        Ok(())
+    }
+    
+    /// Update tooltip with battery information
+    pub fn update_tooltip_with_battery(&mut self, left: Option<u8>, right: Option<u8>, case: Option<u8>) -> Result<(), SystemTrayError> {
+        if !self.initialized {
+            return Ok(());
+        }
+        
+        let tooltip = match (left, right, case) {
+            (Some(l), Some(r), Some(c)) => {
+                format!("RustPods - AirPods Battery\nLeft: {}% | Right: {}% | Case: {}%", l, r, c)
+            }
+            (Some(l), Some(r), None) => {
+                format!("RustPods - AirPods Battery\nLeft: {}% | Right: {}%", l, r)
+            }
+            _ => {
+                "RustPods - AirPods Battery Monitor".to_string()
+            }
+        };
+        
+        if let Some(ref tray) = self.tray {
+            tray.set_tooltip(Some(tooltip))
+                .map_err(|e| SystemTrayError::Tooltip(format!("Failed to update tooltip: {}", e)))?;
+        }
+        
+        Ok(())
+    }
+    
+    /// Update configuration
+    pub fn update_config(&mut self, config: AppConfig) -> Result<(), SystemTrayError> {
+        self.config = config.clone();
+        let new_theme_mode = ThemeMode::from(config.ui.theme);
+        
+        if !matches!(self.theme_mode, new_theme_mode) {
+            self.theme_mode = new_theme_mode;
+            // Update icon for new theme
+            self.update_icon(self.is_connected)?;
+        }
+        
+        Ok(())
+    }
+    
+    /// Get window controller for external use
+    pub fn window_controller(&self) -> DirectWindowController {
+        self.window_controller.clone()
+    }
+    
+    /// Check if startup registration is enabled (Windows-specific)
+    #[cfg(target_os = "windows")]
+    pub fn is_startup_registered(&self) -> bool {
+        // For now, return false - this would need to check Windows registry
+        // TODO: Implement actual Windows startup registration check
+        false
+    }
+    
+    /// Set startup registration (Windows-specific)
+    #[cfg(target_os = "windows")]
+    pub fn set_startup_enabled(&mut self, enabled: bool) -> Result<(), SystemTrayError> {
+        // For now, just log - this would need to modify Windows registry
+        // TODO: Implement actual Windows startup registration
+        log::info!("Startup registration set to: {} (not implemented)", enabled);
+        Ok(())
+    }
+    
+    /// Cleanup the system tray
+    pub fn cleanup(&mut self) -> Result<(), SystemTrayError> {
+        if let Some(tray) = self.tray.take() {
+            log::info!("Cleaning up system tray");
+            drop(tray);
+        }
+        
+        self.initialized = false;
+        Ok(())
+    }
+}
+
+impl Drop for SystemTray {
+    fn drop(&mut self) {
+        if let Err(e) = self.cleanup() {
+            log::error!("Failed to cleanup system tray: {}", e);
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::mpsc;
-    
-    // Note: Most of these tests are commented out because they require a GUI environment
-    // They would typically be run in an integration test environment
 
     #[test]
     fn test_system_tray_creation() {
-        // This is more of a compilation test than a runtime test
-        // It verifies that the type signatures are correct
+        let config = AppConfig::default();
+        let result = SystemTray::new(config);
         
-        let (_tx, _rx) = mpsc::channel::<Message>();
-        
-        // Just make sure the type compiles
-        let tray_type = std::any::TypeId::of::<SystemTray>();
-        assert_eq!(tray_type, std::any::TypeId::of::<SystemTray>());
-        
-        // Verify error enum works
-        let error = SystemTrayError::Creation("test".to_string());
-        assert!(error.to_string().contains("Failed to create tray item"));
+        assert!(result.is_ok());
+        let tray = result.unwrap();
+        assert!(!tray.initialized);
+        assert_eq!(tray.theme_mode, ThemeMode::Dark); // Default theme
     }
-    
+
     #[test]
     fn test_menu_item_struct() {
-        // Test that MenuItem struct works correctly
-        let item = MenuItem {
+        let menu_item = MenuItem {
             label: "Test".to_string(),
             shortcut: Some("Ctrl+T".to_string()),
             message: Some(Message::Exit),
         };
         
-        assert_eq!(item.label, "Test");
-        assert_eq!(item.shortcut, Some("Ctrl+T".to_string()));
-        assert!(matches!(item.message, Some(Message::Exit)));
+        assert_eq!(menu_item.label, "Test");
+        assert_eq!(menu_item.shortcut, Some("Ctrl+T".to_string()));
     }
-    
+
     #[test]
     fn test_theme_detection() {
-        // Test light theme
-        let mut config = AppConfig::default();
-        config.ui.theme = ConfigTheme::Light;
-        let theme_mode = SystemTray::detect_theme_mode(&config);
-        assert!(matches!(theme_mode, ThemeMode::Light));
+        use crate::config::ConfigTheme;
         
-        // Test dark theme
-        config.ui.theme = ConfigTheme::Dark;
-        let theme_mode = SystemTray::detect_theme_mode(&config);
-        assert!(matches!(theme_mode, ThemeMode::Dark));
+        assert_eq!(ThemeMode::from(ConfigTheme::Dark), ThemeMode::Dark);
+        assert_eq!(ThemeMode::from(ConfigTheme::Light), ThemeMode::Light);
         
-        // System theme will default to dark in tests since we don't have a real system to check
-        config.ui.theme = ConfigTheme::System;
-        let theme_mode = SystemTray::detect_theme_mode(&config);
-        assert!(matches!(theme_mode, ThemeMode::Dark));
+        // Test default case
+        assert_eq!(ThemeMode::from(ConfigTheme::Auto), ThemeMode::Dark);
     }
-    
-    // Helper function to create a dummy system tray for tests
-    #[allow(dead_code)]
+
+    /// Create a dummy system tray for testing
     fn create_dummy_tray() -> Result<SystemTray, SystemTrayError> {
-        let (tx, _rx) = mpsc::channel::<Message>();
         let config = AppConfig::default();
-        SystemTray::new(tx, config)
+        SystemTray::new(config)
     }
-    
-    // Skipping actual tray tests as they require a GUI environment
-    // #[test]
-    // fn test_send_message_through_tray() { ... }
 } 

@@ -56,7 +56,11 @@ pub struct BluetoothConfig {
     
     /// Battery status refresh interval in seconds
     #[serde(default = "default_battery_refresh_interval")]
-    pub battery_refresh_interval: u64,
+    pub battery_refresh_interval: Duration,
+    
+    /// ID of the currently paired device
+    #[serde(default)]
+    pub paired_device_id: Option<String>,
     
     /// Auto-reconnect to last connected device
     #[serde(default = "default_true")]
@@ -253,7 +257,7 @@ fn default_false() -> bool { false }
 fn default_scan_duration_secs() -> Duration { Duration::from_secs(5) }
 fn default_scan_interval_secs() -> Duration { Duration::from_secs(30) }
 fn default_auto_scan() -> bool { true }
-fn default_battery_refresh_interval() -> u64 { 10 }
+fn default_battery_refresh_interval() -> Duration { Duration::from_secs(10) }
 fn default_reconnect_attempts() -> u32 { 3 }
 fn default_low_battery_threshold() -> u8 { 20 }
 fn default_change_threshold() -> u8 { 5 }
@@ -302,6 +306,7 @@ impl Default for BluetoothConfig {
             scan_interval: default_scan_interval_secs(),
             min_rssi: Some(-70),
             battery_refresh_interval: default_battery_refresh_interval(),
+            paired_device_id: None,
             auto_reconnect: default_true(),
             reconnect_attempts: default_reconnect_attempts(),
             adaptive_polling: default_true(),
@@ -549,7 +554,7 @@ impl BluetoothConfig {
             ));
         }
         
-        if self.battery_refresh_interval == 0 {
+        if self.battery_refresh_interval.as_secs() == 0 {
             return Err(ConfigError::ValidationFailed(
                 "battery_refresh_interval".to_string(),
                 "Battery refresh interval must be greater than zero".to_string()

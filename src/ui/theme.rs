@@ -584,6 +584,16 @@ pub fn lavender_button_style() -> iced::theme::Button {
     iced::theme::Button::Secondary
 }
 
+// Close button style for a subtle, rounded close button with Catppuccin theming
+pub fn close_button_style() -> iced::theme::Button {
+    iced::theme::Button::Destructive
+}
+
+// Settings button style for a subtle settings gear button
+pub fn settings_button_style() -> iced::theme::Button {
+    iced::theme::Button::Secondary
+}
+
 // NOTE: To use SpaceMono Nerd Font, ensure the font file is included in your assets and registered in main.rs or the application entry point using iced::font::Family or similar.
 
 // Returns the color to use for the settings cogwheel icon based on the theme
@@ -592,4 +602,22 @@ pub fn settings_icon_color(theme: &Theme) -> Color {
         Theme::Light => LIGHT_TEXT,
         Theme::Dark | Theme::System | Theme::CatppuccinMocha => TEXT,
     }
-} 
+}
+
+/// Custom container style for the graphical AirPods popup
+/// Creates a styled container with rounded corners and border matching the Catppuccin theme
+fn graphical_popup_appearance(_theme: &iced::Theme) -> container::Appearance {
+    container::Appearance {
+        text_color: Some(TEXT),
+        background: Some(SURFACE0.into()),
+        border_radius: 10.0.into(),
+        border_width: 1.0,
+        border_color: OVERLAY0,
+    }
+}
+
+pub fn graphical_popup_style() -> iced::theme::Container {
+    iced::theme::Container::Custom(Box::new(graphical_popup_appearance))
+}
+
+ 

@@ -91,8 +91,10 @@ impl LifecycleManager {
         self
     }
     
-    /// Start the lifecycle manager
+    /// Start synchronous initialization (without async tasks)
     pub fn start(&mut self) -> Result<(), String> {
+        log::info!("Starting lifecycle manager (sync phase)");
+        
         // Initialize state persistence manager
         self.persistence_manager = Some(StatePersistenceManager::new(Arc::clone(&self.state_manager)));
         
@@ -128,6 +130,24 @@ impl LifecycleManager {
             }
         }
         
+        // Set state to running
+        let mut state = self.state.lock().unwrap();
+        *state = LifecycleState::Running;
+        
+        log::info!("Lifecycle manager sync phase completed");
+        Ok(())
+    }
+    
+    /// Start async tasks (call after tokio runtime is available)
+    pub fn start_async_tasks(&mut self) -> Result<(), String> {
+        log::info!("Starting lifecycle manager async tasks");
+        
+        // Only start if we haven't already started async tasks
+        if self.auto_save_task.is_some() || self.crash_recovery_task.is_some() {
+            log::warn!("Async tasks already started, skipping");
+            return Ok(());
+        }
+        
         // Start periodic state saving for crash recovery
         self.start_crash_recovery_task();
         
@@ -137,10 +157,7 @@ impl LifecycleManager {
         // Register for system events
         self.register_system_events();
         
-        // Set state to running
-        let mut state = self.state.lock().unwrap();
-        *state = LifecycleState::Running;
-        
+        log::info!("Lifecycle manager async tasks started");
         Ok(())
     }
     

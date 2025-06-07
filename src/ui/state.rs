@@ -8,6 +8,7 @@ use tokio::sync::mpsc;
 use std::sync::OnceLock;
 use tokio::sync::Mutex;
 use serde::Deserialize;
+use std::time::Duration;
 
 use crate::bluetooth::DiscoveredDevice;
 use crate::bluetooth::cli_scanner::{CliScannerResult, CliAirPodsData};
@@ -535,7 +536,7 @@ impl AppState {
     /// Initialize the system tray component
     pub fn initialize_system_tray(&mut self, tx: std::sync::mpsc::Sender<Message>) -> Result<(), SystemTrayError> {
         // Create the system tray
-        let tray = SystemTray::new(tx, self.config.clone())?;
+        let tray = SystemTray::new(self.config.clone())?;
         self.system_tray = Some(tray);
         Ok(())
     }
@@ -689,7 +690,7 @@ impl AppState {
                 self.config.bluetooth.min_rssi = Some(value.try_into().unwrap_or(-70));
             }
             BluetoothSetting::BatteryRefreshInterval(value) => {
-                self.config.bluetooth.battery_refresh_interval = value as u64;
+                self.config.bluetooth.battery_refresh_interval = Duration::from_secs(value as u64);
             }
             BluetoothSetting::AutoReconnect(value) => {
                 self.config.bluetooth.auto_reconnect = value;
@@ -720,6 +721,9 @@ impl AppState {
             }
             UiSetting::LowBatteryThreshold(value) => {
                 self.config.ui.low_battery_threshold = value;
+            }
+            UiSetting::MinimizeToTrayOnClose(value) => {
+                self.config.ui.minimize_to_tray_on_close = value;
             }
         }
     }

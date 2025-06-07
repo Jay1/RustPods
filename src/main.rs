@@ -20,15 +20,17 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::path::PathBuf;
 
-use log::{info, error};
+use log::{info, error, warn};
 use error::{ErrorManager, RustPodsError, ErrorContext};
 use telemetry::TelemetryManager;
-use config::AppConfig;
+use config::{AppConfig, LogLevel};
 use ui::state_manager::StateManager;
 use ui::Message;
 use tokio::sync::mpsc;
 use crate::lifecycle_manager::LifecycleManager;
+use crate::logging::DebugFlags;
 
+#[derive(Debug, Clone)]
 enum AppCommand {
     Adapters,
     Scan,
@@ -41,15 +43,37 @@ enum AppCommand {
     Help,
 }
 
+/// Command line arguments structure
+#[derive(Debug, Clone)]
+pub struct AppArgs {
+    pub command: AppCommand,
+    pub debug_flags: DebugFlags,
+    pub log_level: LogLevel,
+    pub verbose: bool,          // Legacy verbose flag (same as --debug-all)
+}
+
 fn main() {
+    // Parse command line arguments first
+    let args = match parse_enhanced_args() {
+        Ok(args) => args,
+        Err(e) => {
+            eprintln!("Error parsing arguments: {}", e);
+            print_usage();
+            std::process::exit(1);
+        }
+    };
+
     // Load or create a configuration file first to get logging settings
-    let config = match config::load_or_create_config() {
+    let mut config = match config::load_or_create_config() {
         Ok(cfg) => cfg,
         Err(e) => {
             eprintln!("Error loading configuration: {}", e);
             AppConfig::default()
         }
     };
+    
+    // Override config log level with command line arguments
+    config.system.log_level = args.log_level.clone();
     
     // Initialize structured logging with config settings
     let log_dir = dirs::data_local_dir()
@@ -60,7 +84,7 @@ fn main() {
     let log_file = log_dir.join(format!("rustpods_{}.log", 
         chrono::Local::now().format("%Y%m%d_%H%M%S")));
     
-    if let Err(e) = logging::configure_logging(config.system.log_level, Some(log_file), true) {
+    if let Err(e) = logging::configure_logging(config.system.log_level.clone(), Some(log_file), true) {
         eprintln!("Failed to setup logging: {}", e);
     }
     
@@ -68,9 +92,27 @@ fn main() {
     let ctx = ErrorContext::new("Main", "startup")
         .with_metadata("version", env!("CARGO_PKG_VERSION"));
     
-    info!("RustPods v{} - Starting up application", env!("CARGO_PKG_VERSION"));
+    // Only log startup info if not at default level
+    if matches!(config.system.log_level, LogLevel::Info | LogLevel::Debug | LogLevel::Trace) {
+        info!("RustPods v{} - Starting up application", env!("CARGO_PKG_VERSION"));
+    }
     
-    // Create a Tokio runtime
+    // Store debug flags globally for use by other modules
+    logging::set_debug_flags(args.debug_flags.clone());
+    
+    // Handle StateUI command directly without tokio runtime since it creates its own
+    if matches!(args.command, AppCommand::StateUI) {
+        if matches!(config.system.log_level, LogLevel::Info | LogLevel::Debug | LogLevel::Trace) {
+            info!("Launching State UI...");
+        }
+        if let Err(e) = ui::run_state_ui() {
+            error!("Failed to run State UI: {}", e);
+            std::process::exit(1);
+        }
+        return;
+    }
+    
+    // Create a Tokio runtime for other commands that need async execution
     let rt = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime,
         Err(e) => {
@@ -82,29 +124,21 @@ fn main() {
     
     // Run the main app code inside the runtime
     rt.block_on(async {
-        main_async().await;
+        main_async(args).await;
     });
 }
 
-async fn main_async() {
+async fn main_async(args: AppArgs) {
     // Create error context for async initialization
     let ctx = ErrorContext::new("Main", "main_async")
         .with_metadata("runtime", "tokio");
     
-    // Parse command line arguments
-    let command = match parse_args() {
-        Ok(cmd) => cmd,
-        Err(e) => {
-            eprintln!("Error parsing arguments: {}", e);
-            print_usage();
-            std::process::exit(1);
-        }
-    };
-    
     // Load or create a configuration file
     let config = match config::load_or_create_config() {
         Ok(cfg) => {
-            info!("Configuration loaded successfully");
+            if matches!(args.log_level, LogLevel::Info | LogLevel::Debug | LogLevel::Trace) {
+                info!("Configuration loaded successfully");
+            }
             cfg
         },
         Err(e) => {
@@ -116,13 +150,15 @@ async fn main_async() {
     };
     
     // Handle special commands first
-    match command {
+    match args.command {
         AppCommand::Help => {
             print_usage();
             return;
         },
         AppCommand::UI => {
-            info!("Launching UI...");
+            if matches!(args.log_level, LogLevel::Info | LogLevel::Debug | LogLevel::Trace) {
+                info!("Launching UI...");
+            }
             if let Err(e) = ui::run_ui() {
                 error!("Failed to run UI: {}", e);
                 std::process::exit(1);
@@ -130,12 +166,8 @@ async fn main_async() {
             return;
         },
         AppCommand::StateUI => {
-            info!("Launching State UI...");
-            if let Err(e) = ui::run_state_ui() {
-                error!("Failed to run State UI: {}", e);
-                std::process::exit(1);
-            }
-            return;
+            // StateUI is now handled in main() before creating the tokio runtime
+            unreachable!("StateUI should be handled in main() before calling main_async()");
         },
         _ => {
             // Handle other commands with the existing system
@@ -159,32 +191,88 @@ async fn main_async() {
     
     // Execute the remaining commands
     let config = Arc::new(Mutex::new(config));
-    if let Err(exit_code) = execute_command(command, config, error_manager, telemetry_manager).await {
+    if let Err(exit_code) = execute_command(args.command, config, error_manager, telemetry_manager).await {
         std::process::exit(exit_code);
     }
 }
 
-fn parse_args() -> Result<AppCommand, String> {
+fn parse_enhanced_args() -> Result<AppArgs, String> {
     let args: Vec<String> = std::env::args().collect();
     
-    if args.len() <= 1 {
-        // No command provided, default to StateUI - Using our new state management system
-        return Ok(AppCommand::StateUI);
+    let mut debug_flags = DebugFlags::default();
+    let mut log_level = LogLevel::Warn; // Default to warnings and errors only
+    let mut verbose = false;
+    let mut command = AppCommand::StateUI; // Default command
+    
+    let mut i = 1;
+    while i < args.len() {
+        let arg = &args[i];
+        
+        match arg.as_str() {
+            // Debug flags
+            "--debug-ui" => debug_flags.ui = true,
+            "--debug-bluetooth" => debug_flags.bluetooth = true,
+            "--debug-airpods" => debug_flags.airpods = true,
+            "--debug-config" => debug_flags.config = true,
+            "--debug-system" => debug_flags.system = true,
+            "--debug-all" | "-v" | "--verbose" => {
+                debug_flags.all = true;
+                verbose = true;
+                log_level = LogLevel::Debug;
+            },
+            
+            // Log level flags
+            "--quiet" | "-q" => log_level = LogLevel::Error,
+            "--info" => log_level = LogLevel::Info,
+            "--debug" => log_level = LogLevel::Debug,
+            "--trace" => log_level = LogLevel::Trace,
+            
+            // Commands
+            "adapters" => command = AppCommand::Adapters,
+            "scan" => command = AppCommand::Scan,
+            "interval" => command = AppCommand::Interval,
+            "airpods" => command = AppCommand::AirPods,
+            "events" => command = AppCommand::Events,
+            "ui" => command = AppCommand::UI,
+            "stateui" => command = AppCommand::StateUI,
+            "diagnostic" | "diagnostics" => command = AppCommand::Diagnostic,
+            "help" | "--help" | "-h" => command = AppCommand::Help,
+            
+            _ => {
+                if arg.starts_with("--") {
+                    return Err(format!("Unknown flag: '{}'", arg));
+                } else if !arg.starts_with("-") && i == 1 {
+                    // First non-flag argument is treated as command if no command was set yet
+                    return Err(format!("Unknown command: '{}'", arg));
+                }
+            }
+        }
+        i += 1;
     }
-
-    // Parse the command
-    match args[1].to_lowercase().as_str() {
-        "adapters" => Ok(AppCommand::Adapters),
-        "scan" => Ok(AppCommand::Scan),
-        "interval" => Ok(AppCommand::Interval),
-        "airpods" => Ok(AppCommand::AirPods),
-        "events" => Ok(AppCommand::Events),
-        "ui" => Ok(AppCommand::UI),
-        "stateui" => Ok(AppCommand::StateUI),
-        "diagnostic" | "diagnostics" => Ok(AppCommand::Diagnostic),
-        "help" | "--help" | "-h" => Ok(AppCommand::Help),
-        _ => Err(format!("Unknown command: '{}'", args[1]))
+    
+    // Enable debug categories if all debug is enabled
+    if debug_flags.all {
+        debug_flags.ui = true;
+        debug_flags.bluetooth = true;
+        debug_flags.airpods = true;
+        debug_flags.config = true;
+        debug_flags.system = true;
     }
+    
+    // If any debug flags are set, enable debug log level
+    if debug_flags.ui || debug_flags.bluetooth || debug_flags.airpods || 
+       debug_flags.config || debug_flags.system || debug_flags.all {
+        if log_level == LogLevel::Warn {
+            log_level = LogLevel::Debug;
+        }
+    }
+    
+    Ok(AppArgs {
+        command,
+        debug_flags,
+        log_level,
+        verbose,
+    })
 }
 
 async fn execute_command(
@@ -355,16 +443,41 @@ fn handle_command_error<E>(
 fn print_usage() {
     println!("\nRustPods v{} - AirPods Battery Monitor for Windows", env!("CARGO_PKG_VERSION"));
     println!("\nUsage:");
-    println!("  rustpods                - Launch the UI application (default)");
-    println!("  rustpods adapters       - Discover Bluetooth adapters");
-    println!("  rustpods scan           - Run a basic Bluetooth scan");
-    println!("  rustpods interval       - Run interval-based scanning");
-    println!("  rustpods airpods        - Run AirPods filtering demo");
-    println!("  rustpods events         - Run event system demo (use cargo run --example event_system)");
-    println!("  rustpods ui             - Launch the UI application with original state management");
-    println!("  rustpods stateui        - Launch the UI application with new state management");
-    println!("  rustpods diagnostic     - Run system diagnostics");
-    println!("  rustpods help           - Show this help message");
+    println!("  rustpods [FLAGS] [COMMAND]");
+    
+    println!("\nCOMMANDS:");
+    println!("  (none)                  - Launch the UI application (default)");
+    println!("  adapters                - Discover Bluetooth adapters");
+    println!("  scan                    - Run a basic Bluetooth scan");
+    println!("  interval                - Run interval-based scanning");
+    println!("  airpods                 - Run AirPods filtering demo");
+    println!("  events                  - Run event system demo");
+    println!("  ui                      - Launch the UI with original state management");
+    println!("  stateui                 - Launch the UI with new state management");
+    println!("  diagnostic              - Run system diagnostics");
+    println!("  help                    - Show this help message");
+    
+    println!("\nLOG LEVEL FLAGS:");
+    println!("  -q, --quiet             - Show only errors");
+    println!("  (default)               - Show warnings and errors");
+    println!("  --info                  - Show info, warnings, and errors");
+    println!("  --debug                 - Show debug, info, warnings, and errors");
+    println!("  --trace                 - Show all log messages");
+    
+    println!("\nDEBUG FLAGS (enables debug-level logging for specific categories):");
+    println!("  --debug-ui              - UI events, window management, system tray");
+    println!("  --debug-bluetooth       - Bluetooth scanning, device discovery, CLI scanner");
+    println!("  --debug-airpods         - AirPods detection, battery parsing");
+    println!("  --debug-config          - Configuration loading, saving, validation");
+    println!("  --debug-system          - System operations, lifecycle, persistence");
+    println!("  --debug-all, -v         - Enable all debug categories");
+    
+    println!("\nEXAMPLES:");
+    println!("  rustpods                           # Normal UI with warnings/errors only");
+    println!("  rustpods --debug-bluetooth scan    # Debug bluetooth during scan");
+    println!("  rustpods --debug-ui                # Debug UI messages in normal mode");
+    println!("  rustpods -v                        # Full debug output for everything");
+    println!("  rustpods --quiet diagnostic        # Run diagnostics with errors only");
 }
 
 /// Initialize logging from the application configuration

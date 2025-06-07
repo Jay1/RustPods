@@ -2,18 +2,20 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use std::sync::Mutex;
+use std::collections::HashMap;
 
 use iced::{Command, Element, Subscription, Application, window};
+use iced::window::Icon;
 
-use crate::ui::SystemTrayController;
 use crate::ui::{MainWindow, SettingsWindow};
 use crate::ui::message::Message;
 use crate::ui::state_manager::StateManager;
 use crate::ui::theme::Theme;
 use crate::ui::window_visibility::WindowVisibilityManager;
 use crate::ui::UiComponent;
+use crate::ui::utils::load_window_icon;
 
-/// State-managed application UI
+/// State-based UI application
 pub struct StateApp {
     /// State manager
     state_manager: Arc<StateManager>,
@@ -30,9 +32,9 @@ pub struct StateApp {
     /// Current application bounds
     bounds: iced::Rectangle,
     
-    /// System tray controller
-    #[allow(dead_code)]
-    system_tray_controller: Option<SystemTrayController>,
+    // System tray controller (temporarily disabled)
+    // #[allow(dead_code)]
+    // system_tray_controller: Option<SystemTrayController>,
 }
 
 impl Application for StateApp {
@@ -49,18 +51,19 @@ impl Application for StateApp {
         let ui_state = state_manager.get_ui_state();
         let config = state_manager.get_config();
         
-        // Create main and settings windows
-        let main_window = MainWindow::empty();
+        // Create window state manager
+        let visibility_manager = WindowVisibilityManager::new(config.clone());
+        
+        // Create settings window
         let settings_window = SettingsWindow::new(config.clone());
         
-        // Create window visibility manager with the current config
-        let visibility_manager = WindowVisibilityManager::new(config.clone())
-            .with_state_manager(Arc::clone(&state_manager));
+        // Create the main window with initial state
+        let main_window = MainWindow::new();
         
-        // Create initial command
-        let start_command = if !ui_state.visible {
-            // Start hidden if UI state is not visible
-            window::minimize(true)
+        // Get UI state to check if window should be visible on startup
+        let start_command: iced::Command<Message> = if !ui_state.visible {
+            // For now, just use Command::none() since window minimize requires proper window ID
+            Command::none()
         } else {
             Command::none()
         };
@@ -75,7 +78,7 @@ impl Application for StateApp {
                 iced::Point::new(0.0, 0.0),
                 iced::Size::new(800.0, 600.0),
             ),
-            system_tray_controller: None,
+            // system_tray_controller: None, // Temporarily disabled
         };
         
         (app, start_command)
@@ -103,9 +106,10 @@ impl Application for StateApp {
     fn update(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::Exit => {
-                if let Some(controller) = &mut self.system_tray_controller {
-                    let _ = controller.stop();
-                }
+                // Temporarily disable system tray controller cleanup
+                // if let Some(controller) = &mut self.system_tray_controller {
+                //     let _ = controller.stop();
+                // }
                 iced::window::close()
             },
             Message::AnimationTick => {
@@ -173,54 +177,40 @@ pub fn run_state_ui() -> Result<(), iced::Error> {
         sender_for_lifecycle_manager
     ).with_auto_save_interval(auto_save_interval);
     
-    // Start lifecycle manager with proper error handling
-    match lifecycle_manager.start() {
-        Ok(_) => {
-            log::info!("Lifecycle manager started successfully");
-        },
-        Err(e) => {
-            log::error!("Failed to start lifecycle manager: {}", e);
-            // Continue without full lifecycle management, but still try basic features
-        }
+    // Don't start lifecycle manager yet - defer until Iced runtime is available
+    // lifecycle_manager.start() will be called from within the Iced application
+    log::info!("Lifecycle manager initialized, will start after Iced runtime is available");
+    
+    // Start the sync phase of lifecycle manager
+    if let Err(e) = lifecycle_manager.start() {
+        log::error!("Failed to start lifecycle manager sync phase: {}", e);
+        eprintln!("Error: Failed to start lifecycle manager: {}", e);
+        std::process::exit(1);
     }
     
-    // Create a separate thread for the AppStateController
-    let _state_manager_clone = Arc::clone(&state_manager);
-    let controller_thread = thread::spawn(move || {
-        // Create a tokio runtime for the controller
-        let runtime = match tokio::runtime::Runtime::new() {
-            Ok(rt) => rt,
-            Err(e) => {
-                log::error!("Failed to create tokio runtime for controller: {}", e);
-                return;
-            }
-        };
-        
-        // Run the controller with the state manager
-        let mut controller = crate::app_state_controller::AppStateController::new(sender_for_controller_thread);
-        
-        log::info!("Starting app state controller");
-        // Use the runtime to run the async start method
-        if let Err(e) = runtime.block_on(controller.start()) {
-            log::error!("Failed to start app state controller: {}", e);
-        }
-        
-        // Keep the thread alive while the application is running
-        loop {
-            // Sleep to avoid high CPU usage
-            thread::sleep(Duration::from_millis(100));
+    // Store lifecycle manager for async task startup
+    let lifecycle_manager_for_async = Arc::new(Mutex::new(lifecycle_manager));
+    
+    // Start the AppStateController in a background thread with its own async context
+    // We can't use tokio::spawn here because we're not in an async context yet
+    let state_manager_clone = Arc::clone(&state_manager);
+    let controller_handle = std::thread::spawn(move || {
+        // Create a minimal runtime for the controller background thread
+        let rt = tokio::runtime::Runtime::new().expect("Failed to create runtime for controller");
+        rt.block_on(async move {
+            // Run the controller with the state manager
+            let mut controller = crate::app_state_controller::AppStateController::new(sender_for_controller_thread);
             
-            // Check if we should exit the thread
-            // In a real implementation, we would use a proper shutdown signal
-            if thread::panicking() {
-                break;
+            log::info!("Starting app state controller");
+            if let Err(e) = controller.start().await {
+                log::error!("Failed to start app state controller: {}", e);
             }
-        }
+        });
     });
     
     // Register Ctrl+C handler for graceful shutdown
     let state_manager_for_ctrlc = Arc::clone(&state_manager);
-    let lifecycle_manager_for_ctrlc = Arc::new(Mutex::new(lifecycle_manager));
+    let lifecycle_manager_for_ctrlc = Arc::clone(&lifecycle_manager_for_async);
     
     ctrlc::set_handler(move || {
         log::info!("Received Ctrl+C, initiating graceful shutdown");
@@ -244,12 +234,37 @@ pub fn run_state_ui() -> Result<(), iced::Error> {
         std::process::exit(0);
     }).expect("Failed to set Ctrl+C handler");
     
-    // Run the application using the standard iced settings
-    let flags = (controller_sender, controller_receiver);
+    // Run the StateApp using the standard iced settings with proper icon
+    let flags = Arc::clone(&state_manager);
+    
+    // Load the window icon with proper error handling
+    let icon = load_window_icon();
+    
+    // Start async task startup in a deferred manner
+    let lifecycle_manager_for_startup = Arc::clone(&lifecycle_manager_for_async);
+    
+    // Spawn a task to start lifecycle async tasks after a delay
+    std::thread::spawn(move || {
+        // Wait a moment for Iced to fully initialize its runtime
+        thread::sleep(Duration::from_millis(500));
+        
+        log::info!("Starting lifecycle manager async tasks after delay");
+        if let Ok(mut manager) = lifecycle_manager_for_startup.lock() {
+            if let Err(e) = manager.start_async_tasks() {
+                log::error!("Failed to start lifecycle manager async tasks: {}", e);
+            } else {
+                log::info!("Successfully started lifecycle manager async tasks");
+            }
+        } else {
+            log::error!("Failed to acquire lock on lifecycle manager for async task startup");
+        }
+    });
+    
     let settings = iced::Settings {
         id: None,
         window: iced::window::Settings {
             visible: true,
+            icon,
             ..Default::default()
         },
         flags: flags,
@@ -258,7 +273,7 @@ pub fn run_state_ui() -> Result<(), iced::Error> {
         antialiasing: false,
         exit_on_close_request: true,
     };
-    let result = crate::ui::state::AppState::run(settings);
+    let result = StateApp::run(settings);
     
     // Handle any errors during UI execution
     if let Err(ref e) = result {
@@ -267,13 +282,16 @@ pub fn run_state_ui() -> Result<(), iced::Error> {
     
     log::info!("UI has exited, performing cleanup");
     
-    // Join controller thread (will only happen if UI has exited)
-    if controller_thread.is_finished() {
-        if let Err(_e) = controller_thread.join() {
-            log::error!("Failed to join controller thread: thread panicked");
+    // Check controller thread status (will only happen if UI has exited)
+    if controller_handle.is_finished() {
+        log::info!("Controller thread has completed");
+        if let Err(e) = controller_handle.join() {
+            log::error!("Controller thread panicked: {:?}", e);
         }
     } else {
-        log::warn!("Controller thread is still running after UI exit");
+        log::info!("Controller thread is still running after UI exit");
+        // Note: We can't gracefully stop the thread from here, but that's okay
+        // as the process will terminate anyway
     }
     
     result

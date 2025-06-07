@@ -72,7 +72,7 @@ impl BatteryMonitorOptions {
     /// Create options from app config
     pub fn from_config(config: &AppConfig) -> Self {
         Self {
-            polling_interval: config.bluetooth.battery_refresh_interval,
+            polling_interval: config.bluetooth.battery_refresh_interval.as_secs(),
             adaptive_polling: config.bluetooth.adaptive_polling,
             change_threshold: config.battery.change_threshold,
             use_smoothing: config.battery.smoothing_enabled,

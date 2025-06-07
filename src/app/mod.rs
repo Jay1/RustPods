@@ -1,18 +1,20 @@
 //! Application entry point and main logic
 
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
-// Remove unused tokio_mpsc import
-// use tokio::sync::mpsc as tokio_mpsc;
+use tokio::sync::mpsc;
+use log::{info, error, debug, warn};
 
+// Main app imports
+// Temporarily disable system tray
+// use crate::ui::{Message, SystemTray};
+use crate::ui::Message;
+use crate::error::RustPodsError;
+use crate::airpods::{DetectedAirPods, detect_airpods};
 use crate::bluetooth::{BleScanner, AirPodsBatteryStatus};
 // Remove unused ScanConfig import
 use crate::config::{AppConfig, ConfigManager};
-use crate::ui::{Message, SystemTray};
-use crate::error::RustPodsError;
-use crate::airpods::{DetectedAirPods, detect_airpods};
-use log; // Keep log module but remove specific imports
-use futures::StreamExt;
+// Remove duplicate and unused imports
 use tracing;
 
 /// Main application struct
@@ -29,7 +31,7 @@ pub struct App {
     scanner: BleScanner,
     /// System tray
     #[allow(dead_code)]
-    tray: SystemTray,
+    // tray: SystemTray, // Temporarily disabled
     /// Running flag
     running: bool,
     /// Current AirPods device
@@ -44,7 +46,7 @@ impl App {
     /// Create a new application
     pub fn new() -> Result<Self, RustPodsError> {
         // Create channels
-        let (ui_tx, ui_rx) = mpsc::channel();
+        let (ui_tx, ui_rx) = mpsc::channel(100);
         
         // Create config manager and load config
         let config_manager = ConfigManager::default();
@@ -58,15 +60,16 @@ impl App {
         // unreachable!();
         // For now, create a dummy scanner to allow the app to run
         let scanner = BleScanner::dummy();
-        let tray = SystemTray::new(ui_tx.clone(), config.clone())
-            .map_err(|_| RustPodsError::UiError)?;
+        // Temporarily disable system tray
+        // let tray = SystemTray::new(ui_tx.clone(), config.clone())
+        //     .map_err(|_| RustPodsError::UiError)?;
         Ok(Self {
             config,
             config_manager,
             ui_tx,
             ui_rx,
             scanner,
-            tray,
+            // tray, // Temporarily disabled
             running: false,
             current_airpods: Arc::new(Mutex::new(None)),
             battery_status: Arc::new(Mutex::new(AirPodsBatteryStatus::default())),
@@ -221,7 +224,7 @@ impl App {
         };
         
         // Get the refresh interval from config
-        let refresh_interval = Duration::from_secs(self.config.bluetooth.battery_refresh_interval);
+        let refresh_interval = self.config.bluetooth.battery_refresh_interval;
         
         // Create the callback for battery updates
         let ui_tx = self.ui_tx.clone();

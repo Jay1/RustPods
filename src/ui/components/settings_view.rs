@@ -5,6 +5,7 @@ use iced::{Length};
 use std::convert::TryInto;
 use crate::ui::theme as ui_theme;
 use iced::Renderer;
+use std::time::Duration;
 
 /// Settings view component
 #[derive(Debug, Clone)]
@@ -44,7 +45,7 @@ impl SettingsView {
                 self.config.bluetooth.scan_interval = std::time::Duration::from_secs(value as u64);
             },
             BluetoothSetting::BatteryRefreshInterval(value) => {
-                self.config.bluetooth.battery_refresh_interval = value as u64;
+                self.config.bluetooth.battery_refresh_interval = Duration::from_secs(value as u64);
             },
             BluetoothSetting::MinRssi(value) => {
                 self.config.bluetooth.min_rssi = Some(value.try_into().unwrap_or(-70));
@@ -63,6 +64,24 @@ impl SettingsView {
         let title = Text::new("Bluetooth")
             .size(20)
             .style(ui_theme::TEXT);
+        
+        // Device pairing section
+        let pairing_section = if let Some(paired_device) = &self.config.bluetooth.paired_device_id {
+            Column::new()
+                .spacing(10)
+                .push(Text::new("Paired Device").style(ui_theme::TEXT).size(16))
+                .push(Text::new(format!("Device: {}", paired_device)).style(ui_theme::TEXT))
+                .push(
+                    iced::widget::button("Unpair Device")
+                        .on_press(Message::UnpairDevice)
+                        .style(iced::theme::Button::Destructive)
+                )
+        } else {
+            Column::new()
+                .spacing(10)
+                .push(Text::new("No Device Paired").style(ui_theme::TEXT).size(16))
+                .push(Text::new("Use the main interface to pair with your AirPods").style(ui_theme::SUBTEXT1))
+        };
         
         let scan_duration_seconds = self.config.bluetooth.scan_duration.as_secs() as i32;
         let scan_duration = Column::new()
@@ -104,7 +123,7 @@ impl SettingsView {
                     .push(Text::new(scan_interval_seconds.to_string()).style(ui_theme::TEXT))
             );
         
-        let battery_refresh_seconds = self.config.bluetooth.battery_refresh_interval as i32;
+        let battery_refresh_seconds = self.config.bluetooth.battery_refresh_interval.as_secs() as i32;
         let battery_refresh = Column::new()
             .spacing(5)
             .push(Text::new("Battery refresh interval (seconds)").style(ui_theme::TEXT))
@@ -125,91 +144,37 @@ impl SettingsView {
             );
         
         Column::new()
-            .spacing(15)
+            .spacing(20)
             .push(title)
+            .push(pairing_section)
             .push(scan_duration)
             .push(scan_interval)
             .push(battery_refresh)
             .into()
     }
     
-    /// UI settings section
+    /// UI settings section  
     pub fn ui_settings(&self) -> Element<'_, Message, Renderer<ui_theme::Theme>> {
-        let title = Text::new("User Interface")
+        let title = Text::new("Settings")
             .size(20)
             .style(ui_theme::TEXT);
-            
-        // Clone the themes to avoid reference issues
-        let theme_light = ui_theme::Theme::Light;
-        let theme_dark = ui_theme::Theme::Dark;
-        let theme_system = ui_theme::Theme::System;
-        let theme_options = vec![theme_light, theme_dark, theme_system];
-            
-        let theme_picker = Row::new()
-            .spacing(10)
-            .push(Text::new("Theme:").width(Length::Fill).style(ui_theme::TEXT))
-            .push(
-                PickList::new(
-                    theme_options,
-                    Some(ui_theme::Theme::from(self.config.ui.theme.clone())),
-                    |theme| Message::UpdateUiSetting(UiSetting::Theme(theme))
-                )
-                .width(Length::FillPortion(2))
-            );
-            
-        let show_notifications = Checkbox::new(
-            "Show battery notifications",
-            self.config.ui.show_notifications,
-            |value| Message::UpdateUiSetting(UiSetting::ShowNotifications(value))
+        
+        let minimize_to_tray = Checkbox::new(
+            "Minimize to tray when X is pressed",
+            self.config.ui.minimize_to_tray_on_close,
+            |value| Message::UpdateUiSetting(UiSetting::MinimizeToTrayOnClose(value))
         );
         
-        let start_minimized = Checkbox::new(
-            "Start minimized to system tray",
-            self.config.ui.start_minimized,
-            |value| Message::UpdateUiSetting(UiSetting::StartMinimized(value))
-        );
-        
-        let show_percentage = Checkbox::new(
-            "Show battery percentage in system tray icon",
-            self.config.ui.show_percentage_in_tray,
-            |value| Message::UpdateUiSetting(UiSetting::ShowPercentageInTray(value))
-        );
-        
-        let show_low_battery = Checkbox::new(
-            "Show low battery warnings",
-            self.config.ui.show_low_battery_warning,
-            |value| Message::UpdateUiSetting(UiSetting::ShowLowBatteryWarning(value))
-        );
-        
-        let battery_threshold = Column::new()
-            .spacing(5)
-            .push(Text::new("Low battery threshold (%)").style(ui_theme::TEXT))
-            .push(
-                Row::new()
-                    .spacing(10)
-                    .push(
-                        Slider::new(
-                            5..=50,
-                            self.config.ui.low_battery_threshold as i32,
-                            move |value| {
-                                Message::UpdateUiSetting(UiSetting::LowBatteryThreshold(value as u8))
-                            }
-                        )
-                        .width(Length::Fill)
-                    )
-                    .push(Text::new(format!("{}%", self.config.ui.low_battery_threshold)).style(ui_theme::TEXT))
-            );
+        let notice = Text::new("Note: System tray has been improved for better reliability")
+            .size(12)
+            .style(crate::ui::theme::TEXT);
         
         Container::new(
             Column::new()
                 .spacing(15)
                 .push(title)
-                .push(theme_picker)
-                .push(show_notifications)
-                .push(start_minimized)
-                .push(show_percentage)
-                .push(show_low_battery)
-                .push(battery_threshold)
+                .push(minimize_to_tray)
+                .push(notice)
                 .width(Length::Fill)
         )
         .width(Length::Fill)
@@ -316,6 +281,8 @@ pub enum UiSetting {
     ShowLowBatteryWarning(bool),
     /// Low battery threshold
     LowBatteryThreshold(u8),
+    /// Minimize to tray when close button is pressed
+    MinimizeToTrayOnClose(bool),
 }
 
 /// System settings enum

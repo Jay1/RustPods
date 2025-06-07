@@ -29,5 +29,12 @@ pub mod tray {
 
 /// UI element assets
 pub mod ui {
-    // UI-specific assets would go here
+    /// Close icon SVG for buttons and dialogs
+    pub const CLOSE_ICON: &[u8] = include_bytes!("../assets/icons/close.svg");
+    
+    /// Charging bolt icon SVG for battery indicators
+    pub const CHARGING_ICON: &[u8] = include_bytes!("../assets/icons/charging.svg");
+    
+    /// Settings gear icon SVG for settings buttons
+    pub const SETTINGS_ICON: &[u8] = include_bytes!("../assets/icons/settings.svg");
 } 

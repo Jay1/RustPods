@@ -5,36 +5,64 @@ edition = "2021"
 default-run = "ui_app"
 
 [dependencies]
-btleplug = "0.10"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "process"] }
-tokio-stream = "0.1"
-thiserror = "1.0"
+# Core runtime
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "full"] }
 log = "0.4"
 env_logger = "0.10"
-iced = { version = "0.10", features = ["tokio", "debug", "advanced", "svg", "image"] }
-dirs-next = "2.0"
-tray-item = "0.7"
+
+# Bluetooth functionality
+btleplug = "0.10"
+uuid = { version = "1.3", features = ["v4", "serde"] }
+
+# AirPods communication and parsing
 serde = { version = "1", features = ["derive"] }
 serde_json = "1.0"
+
+# UI framework
+iced = { version = "0.10", features = ["tokio", "debug", "advanced", "svg", "image"] }
+
+# System tray integration
+tray-icon = "0.15"
+
+# Configuration and persistence
+dirs = "5.0"
+dirs-next = "2.0"
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Image processing
+image = "0.25"
+
+# Process management and async utilities
+tokio-stream = "0.1"
 futures = "0.3"
 async-stream = "0.3"
-chrono = { version = "0.4", features = ["serde"] }
-async-trait = "0.1"
-rand = "0.8"
-ctrlc = "3.4.7"
-windows = { version = "0.61.1", features = [
-    "Foundation",
-    "Devices_Bluetooth",
-    "Devices_Bluetooth_GenericAttributeProfile",
-    "Devices_Enumeration"
-] }
-dirs = "5.0"
-uuid = { version = "1.3", features = ["v4", "serde"] }
+
+# Utility libraries
 lazy_static = "1.4"
-regex = "1.9"
-backtrace = "0.3"
 human-panic = "1.1"
 tracing = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+regex = "1.0"
+ctrlc = "3.0"
+
+# Windows API for direct window control
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["winuser", "windef"] }
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_System_Registry",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Graphics_Gdi",
+    "Win32_Security",
+    "Win32_System_Threading",
+    "Win32_System_SystemServices",
+    "Win32_System_LibraryLoader",
+    "Win32_Devices_Bluetooth",
+    "Win32_Devices_Enumeration"
+] }
 
 [dev-dependencies]
 mockall = "0.11"

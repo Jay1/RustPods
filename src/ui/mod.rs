@@ -9,7 +9,7 @@ pub mod state;
 pub mod state_manager;
 mod message;
 mod system_tray;
-mod system_tray_controller;
+// mod system_tray_controller; // Keep controller disabled for now
 mod main_window;
 mod settings_window;
 pub mod theme;
@@ -18,6 +18,7 @@ pub mod window_management;
 pub mod window_visibility;
 pub mod form_validation;
 pub mod test_helpers;
+pub mod utils;
 
 // Re-exports for easier access
 pub use app::run_ui;
@@ -25,9 +26,9 @@ pub use fixed_state_app::{StateApp, run_state_ui};
 pub use state::AppState;
 pub use message::Message;
 pub use system_tray::SystemTray;
-pub use system_tray_controller::SystemTrayController;
+// pub use system_tray_controller::SystemTrayController; // Keep controller disabled
 pub use main_window::MainWindow;
-pub use settings_window::{SettingsWindow, SettingsTab};
+pub use settings_window::SettingsWindow;
 pub use state_manager::StateManager;
 pub use keyboard_shortcuts::{KeyboardShortcut, KeyboardShortcutManager, handle_events};
 pub use window_management::{WindowInteraction, DragRegion};
