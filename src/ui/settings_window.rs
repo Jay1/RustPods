@@ -60,10 +60,19 @@ impl SettingsWindow {
 
 impl UiComponent for SettingsWindow {
     fn view(&self) -> Element<'_, Message, iced::Renderer<Theme>> {
-        // Simple settings window with only minimize to tray option
-        let title = text("Settings")
-            .size(24)
-            .style(theme::TEXT);
+        // Header with back button and title
+        let header = row![
+            button(text("← Back").size(14))
+                .on_press(Message::CloseSettings)
+                .style(iced::theme::Button::Secondary)
+                .padding([5, 10]),
+            Space::with_width(Length::Fixed(10.0)),
+            text("Settings")
+                .size(24)
+                .style(theme::TEXT),
+            Space::with_width(Length::Fill),
+        ]
+        .align_items(Alignment::Center);
         
         // Minimize to tray checkbox
         let minimize_checkbox = Checkbox::new(
@@ -72,13 +81,18 @@ impl UiComponent for SettingsWindow {
             |value| Message::UpdateUiSetting(UiSetting::MinimizeToTrayOnClose(value))
         );
         
-        // Action buttons with explicit text styling
+        // Settings info text
+        let info_text = text("Settings are saved automatically when changed")
+            .size(12)
+            .style(theme::SUBTEXT1);
+        
+        // Action buttons - Save applies changes and closes, Cancel discards changes
         let save_button = button(
-            text("Save")
+            text("Save & Close")
                 .style(theme::TEXT)
                 .size(14)
         )
-            .on_press(Message::OpenSettings) // This will toggle settings off, saving happens automatically
+            .on_press(Message::SaveSettings)
             .style(iced::theme::Button::Primary)
             .padding(10);
             
@@ -87,7 +101,7 @@ impl UiComponent for SettingsWindow {
                 .style(theme::TEXT) 
                 .size(14)
         )
-            .on_press(Message::OpenSettings) // This will toggle settings off
+            .on_press(Message::CloseSettings)
             .style(iced::theme::Button::Secondary)
             .padding(10);
         
@@ -96,12 +110,15 @@ impl UiComponent for SettingsWindow {
             cancel_button,
             save_button
         ]
-        .spacing(10);
+        .spacing(10)
+        .align_items(Alignment::Center);
         
         let content = column![
-            title,
+            header,
             Space::with_height(Length::Fixed(20.0)),
             minimize_checkbox,
+            Space::with_height(Length::Fixed(15.0)),
+            info_text,
             Space::with_height(Length::Fixed(30.0)),
             actions
         ]
