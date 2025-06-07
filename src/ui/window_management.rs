@@ -156,9 +156,9 @@ pub fn create_draggable<'a, Message>(
 }
 
 /// Default window width
-pub const DEFAULT_WINDOW_WIDTH: u32 = 800;
+pub const DEFAULT_WINDOW_WIDTH: u32 = 360;
 /// Default window height
-pub const DEFAULT_WINDOW_HEIGHT: u32 = 600;
+pub const DEFAULT_WINDOW_HEIGHT: u32 = 500;
 
 /// Create a drag region that allows the user to move the window
 pub fn create_drag_region(title_bar_height: u16) -> iced::widget::Container<'static, crate::ui::Message> {

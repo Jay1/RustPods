@@ -14,6 +14,7 @@ use crate::ui::theme::Theme;
 use crate::config::AppConfig;
 use crate::config::ConfigManager;
 use crate::bluetooth::DiscoveredDevice;
+use crate::ui::window_management::{DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT};
 // Import the AppController from the appropriate path
 
 /// State-based application implementation with improved state management
@@ -261,7 +262,7 @@ pub fn run_state_ui() -> Result<(), iced::Error> {
         StateApp::run(iced::Settings {
             id: Some("rustpods".to_string()),
             window: iced::window::Settings {
-                size: (800, 600),
+                size: (DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT),
                 position: iced::window::Position::Default,
                 min_size: Some((400, 300)),
                 max_size: None,

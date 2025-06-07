@@ -14,6 +14,7 @@ use crate::ui::theme::Theme;
 use crate::ui::window_visibility::WindowVisibilityManager;
 use crate::ui::UiComponent;
 use crate::ui::utils::load_window_icon;
+use crate::ui::window_management::{DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT};
 
 /// State-based UI application
 pub struct StateApp {
@@ -76,7 +77,7 @@ impl Application for StateApp {
             visibility_manager,
             bounds: iced::Rectangle::new(
                 iced::Point::new(0.0, 0.0),
-                iced::Size::new(800.0, 600.0),
+                iced::Size::new(DEFAULT_WINDOW_WIDTH as f32, DEFAULT_WINDOW_HEIGHT as f32),
             ),
             // system_tray_controller: None, // Temporarily disabled
         };

@@ -151,150 +151,115 @@ impl MainWindow {
             // Show our new graphical AirPods popup - inline implementation to avoid theme issues
             let header_row = row![
                 text(device.name.clone())
-                    .size(24.0)
+                    .size(20.0)
                     .style(crate::ui::theme::TEXT),
                 Space::with_width(Length::Fill),
                 button(
                     Svg::new(Handle::from_memory(crate::assets::ui::SETTINGS_ICON))
-                        .width(Length::Fixed(16.0))
-                        .height(Length::Fixed(16.0))
+                        .width(Length::Fixed(21.0))
+                        .height(Length::Fixed(21.0))
                 )
                 .on_press(Message::OpenSettings)
                 .style(crate::ui::theme::settings_button_style())
-                .padding(6),
+                .padding(5),
                 button(
                     Svg::new(Handle::from_memory(crate::assets::ui::CLOSE_ICON))
-                        .width(Length::Fixed(16.0))
-                        .height(Length::Fixed(16.0))
+                        .width(Length::Fixed(21.0))
+                        .height(Length::Fixed(21.0))
                 )
                 .on_press(Message::Exit)
                 .style(crate::ui::theme::close_button_style())
-                .padding(6)
+                .padding(5)
             ]
-            .spacing(8)
+            .spacing(6)
             .align_items(Alignment::Center);
 
-            let device_images_row = row![
+            // Centered AirPods column only (case column removed for testing)
+            let content_row = column![
                 image("assets/icons/hw/airpodspro.png")
-                    .height(Length::Fixed(128.0)),
-                image("assets/icons/hw/airpodsprocase.png")
-                    .height(Length::Fixed(128.0))
-            ]
-            .align_items(Alignment::Center)
-            .spacing(40);
-
-            let battery_indicators_row = row![
-                // Earbuds group: Left and Right together
+                    .width(Length::Fixed(270.0))
+                    .height(Length::Fixed(230.0)),
+                Space::with_height(Length::Fixed(5.0)), // Gap between image and batteries
+                // Left and right batteries horizontally stacked  
                 row![
-                    // Left battery indicator with colored icon
                     column![
                         crate::ui::components::battery_icon::battery_icon_display(
                             device.left_battery,
                             false, // TODO: Add charging status when available
-                            64.0,  // Increased icon size for better visibility
+                            80.0,
                             self.animation_progress
                         ),
-                        text("Left")
-                            .size(12)
-                            .style(crate::ui::theme::SUBTEXT1)
-                            .horizontal_alignment(Horizontal::Center),
+                        Space::with_height(Length::Fixed(8.0)), // Gap between battery and percentage
                         text(format!("{}%", device.left_battery.unwrap_or(0)))
-                            .size(16)
+                            .size(24)
                             .style(crate::ui::theme::TEXT)
                             .horizontal_alignment(Horizontal::Center)
                     ]
-                    .align_items(Alignment::Center)
-                    .spacing(4),
-                    
-                    // Right battery indicator with colored icon
+                    .align_items(Alignment::Center),
+                    Space::with_width(Length::Fixed(15.0)), // Padding between left and right
                     column![
                         crate::ui::components::battery_icon::battery_icon_display(
                             device.right_battery,
                             false, // TODO: Add charging status when available
-                            64.0,  // Increased icon size for better visibility
+                            80.0,
                             self.animation_progress
                         ),
-                        text("Right")
-                            .size(12)
-                            .style(crate::ui::theme::SUBTEXT1)
-                            .horizontal_alignment(Horizontal::Center),
+                        Space::with_height(Length::Fixed(8.0)), // Gap between battery and percentage
                         text(format!("{}%", device.right_battery.unwrap_or(0)))
-                            .size(16)
+                            .size(24)
                             .style(crate::ui::theme::TEXT)
                             .horizontal_alignment(Horizontal::Center)
                     ]
                     .align_items(Alignment::Center)
-                    .spacing(4)
-                ]
-                .spacing(20)
-                .align_items(Alignment::Center),
-                
-                // Case indicator with colored icon
-                column![
-                    crate::ui::components::battery_icon::battery_icon_display(
-                        device.case_battery,
-                        false, // TODO: Add charging status when available
-                        64.0,  // Increased icon size for better visibility
-                        self.animation_progress
-                    ),
-                    text("Case")
-                        .size(12)
-                        .style(crate::ui::theme::SUBTEXT1)
-                        .horizontal_alignment(Horizontal::Center),
-                    text(format!("{}%", device.case_battery.unwrap_or(0)))
-                        .size(16)
-                        .style(crate::ui::theme::TEXT)
-                        .horizontal_alignment(Horizontal::Center)
                 ]
                 .align_items(Alignment::Center)
-                .spacing(4)
             ]
-            .spacing(40)
-            .align_items(Alignment::Center);
+            .align_items(Alignment::Center)
+            .width(Length::Fill); // Take full width for automatic centering
+            
+            // TODO: Case battery logic commented out for testing
+            // Case battery data: device.case_battery is available but not displayed
 
             // Wrap the popup in a polished container with modern styling
             container(
                 column![
                     header_row,
-                    device_images_row,
-                    battery_indicators_row,
+                    content_row,
                 ]
-                .spacing(20)
+                .spacing(20)  // Increased spacing between major sections
                 .align_items(Alignment::Center)
-                .padding([20, 25, 25, 25])  // top, right, bottom, left
+                .padding([15, 25, 25, 25])  // Slightly more padding: top, right, bottom, left
             )
-            .width(Length::Fixed(420.0))
-            .height(Length::Fixed(320.0))
+            .width(Length::Fill)
+            .height(Length::Fill)
             .style(iced::theme::Container::Box)
-            .center_x()
-            .center_y()
             .into()
         } else {
             crate::debug_log!("ui", "No AirPods found, showing search message");
             // Show a styled message in the new popup format
             let header_row = row![
                 text("RustPods")
-                    .size(24.0)
+                    .size(20.0)
                     .style(crate::ui::theme::TEXT),
                 Space::with_width(Length::Fill),
                 button(
                     Svg::new(Handle::from_memory(crate::assets::ui::SETTINGS_ICON))
-                        .width(Length::Fixed(16.0))
-                        .height(Length::Fixed(16.0))
+                        .width(Length::Fixed(21.0))
+                        .height(Length::Fixed(21.0))
                 )
                 .on_press(Message::OpenSettings)
                 .style(crate::ui::theme::settings_button_style())
-                .padding(6),
+                .padding(5),
                 button(
                     Svg::new(Handle::from_memory(crate::assets::ui::CLOSE_ICON))
-                        .width(Length::Fixed(16.0))
-                        .height(Length::Fixed(16.0))
+                        .width(Length::Fixed(21.0))
+                        .height(Length::Fixed(21.0))
                 )
                 .on_press(Message::Exit)
                 .style(crate::ui::theme::close_button_style())
-                .padding(6)
+                .padding(5)
             ]
-            .spacing(8)
+            .spacing(6)
             .align_items(Alignment::Center);
 
             let search_message = column![
@@ -302,33 +267,33 @@ impl MainWindow {
                     .size(48.0)
                     .horizontal_alignment(Horizontal::Center),
                 text("Searching for AirPods...")
-                    .size(18.0)
+                    .size(24.0)
                     .style(crate::ui::theme::SUBTEXT1)
                     .horizontal_alignment(Horizontal::Center),
                 text("Make sure your AirPods are:")
-                    .size(14.0)
+                    .size(18.0)
                     .style(crate::ui::theme::OVERLAY1)
                     .horizontal_alignment(Horizontal::Center),
                 text("• Out of the case OR being used")
-                    .size(12.0)
+                    .size(16.0)
                     .style(crate::ui::theme::OVERLAY1)
                     .horizontal_alignment(Horizontal::Center),
                 text("• Connected to this device")
-                    .size(12.0)
+                    .size(16.0)
                     .style(crate::ui::theme::OVERLAY1)
                     .horizontal_alignment(Horizontal::Center),
                 text("• Broadcasting (not in deep sleep)")
-                    .size(12.0)
+                    .size(16.0)
                     .style(crate::ui::theme::OVERLAY1)
                     .horizontal_alignment(Horizontal::Center),
                 text("")
-                    .size(8.0),
+                    .size(4.0),
                 text("Scanning automatically every 15 seconds...")
-                    .size(11.0)
+                    .size(14.0)
                     .style(crate::ui::theme::YELLOW)
                     .horizontal_alignment(Horizontal::Center)
             ]
-            .spacing(6)
+            .spacing(4)
             .align_items(Alignment::Center);
 
             // Wrap in the same styled container as the popup
@@ -337,15 +302,13 @@ impl MainWindow {
                     header_row,
                     search_message,
                 ]
-                .spacing(20)
+                .spacing(15)
                 .align_items(Alignment::Center)
-                .padding([20, 25, 25, 25])  // top, right, bottom, left
+                .padding([15, 20, 20, 20])  // top, right, bottom, left - reduced padding
             )
-            .width(Length::Fixed(420.0))
-            .height(Length::Fixed(320.0))
+            .width(Length::Fill)
+            .height(Length::Fill)
             .style(iced::theme::Container::Box)
-            .center_x()
-            .center_y()
             .into()
         }
     }
@@ -370,8 +333,8 @@ impl UiComponent for MainWindow {
         let content = self.view_content();
         
         container(content)
-            .width(Length::Fill)
-            .height(Length::Fill)
+            .width(Length::Fixed(414.0))  // 15% bigger than 360
+            .height(Length::Fixed(455.0)) // 15% bigger than 380 + 15px
             .style(crate::ui::theme::device_row_style())
             .center_x()
             .center_y()

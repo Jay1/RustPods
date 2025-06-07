@@ -107,10 +107,10 @@ pub fn battery_icon_display<'a>(
     // Convert string to bytes for Handle::from_memory
     let svg_bytes = svg_string.into_bytes();
     
-    // Create SVG element with fixed, reasonable sizing (the SVG viewBox handles scaling)
+    // Create SVG element using the actual size parameter (bug fix!)
     let svg_element = Svg::new(iced::widget::svg::Handle::from_memory(svg_bytes))
-        .width(Length::Fixed(32.0))   // Fixed reasonable width
-        .height(Length::Fixed(48.0)); // Fixed reasonable height (3:2 aspect ratio for battery)
+        .width(Length::Fixed(size))     // Use the actual size parameter
+        .height(Length::Fixed(size * 0.6)); // Maintain aspect ratio for horizontal battery
     
     // Return the SVG directly without container wrapper since colors are baked into SVG
     svg_element.into()
@@ -121,50 +121,49 @@ fn create_colored_battery_svg(percentage: f32, charging: bool, hex_color: &str) 
     // Clamp percentage between 0.0 and 1.0
     let p = percentage.clamp(0.0, 1.0);
 
-    // Define horizontal battery dimensions
-    let battery_width = 24.0;
-    let battery_height = 12.0;
-    let battery_x = 2.0;
-    let battery_y = 6.0;
+    // Define horizontal battery dimensions - better proportions for visibility  
+    let battery_width = 48.0;  // Reasonable width
+    let battery_height = 24.0; // Reasonable height 
+    let battery_x = 4.0;       
+    let battery_y = 6.0;       
     
     // Terminal dimensions (small nub on the right)
-    let terminal_width = 2.0;
-    let terminal_height = 6.0;
+    let terminal_width = 4.0;  
+    let terminal_height = 10.0; 
     let terminal_x = battery_x + battery_width;
-    let terminal_y = battery_y + 3.0;
+    let terminal_y = battery_y + 7.0;  // Centered vertically
     
     // Fill area (inside the battery)
-    let fill_padding = 1.0;
+    let fill_padding = 2.0;  
     let fill_x = battery_x + fill_padding;
     let fill_y = battery_y + fill_padding;
-    let fill_max_width = battery_width - (2.0 * fill_padding);
-    let fill_height = battery_height - (2.0 * fill_padding);
+    let fill_max_width = battery_width - (fill_padding * 2.0);
+    let fill_height = battery_height - (fill_padding * 2.0);
+    let fill_width = fill_max_width * p;
     
-    let actual_fill_width = fill_max_width * p;
-
     let mut svg_string = String::new();
     use std::fmt::Write;
     
-    // Define neutral gray color for battery outline
-    let gray_color = "#6C7086";
+    // Define neutral color for battery outline - much lighter/whiter for visibility
+    let gray_color = "#CDD6F4"; // Much lighter - almost white for excellent visibility
     
     write!(
         &mut svg_string,
-        r#"<svg width="32" height="24" viewBox="0 0 32 24" xmlns="http://www.w3.org/2000/svg">"#,
+        r#"<svg width="60" height="36" viewBox="0 0 60 36" xmlns="http://www.w3.org/2000/svg">"#,
     ).unwrap();
     
-    // Main battery body outline (horizontal rectangle)
+    // Main battery body outline (horizontal rectangle) - MUCH thicker stroke for visibility
     write!(
         &mut svg_string,
-        r#"<rect x="{}" y="{}" width="{}" height="{}" stroke="{}" stroke-width="1" fill="none" rx="2"/>"#,
+        r#"<rect x="{}" y="{}" width="{}" height="{}" stroke="{}" stroke-width="4.0" fill="none" rx="2"/>"#,
         battery_x, battery_y, battery_width, battery_height, gray_color
     ).unwrap();
     
-    // Battery terminal (small nub on the right)
+    // Battery terminal (small nub on the right) - thicker for visibility
     write!(
         &mut svg_string,
-        r#"<rect x="{}" y="{}" width="{}" height="{}" fill="{}" rx="1"/>"#,
-        terminal_x, terminal_y, terminal_width, terminal_height, gray_color
+        r#"<rect x="{}" y="{}" width="{}" height="{}" fill="{}" stroke="{}" stroke-width="2.0" rx="1"/>"#,
+        terminal_x, terminal_y, terminal_width, terminal_height, gray_color, gray_color
     ).unwrap();
 
     // Fill level rectangle with the actual battery level color (grows from left to right)
@@ -174,19 +173,19 @@ fn create_colored_battery_svg(percentage: f32, charging: bool, hex_color: &str) 
             r#"<rect x="{:.2}" y="{:.2}" width="{:.2}" height="{:.2}" fill="{}" rx="1"/>"#,
             fill_x,
             fill_y,
-            actual_fill_width,
+            fill_width,
             fill_height,
             hex_color
         ).unwrap();
     }
 
-    // Add charging bolt if charging (use same color as fill)
+    // Add charging bolt if charging (use same color as fill) - better sized and positioned
     if charging {
-        // Simple lightning bolt in the center
+        // Lightning bolt positioned in center, properly sized
         write!(
             &mut svg_string,
-            r#"<path d="M10 8L8 11H10L8 14L12 11H10L12 8Z" fill="{}"/>"#,
-            hex_color
+            r#"<path d="M26 14L22 20H26L22 26L32 20H28L32 14Z" fill="{}" stroke="{}" stroke-width="1"/>"#,
+            hex_color, gray_color
         ).unwrap();
     }
 
