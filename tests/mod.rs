@@ -40,6 +40,7 @@ pub mod system_tray_integration_tests;
 pub mod settings_window_tests;
 pub mod state_manager_tests;
 pub mod error_handling_tests;
+pub mod module_integration_tests;
 
 #[cfg(test)]
 mod tests {

@@ -578,13 +578,13 @@ mod tests {
 
     #[test]
     fn test_theme_detection() {
-        use crate::config::ConfigTheme;
+        use crate::config::Theme as ConfigTheme;
         
         assert_eq!(ThemeMode::from(ConfigTheme::Dark), ThemeMode::Dark);
         assert_eq!(ThemeMode::from(ConfigTheme::Light), ThemeMode::Light);
         
         // Test default case
-        assert_eq!(ThemeMode::from(ConfigTheme::Auto), ThemeMode::Dark);
+        assert_eq!(ThemeMode::from(ConfigTheme::System), ThemeMode::Dark);
     }
 
     /// Create a dummy system tray for testing
