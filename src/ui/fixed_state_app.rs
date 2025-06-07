@@ -2,10 +2,9 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use std::sync::Mutex;
-use std::collections::HashMap;
 
-use iced::{Command, Element, Subscription, Application, window};
-use iced::window::Icon;
+
+use iced::{Command, Element, Subscription, Application};
 
 use crate::ui::{MainWindow, SettingsWindow};
 use crate::ui::message::Message;
@@ -28,9 +27,11 @@ pub struct StateApp {
     settings_window: SettingsWindow,
     
     /// Window visibility manager
+    #[allow(dead_code)]
     visibility_manager: WindowVisibilityManager,
     
     /// Current application bounds
+    #[allow(dead_code)]
     bounds: iced::Rectangle,
     
     // System tray controller (temporarily disabled)
@@ -157,7 +158,7 @@ pub fn run_state_ui() -> Result<(), iced::Error> {
     log::info!("Starting RustPods UI with state management");
     
     // Create a channel to communicate between the UI and state manager
-    let (controller_sender, controller_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (controller_sender, _controller_receiver) = tokio::sync::mpsc::unbounded_channel();
     let sender_for_state_manager = controller_sender.clone();
     let sender_for_controller_thread = controller_sender.clone();
     let sender_for_lifecycle_manager = controller_sender.clone();
@@ -194,7 +195,7 @@ pub fn run_state_ui() -> Result<(), iced::Error> {
     
     // Start the AppStateController in a background thread with its own async context
     // We can't use tokio::spawn here because we're not in an async context yet
-    let state_manager_clone = Arc::clone(&state_manager);
+    let _state_manager_clone = Arc::clone(&state_manager);
     let controller_handle = std::thread::spawn(move || {
         // Create a minimal runtime for the controller background thread
         let rt = tokio::runtime::Runtime::new().expect("Failed to create runtime for controller");

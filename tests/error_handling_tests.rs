@@ -8,7 +8,6 @@ use rustpods::ui::state::AppState;
 use tempfile::tempdir;
 use std::fs::File;
 use std::io::{Write};
-use tokio::sync::mpsc;
 
 /// Test that configuration file errors are handled gracefully
 #[test]

@@ -5,10 +5,9 @@ use std::time::Instant;
 
 use rustpods::bluetooth::scanner::DiscoveredDevice;
 use rustpods::airpods::{
-    detector::{detect_airpods, identify_airpods_type, APPLE_COMPANY_ID},
-    AirPodsType, AirPodsBattery, parse_airpods_data, Result as AirPodsResult
+    detector::{detect_airpods, APPLE_COMPANY_ID}, parse_airpods_data
 };
-use rustpods::error::{AirPodsError, ErrorContext, RecoveryAction, RustPodsError};
+use rustpods::error::AirPodsError;
 
 // Helper function to create test devices
 fn create_test_device(
@@ -46,9 +45,14 @@ fn test_manufacturer_data_missing_error() {
     );
     
     let result = detect_airpods(&device);
-    // Now we expect Ok(None) instead of an error when manufacturer data is missing
-    assert!(result.is_ok());
-    assert_eq!(result.unwrap(), None);
+    // Device flagged as potential AirPods but missing manufacturer data should error
+    assert!(result.is_err());
+    match result {
+        Err(AirPodsError::ManufacturerDataMissing) => {
+            // Expected error, test passes
+        },
+        _ => panic!("Expected ManufacturerDataMissing error but got {:?}", result),
+    }
 }
 
 #[test]
@@ -65,11 +69,11 @@ fn test_detection_failed_error() {
     assert!(result.is_err());
     
     match result {
-        Err(AirPodsError::InvalidData(_)) => {
-            // Expected error, test passes
-            // The error message should contain information about the cause
+        Err(AirPodsError::DetectionFailed(msg)) => {
+            // Expected error from identify_airpods_type failing due to short data
+            assert!(msg.contains("too short"), "Error message should mention data length: {}", msg);
         },
-        Err(e) => panic!("Expected InvalidData error but got {:?}", e),
+        Err(e) => panic!("Expected DetectionFailed error but got {:?}", e),
         _ => panic!("Expected error but got Ok result"),
     }
 }

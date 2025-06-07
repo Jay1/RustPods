@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 use tokio::time::sleep;
 
 use rustpods::airpods::{
-    AirPodsType, AirPodsFilter,
+    AirPodsType,
     airpods_all_models_filter, airpods_pro_filter, airpods_nearby_filter
 };
 use rustpods::bluetooth::{BleScanner, BleEvent, ScanConfig};

@@ -9,6 +9,7 @@ pub struct DeviceList {
     /// The devices to display
     devices: Vec<DiscoveredDevice>,
     /// The currently selected device address
+    #[allow(dead_code)]
     selected: Option<String>,
 }
 

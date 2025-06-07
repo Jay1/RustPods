@@ -11,9 +11,7 @@ use crate::ui::{Message, UiComponent, MainWindow, SettingsWindow};
 use crate::ui::state_manager::StateManager;
 use crate::ui::window_visibility::WindowVisibilityManager;
 use crate::ui::theme::Theme;
-use crate::config::AppConfig;
-use crate::config::ConfigManager;
-use crate::bluetooth::DiscoveredDevice;
+
 use crate::ui::window_management::{DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT};
 // Import the AppController from the appropriate path
 
@@ -184,6 +182,7 @@ impl Application for StateApp {
 }
 
 /// Run the state-based UI application
+#[allow(dead_code)]
 pub fn run_state_ui() -> Result<(), iced::Error> {
     // Initialize logging if not already initialized
     if env_logger::try_init().is_err() {

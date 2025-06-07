@@ -3,7 +3,6 @@
 
 use std::collections::HashMap;
 use std::time::Instant;
-use tokio::sync::mpsc;
 
 use btleplug::api::BDAddr;
 use iced::Element;

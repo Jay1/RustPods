@@ -246,10 +246,13 @@ impl Default for DiscoveredDevice {
 /// BLE scanner
 ///
 /// Example usage:
-/// ```rust
-/// // In production:
-/// let adapter = ...; // Obtain Arc<Adapter> from btleplug
-/// let provider = Arc::new(RealAdapterEventsProvider { adapter });
+/// ```rust,no_run
+/// use std::sync::Arc;
+/// use rustpods::bluetooth::{BleScanner, ScanConfig};
+/// use rustpods::bluetooth::scanner::{RealAdapterEventsProvider, MockAdapterEventsProvider};
+///
+/// // In production (example with mock since we can't actually get a real adapter in doctest):
+/// let provider = Arc::new(MockAdapterEventsProvider);
 /// let scanner = BleScanner::new(provider, ScanConfig::default());
 ///
 /// // In tests:

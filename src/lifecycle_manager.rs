@@ -213,10 +213,10 @@ impl LifecycleManager {
     /// Register for system events
     fn register_system_events(&mut self) {
         // Get necessary clones for the task
-        let state = Arc::clone(&self.state);
-        let ui_sender = self.ui_sender.clone();
-        let state_manager = Arc::clone(&self.state_manager);
-        let persistence_manager = self.persistence_manager.clone();
+        let _state = Arc::clone(&self.state);
+        let _ui_sender = self.ui_sender.clone();
+        let _state_manager = Arc::clone(&self.state_manager);
+        let _persistence_manager = self.persistence_manager.clone();
         
         // Create the system event task
         // Win32 system event monitoring is currently disabled due to removal of unsupported Win32 imports.

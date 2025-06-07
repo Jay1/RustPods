@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use rustpods::error::ErrorContext;
-    use std::fmt::Display;
+    
     
     #[test]
     fn test_error_context_display() {

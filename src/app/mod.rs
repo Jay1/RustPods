@@ -1,9 +1,9 @@
 //! Application entry point and main logic
 
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+
 use tokio::sync::mpsc;
-use log::{info, error, debug, warn};
+
 
 // Main app imports
 // Temporarily disable system tray

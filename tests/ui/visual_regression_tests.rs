@@ -7,12 +7,10 @@ use rustpods::ui::{
     MainWindow,
     window_management::{DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT},
     theme::{self, Theme},
-    components::battery_icon,
-    Message, UiComponent,
+    components::battery_icon, UiComponent,
 };
 use rustpods::ui::state::MergedBluetoothDevice;
-use rustpods::config::AppConfig;
-use iced::{Length, Color, Point};
+use iced::Color;
 
 /// Test that core window dimensions are locked to prevent accidental resizing
 #[test]
@@ -121,20 +119,20 @@ fn test_theme_colors_locked() {
     // Core Catppuccin Mocha colors that define our visual identity
     let theme = Theme::CatppuccinMocha;
     
-    // Text colors
-    assert_eq!(theme::TEXT, Color::from_rgb8(0xcd, 0xd6, 0xf4), "Primary text color");
-    assert_eq!(theme::SUBTEXT1, Color::from_rgb8(0xba, 0xc2, 0xde), "Secondary text color");
-    assert_eq!(theme::OVERLAY1, Color::from_rgb8(0x6c, 0x70, 0x86), "Tertiary text color");
+    // Text colors - Updated to use RGB (0-1 range) values from current implementation
+    assert_eq!(theme::TEXT, Color::from_rgb(0xcd as f32 / 255.0, 0xd6 as f32 / 255.0, 0xf4 as f32 / 255.0), "Primary text color");
+    assert_eq!(theme::SUBTEXT1, Color::from_rgb(0xba as f32 / 255.0, 0xc2 as f32 / 255.0, 0xde as f32 / 255.0), "Secondary text color");
+    assert_eq!(theme::OVERLAY1, Color::from_rgb(0x7f as f32 / 255.0, 0x84 as f32 / 255.0, 0x9c as f32 / 255.0), "Tertiary text color");
     
-    // Battery level colors
-    assert_eq!(theme::GREEN, Color::from_rgb8(0xa6, 0xe3, 0xa1), "High battery color");
-    assert_eq!(theme::YELLOW, Color::from_rgb8(0xf9, 0xe2, 0xaf), "Medium battery color");  
-    assert_eq!(theme::RED, Color::from_rgb8(0xf3, 0x8b, 0xa8), "Low battery color");
-    assert_eq!(theme::BLUE, Color::from_rgb8(0x89, 0xb4, 0xfa), "Charging color");
+    // Battery level colors  
+    assert_eq!(theme::GREEN, Color::from_rgb(0xa6 as f32 / 255.0, 0xe3 as f32 / 255.0, 0xa1 as f32 / 255.0), "High battery color");
+    assert_eq!(theme::YELLOW, Color::from_rgb(0xf9 as f32 / 255.0, 0xe2 as f32 / 255.0, 0xaf as f32 / 255.0), "Medium battery color");  
+    assert_eq!(theme::RED, Color::from_rgb(0xf3 as f32 / 255.0, 0x8b as f32 / 255.0, 0xa8 as f32 / 255.0), "Low battery color");
+    assert_eq!(theme::BLUE, Color::from_rgb(0x89 as f32 / 255.0, 0xb4 as f32 / 255.0, 0xfa as f32 / 255.0), "Charging color");
     
     // Background colors
-    assert_eq!(theme::BASE, Color::from_rgb8(0x1e, 0x1e, 0x2e), "Main background");
-    assert_eq!(theme::SURFACE0, Color::from_rgb8(0x31, 0x32, 0x44), "Surface color");
+    assert_eq!(theme::BASE, Color::from_rgb(0x1e as f32 / 255.0, 0x1e as f32 / 255.0, 0x2e as f32 / 255.0), "Main background");
+    assert_eq!(theme::SURFACE0, Color::from_rgb(0x31 as f32 / 255.0, 0x32 as f32 / 255.0, 0x44 as f32 / 255.0), "Surface color");
 }
 
 /// Test that battery color logic is preserved

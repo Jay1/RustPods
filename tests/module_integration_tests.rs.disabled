@@ -301,7 +301,7 @@ async fn test_configuration_validation() {
     state_manager.dispatch(Action::UpdateSettings(config.clone()));
     
     // Collect messages to see if validation warnings were generated
-    let messages = collector.collect_messages(200).await;
+    let _messages = collector.collect_messages(200).await;
     
     // Configuration should still be updated (the zero duration will be handled gracefully)
     let stored_config = state_manager.get_config();
@@ -359,10 +359,10 @@ async fn test_error_propagation_through_state() {
     state_manager.dispatch(Action::RemoveDevice("test-device".to_string()));
     
     // Collect messages
-    let messages = collector.collect_messages(300).await;
+    let _messages = collector.collect_messages(300).await;
     
     // Verify that disconnection messages were propagated
-    assert!(messages.iter().any(|msg| matches!(msg, Message::DeviceDisconnected)));
+    assert!(_messages.iter().any(|msg| matches!(msg, Message::DeviceDisconnected)));
     
     // Verify device state reflects the removal
     let device_state = state_manager.get_device_state();

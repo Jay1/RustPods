@@ -4,7 +4,6 @@
 use btleplug::api::BDAddr;
 use std::collections::HashMap;
 use std::time::Instant;
-use tokio::sync::mpsc;
 
 use rustpods::bluetooth::DiscoveredDevice;
 use rustpods::config::AppConfig;

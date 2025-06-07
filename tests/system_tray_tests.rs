@@ -7,9 +7,7 @@ use std::sync::Arc;
 use rustpods::ui::SystemTray;
 use rustpods::ui::state_manager::StateManager;
 use rustpods::ui::Message;
-use rustpods::config::AppConfig;
-use rustpods::bluetooth::AirPodsBatteryStatus;
-use rustpods::airpods::{AirPodsBattery, AirPodsChargingState};
+// Removed unused imports
 use rustpods::ui::state_manager::Action;
 use rustpods::ui::test_helpers::{create_test_config, create_test_battery, create_test_state_manager, MockSystemTray};
 
@@ -76,8 +74,8 @@ fn setup_test_env() -> (Arc<StateManager>, mpsc::Sender<Message>) {
 
 #[test]
 fn test_system_tray_creation() {
-    let (sender, _receiver) = mpsc::channel::<Message>();
-    let config = create_test_config();
+    let (_sender, _receiver) = mpsc::channel::<Message>();
+    let _config = create_test_config();
     
     // Test that SystemTray::new would work with correct parameters
     // We can't actually create it in headless test environment
@@ -88,8 +86,8 @@ fn test_system_tray_creation() {
 
 #[test]
 fn test_system_tray_battery_update() {
-    let (state_manager, sender) = setup_test_env();
-    let config = create_test_config();
+    let (_state_manager, _sender) = setup_test_env();
+    let _config = create_test_config();
     
     // Create a mock system tray
     let mut tray = MockSystemTray::new();
@@ -105,20 +103,20 @@ fn test_system_tray_battery_update() {
 
 #[test]
 fn test_system_tray_connects_to_state_manager() {
-    let (state_manager, sender) = setup_test_env();
+    let (_state_manager, _sender) = setup_test_env();
     
     // Create a mock system tray
     let mut tray = MockSystemTray::new();
     
     // Connect to state manager
-    let result = tray.connect_state_manager(Arc::clone(&state_manager));
+    let result = tray.connect_state_manager(Arc::clone(&_state_manager));
     
     assert!(result.is_ok(), "Should connect to state manager successfully");
 }
 
 #[test]
 fn test_state_changes_reflected_in_system_tray() {
-    let (state_manager, sender) = setup_test_env();
+    let (state_manager, _sender) = setup_test_env();
     
     // Create a battery status
     let status = create_test_battery();

@@ -2,16 +2,14 @@
 //! This tests the core state management functionality (post-refactor)
 
 use std::sync::Arc;
-use std::time::Duration;
-use chrono::Utc;
+// Removed unused imports
 use std::convert::TryInto;
 
-use tokio::sync::mpsc::{UnboundedSender, UnboundedReceiver};
-use rustpods::ui::state_manager::{StateManager, Action, DeviceState, UiState};
+use rustpods::ui::state_manager::{StateManager, Action};
 use rustpods::bluetooth::DiscoveredDevice;
 use rustpods::bluetooth::AirPodsBatteryStatus;
 use rustpods::airpods::{AirPodsBattery, AirPodsChargingState};
-use rustpods::ui::Message;
+// Removed unused import
 use rustpods::config::AppConfig;
 
 /// Helper function to create a test state manager
@@ -194,7 +192,7 @@ fn test_visibility_action() {
 
 #[test]
 fn test_notification_generation() {
-    let (tokio_tx, mut tokio_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (tokio_tx, _tokio_rx) = tokio::sync::mpsc::unbounded_channel();
     let state_manager = Arc::new(StateManager::new(tokio_tx));
     
     // Create a test device
@@ -204,7 +202,7 @@ fn test_notification_generation() {
     state_manager.dispatch(Action::UpdateDevice(device));
     
     // In a real test with tokio runtime, we'd try to receive the message:
-    // let message = tokio_rx.try_recv();
+    // let message = _tokio_rx.try_recv();
     // assert!(message.is_ok());
     
     // Here we just verify the state manager doesn't panic
@@ -223,7 +221,7 @@ fn test_auto_toggle_action() {
 
 #[test]
 fn test_shutdown_action() {
-    let (tokio_tx, mut tokio_rx) = tokio::sync::mpsc::unbounded_channel();
+    let (tokio_tx, _tokio_rx) = tokio::sync::mpsc::unbounded_channel();
     let state_manager = Arc::new(StateManager::new(tokio_tx));
     
     // Dispatch shutdown action
@@ -231,7 +229,7 @@ fn test_shutdown_action() {
     
     // This should trigger an Exit message to be sent
     // In a tokio runtime test, we would verify:
-    // let message = tokio_rx.try_recv();
+    // let message = _tokio_rx.try_recv();
     // assert!(message.is_ok());
     // assert!(matches!(message.unwrap(), Message::Exit));
 } 

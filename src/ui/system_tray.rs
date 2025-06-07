@@ -1,20 +1,19 @@
-use std::sync::mpsc;
+
 use tokio::sync::mpsc::UnboundedSender;
 use tray_icon::{TrayIcon, TrayIconBuilder, TrayIconEvent, MouseButton, menu::{Menu, MenuEvent}};
 use tray_icon::menu::MenuItem as TrayMenuItem;
 use tray_icon::Icon;
-use std::io;
+
 use std::path::Path;
 
 use crate::ui::Message;
 use crate::config::{AppConfig, Theme as ConfigTheme};
-use crate::ui::state_manager::StateManager;
-use crate::bluetooth::AirPodsBatteryStatus;
-use crate::error::{RustPodsError, ErrorContext};
+
 use std::sync::Arc;
 use std::sync::{Mutex};
 
 /// Menu item configuration
+#[allow(dead_code)]
 struct MenuItem {
     /// Label to display in the menu
     label: String,
@@ -68,6 +67,7 @@ pub enum SystemTrayError {
 
 /// Window control commands
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum WindowCommand {
     Show,
     Hide,
@@ -503,7 +503,7 @@ impl SystemTray {
         self.config = config.clone();
         let new_theme_mode = ThemeMode::from(config.ui.theme);
         
-        if !matches!(self.theme_mode, new_theme_mode) {
+        if !matches!(self.theme_mode, _new_theme_mode) {
             self.theme_mode = new_theme_mode;
             // Update icon for new theme
             self.update_icon(self.is_connected)?;
@@ -593,6 +593,7 @@ mod tests {
     }
 
     /// Create a dummy system tray for testing
+    #[allow(dead_code)]
     fn create_dummy_tray() -> Result<SystemTray, SystemTrayError> {
         let config = AppConfig::default();
         SystemTray::new(config)

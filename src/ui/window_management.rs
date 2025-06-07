@@ -134,7 +134,7 @@ pub fn handle_window_events(
                 window_state.handle_mouse_release();
                 None
             }
-            mouse::Event::CursorMoved { position } => {
+            mouse::Event::CursorMoved { position: _ } => {
                 None
             }
             _ => None,

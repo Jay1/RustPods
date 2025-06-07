@@ -1,16 +1,11 @@
 use std::time::{Duration, Instant};
 
-use iced::widget::text;
-use iced::Element;
 
 use rustpods::airpods::{AirPodsBattery, AirPodsChargingState};
 use rustpods::bluetooth::AirPodsBatteryStatus;
 use rustpods::ui::components::real_time_battery_display::RealTimeBatteryDisplay;
-use rustpods::ui::Message;
 use rustpods::ui::UiComponent;
-use rustpods::ui::theme::Theme;
 
-use crate::test_helpers;
 
 #[test]
 fn test_real_time_battery_display_with_battery() {

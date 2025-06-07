@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use tempfile::tempdir;
 use std::fs;
 use std::time::Duration;
+// For now, just implement the test without performance tracking to fix the compilation error
 
 /// Test that configuration can be saved and loaded correctly
 #[test]
@@ -324,4 +325,21 @@ fn test_validation_edge_cases() {
     
     config.ui.low_battery_threshold = 101; // Just above upper bound
     assert!(config.ui.validate().is_err(), "Battery threshold > 100% should fail validation");
+}
+
+#[test]
+fn test_default_config_creation() {
+    let config = AppConfig::default();
+    
+    // Test default bluetooth settings
+    assert_eq!(config.bluetooth.auto_scan_on_startup, true);
+    assert_eq!(config.bluetooth.scan_duration, Duration::from_secs(5));  // Actual default is 5s 
+    assert_eq!(config.bluetooth.scan_interval, Duration::from_secs(30)); // Actual default is 30s
+    
+    // Test default UI settings that actually exist
+    assert_eq!(config.ui.show_notifications, true);
+    assert_eq!(config.ui.start_minimized, true);  // Actual default is true (start minimized to tray)
+    
+    // Test system settings
+    assert_eq!(config.system.enable_telemetry, false);  // Actual default is false for telemetry
 } 

@@ -365,6 +365,7 @@ pub struct ErrorManager {
 
 /// Error record for the history
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct ErrorRecord {
     /// Error type as string
     error_type: String,

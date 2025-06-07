@@ -4,17 +4,17 @@
 //! including smart polling intervals, JSON parsing, and resource management.
 
 use std::path::PathBuf;
-use std::process::Command;
+
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::task::JoinHandle;
 use tokio::time::interval;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::airpods::{AirPodsBattery, DetectedAirPods, AirPodsType, AirPodsChargingState};
 use crate::bluetooth::BluetoothError;
 use btleplug::api::BDAddr;
-use crate::config::{AppConfig, LogLevel};
+use crate::config::AppConfig;
 
 /// Default polling interval for CLI scanner (30 seconds)
 const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(30);
@@ -94,7 +94,7 @@ pub struct CliScannerConfig {
 impl Default for CliScannerConfig {
     fn default() -> Self {
         Self {
-            scanner_path: PathBuf::from("scripts/airpods_battery_cli/build/Release/airpods_battery_cli_v5.exe"),
+            scanner_path: PathBuf::from("scripts/airpods_battery_cli/build/Release/airpods_battery_cli.exe"),
             poll_interval: DEFAULT_POLL_INTERVAL,
             adaptive_polling: true,
             max_errors: 5,
@@ -122,19 +122,19 @@ impl CliScannerConfig {
         path.push("airpods_battery_cli");
         path.push("build");
         
-        // Try Release first, then Debug (v5 is the working implementation)
-        let release_path = path.join("Release").join("airpods_battery_cli_v5.exe");
+        // Try Release first, then Debug (v6 modular architecture only)
+        let release_path = path.join("Release").join("airpods_battery_cli.exe");
         if release_path.exists() {
             return release_path;
         }
         
-        let debug_path = path.join("Debug").join("airpods_battery_cli_v5.exe");
+        let debug_path = path.join("Debug").join("airpods_battery_cli.exe");
         if debug_path.exists() {
             return debug_path;
         }
         
         // Fallback to relative path
-        PathBuf::from("scripts/airpods_battery_cli/build/Release/airpods_battery_cli_v5.exe")
+        PathBuf::from("scripts/airpods_battery_cli/build/Release/airpods_battery_cli.exe")
     }
 }
 

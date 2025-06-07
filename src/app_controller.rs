@@ -18,12 +18,14 @@ pub struct AppController {
     /// Runtime handle for async tasks
     runtime_handle: Arc<Handle>,
     /// Runtime for async tasks (optional, only created if needed)
+    #[allow(dead_code)]
     runtime: Option<Arc<Runtime>>,
     /// Bluetooth event broker
     event_broker: EventBroker,
     /// Bluetooth scanner
     scanner: Arc<Mutex<Option<BleScanner>>>,
     /// Scan configuration
+    #[allow(dead_code)]
     scan_config: ScanConfig,
     /// Scan task handle
     scan_task: Option<JoinHandle<()>>,
@@ -184,6 +186,7 @@ impl AppController {
     }
     
     /// Helper function to start battery monitoring (extracted to avoid self capture)
+    #[allow(dead_code)]
     fn start_battery_monitoring(&mut self) {
         // Call the extracted function with cloned values
         let task = start_battery_monitoring(

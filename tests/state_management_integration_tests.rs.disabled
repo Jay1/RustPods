@@ -87,10 +87,11 @@ impl MessageCollector {
         let messages_clone = self.messages.clone();
         let mut receiver = std::mem::replace(&mut self.receiver, mpsc::unbounded_channel().1);
         
-        // Collect messages until timeout
-        tokio::spawn(async move {
-            loop {
-                match timeout(timeout_duration, receiver.recv()).await {
+        // Collect messages until timeout - use a JoinHandle to ensure cleanup
+        let collection_task = tokio::spawn(async move {
+            let start = std::time::Instant::now();
+            while start.elapsed() < timeout_duration {
+                match timeout(Duration::from_millis(50), receiver.recv()).await {
                     Ok(Some(msg)) => {
                         let mut messages = messages_clone.lock().unwrap();
                         messages.push(msg);
@@ -100,8 +101,8 @@ impl MessageCollector {
             }
         });
         
-        // Wait for timeout
-        tokio::time::sleep(timeout_duration).await;
+        // Wait for collection to complete
+        let _ = collection_task.await;
         
         // Return collected messages
         let messages = self.messages.lock().unwrap().clone();
@@ -185,7 +186,7 @@ async fn test_cross_component_communication() {
 #[tokio::test]
 async fn test_animation_transitions() {
     // Create message collector
-    let mut collector = MessageCollector::new();
+    let collector = MessageCollector::new();
     let sender = collector.sender();
     
     // Create state manager with the sender
@@ -274,7 +275,7 @@ async fn test_state_persistence() {
 #[tokio::test]
 async fn test_error_state_handling() {
     // Create message collector
-    let mut collector = MessageCollector::new();
+    let collector = MessageCollector::new();
     let sender = collector.sender();
     
     // Create state manager with the sender
@@ -307,7 +308,7 @@ async fn test_error_state_handling() {
 #[tokio::test]
 async fn test_connection_state_transitions() {
     // Create message collector
-    let mut collector = MessageCollector::new();
+    let collector = MessageCollector::new();
     let sender = collector.sender();
     
     // Create state manager with the sender

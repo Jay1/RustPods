@@ -5,7 +5,7 @@ use std::time::Instant;
 use btleplug::api::BDAddr;
 
 use rustpods::bluetooth::DiscoveredDevice;
-use rustpods::airpods::{DetectedAirPods, AirPodsType, AirPodsBattery, ChargingStatus, APPLE_COMPANY_ID, AirPodsChargingState};
+use rustpods::airpods::{DetectedAirPods, AirPodsType, AirPodsBattery, APPLE_COMPANY_ID, AirPodsChargingState};
 
 /// Create a test device with basic properties
 pub fn create_test_device(

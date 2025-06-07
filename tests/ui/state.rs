@@ -28,8 +28,8 @@ fn create_test_device(address: [u8; 6], name: &str, rssi: i16) -> DiscoveredDevi
 #[test]
 fn test_app_state_initialization() {
     let app_state = AppState::default();
-    // Visibility should be the opposite of start_minimized setting
-    assert_eq!(app_state.visible, !app_state.config.ui.start_minimized);
+    // Application starts visible by default (system tray handles minimized behavior)
+    assert_eq!(app_state.visible, true);
     // Should have no devices initially
     assert!(app_state.devices.is_empty());
     // Should have no device selected
@@ -39,7 +39,7 @@ fn test_app_state_initialization() {
 #[test]
 fn test_app_state_visibility() {
     let mut app_state = AppState::default();
-    let initial_visibility = !app_state.config.ui.start_minimized;
+    let initial_visibility = true; // Always starts visible
     assert_eq!(app_state.visible, initial_visibility);
     app_state.toggle_visibility();
     assert_eq!(app_state.visible, !initial_visibility);

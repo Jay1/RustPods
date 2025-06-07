@@ -1,4 +1,4 @@
-use serde::Deserialize;
+
 use iced::{Subscription, Application, Command, executor};
 use std::collections::HashMap;
 use tokio::sync::{mpsc, Mutex};
@@ -7,7 +7,7 @@ use std::time::Duration;
 use std::process::Command as ProcessCommand;
 
 use crate::airpods::battery::AirPodsBatteryInfo;
-use crate::bluetooth::{DiscoveredDevice, AirPodsBatteryStatus};
+use crate::bluetooth::DiscoveredDevice;
 use crate::config::{AppConfig, ConfigManager, ConfigError};
 use crate::ui::{
     components::{BluetoothSetting, UiSetting, SystemSetting},
@@ -87,7 +87,7 @@ impl AppState {
         let settings_window = SettingsWindow::new(config.clone());
         
         // Create and initialize system tray
-        let mut system_tray = match SystemTray::new(config.clone()) {
+        let system_tray = match SystemTray::new(config.clone()) {
             Ok(mut tray) => {
                 // Set the UI sender for fallback communication
                 tray.set_ui_sender(controller_sender.clone());
@@ -167,7 +167,8 @@ impl AppState {
 
 impl Default for AppState {
     fn default() -> Self {
-        panic!("AppState::default() should not be used. Use AppState::new(controller_sender) instead.");
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        Self::new(tx)
     }
 }
 
@@ -561,7 +562,7 @@ impl AppState {
     }
     
     /// Initialize the system tray component
-    pub fn initialize_system_tray(&mut self, tx: std::sync::mpsc::Sender<Message>) -> Result<(), SystemTrayError> {
+    pub fn initialize_system_tray(&mut self, _tx: std::sync::mpsc::Sender<Message>) -> Result<(), SystemTrayError> {
         // Create the system tray
         let tray = SystemTray::new(self.config.clone())?;
         self.system_tray = Some(tray);
@@ -605,6 +606,7 @@ impl AppState {
     }
     
     /// Save the current settings
+    #[allow(dead_code)]
     fn save_settings(&mut self) {
         // Validate settings first
         match self.config.validate() {
@@ -638,6 +640,7 @@ impl AppState {
     }
     
     /// Reset settings to defaults
+    #[allow(dead_code)]
     fn reset_settings(&mut self) {
         // Create a new default config but preserve the settings path
         let settings_path = self.config.settings_path.clone();
@@ -651,6 +654,7 @@ impl AppState {
     }
     
     /// Load settings from disk
+    #[allow(dead_code)]
     fn load_settings(&mut self) -> Result<(), ConfigError> {
         match AppConfig::load() {
             Ok(config) => {
@@ -784,6 +788,7 @@ impl AppState {
     }
 
     /// Refresh device data from the CLI scanner (fast synchronous call in async command)
+    #[allow(dead_code)]
     fn refresh_device_data(&mut self) {
         println!("[DEBUG] refresh_device_data called at {:?}", std::time::SystemTime::now());
         
@@ -941,6 +946,7 @@ impl Default for MergedBluetoothDevice {
 }
 
 /// Async function to scan for AirPods without blocking the UI
+#[allow(dead_code)]
 async fn async_scan_for_airpods() -> Vec<AirPodsBatteryInfo> {
     use tokio::task;
     
@@ -954,9 +960,10 @@ async fn async_scan_for_airpods() -> Vec<AirPodsBatteryInfo> {
 }
 
 /// Get AirPods data from the CLI scanner 
+#[allow(dead_code)]
 fn get_airpods_from_cli_scanner() -> Vec<AirPodsBatteryInfo> {
-    // Path to the CLI scanner executable
-    let cli_path = "scripts/airpods_battery_cli/build/Debug/airpods_battery_cli_v5.exe";
+    // Path to the v6 modular CLI scanner executable
+    let cli_path = "scripts/airpods_battery_cli/build/Release/airpods_battery_cli.exe";
     
     println!("[DEBUG] Calling CLI scanner at: {}", cli_path);
     
@@ -1040,8 +1047,8 @@ fn get_airpods_from_cli_scanner() -> Vec<AirPodsBatteryInfo> {
 
 /// Get AirPods data from the CLI scanner using continuous scanning mode
 fn get_airpods_from_cli_scanner_continuous() -> Vec<AirPodsBatteryInfo> {
-    // Path to the CLI scanner executable
-    let cli_path = "scripts/airpods_battery_cli/build/Debug/airpods_battery_cli_v5.exe";
+    // Path to the v6 modular CLI scanner executable
+    let cli_path = "scripts/airpods_battery_cli/build/Release/airpods_battery_cli.exe";
     
     println!("[DEBUG] Calling continuous CLI scanner at: {}", cli_path);
     

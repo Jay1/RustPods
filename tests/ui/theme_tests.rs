@@ -1,7 +1,6 @@
 //! Integration tests for UI theme implementation
 
 use rustpods::ui::theme::{Theme, TEXT, BASE};
-use rustpods::ui::state::AppState;
 use iced::application;
 use iced::Color;
 
@@ -100,7 +99,7 @@ fn test_theme_application_to_components() {
 fn test_theme_equality_and_copy() {
     // Themes should implement equality comparison
     assert_eq!(Theme::CatppuccinMocha, Theme::CatppuccinMocha);
-    assert_ne!(Theme::CatppuccinMocha, Theme::CatppuccinMocha);
+    // Same theme should be equal to itself
     
     // Themes should be copyable
     let theme1 = Theme::CatppuccinMocha;
@@ -119,29 +118,15 @@ fn test_theme_debug() {
 /// Test all available themes are distinct
 #[test]
 fn test_themes_are_distinct() {
-    // Test that each theme produces different styles
-    let themes = [
-        Theme::CatppuccinMocha,
-        Theme::CatppuccinMocha,
-        Theme::CatppuccinMocha,
-        Theme::CatppuccinMocha,
-    ];
+    // Currently we only have one theme (CatppuccinMocha)
+    // When we add more themes, they should be distinct
+    let theme = Theme::CatppuccinMocha;
+    let background = <Theme as application::StyleSheet>::appearance(&theme, &()).background_color;
     
-    // Compare application background colors between themes
-    let backgrounds: Vec<Color> = themes.iter()
-        .map(|t| <Theme as application::StyleSheet>::appearance(t, &()).background_color)
-        .collect();
+    // Just verify the single theme has a valid background
+    assert_ne!(background, Color::TRANSPARENT, "Theme should have a non-transparent background");
     
-    // Check that each theme has a unique background color
-    for (i, bg1) in backgrounds.iter().enumerate() {
-        for (j, bg2) in backgrounds.iter().enumerate() {
-            if i != j {
-                assert!(*bg1 != *bg2, 
-                        "Themes {:?} and {:?} have the same background color", 
-                        themes[i], themes[j]);
-            }
-        }
-    }
+    // TODO: When we add more themes, test that they are distinct
 }
 
 /// Test custom font registration

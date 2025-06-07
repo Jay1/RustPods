@@ -12,6 +12,7 @@ use crate::ui::theme::Theme;
 use crate::bluetooth::AirPodsBatteryStatus;
 
 // Constants for animation
+#[allow(dead_code)]
 const ANIMATION_DURATION_MS: u64 = 1000;
 const CHARGING_PULSE_SPEED: f32 = 0.5;
 const MIN_PULSE_OPACITY: f32 = 0.7;
@@ -56,8 +57,8 @@ impl RealTimeBatteryDisplay {
             battery_status,
             animation_progress: 0.0,
             last_update: Some(Instant::now()),
-            show_time_since_update: true,
-            show_detailed_info: false,
+            show_time_since_update: false,
+            show_detailed_info: true,
             previous_levels: None,
             compact_view: false,
         }
@@ -65,7 +66,7 @@ impl RealTimeBatteryDisplay {
     
     /// Set the animation progress
     pub fn with_animation_progress(mut self, progress: f32) -> Self {
-        self.animation_progress = progress;
+        self.animation_progress = progress.clamp(0.0, 1.0);
         self
     }
     

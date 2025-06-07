@@ -6,13 +6,12 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use btleplug::api::BDAddr;
 
 use rustpods::bluetooth::{DiscoveredDevice, AirPodsBatteryStatus};
-use rustpods::airpods::{DetectedAirPods, AirPodsType, AirPodsBattery, AirPodsChargingState};
-use rustpods::config::AppConfig;
+use rustpods::airpods::AirPodsType;
 
 /// Mock device that stores additional testing details
 #[derive(Debug, Clone)]
@@ -104,7 +103,7 @@ impl BDAddrExt for BDAddr {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rustpods::bluetooth::DiscoveredDevice;
+    
     use rustpods::airpods::{AirPodsBattery, AirPodsChargingState};
 
     #[test]

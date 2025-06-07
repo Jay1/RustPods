@@ -29,6 +29,7 @@ pub struct AppStateController {
     state_manager: Arc<StateManager>,
     
     /// AirPods detector
+    #[allow(dead_code)]
     airpods_detector: AirPodsDetector,
     
     /// Lifecycle manager

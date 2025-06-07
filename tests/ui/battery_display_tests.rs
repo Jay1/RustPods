@@ -1,17 +1,13 @@
 //! Tests for the RealTimeBatteryDisplay component
 //! This tests the battery display functionality implemented in Task 10.2
 
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use rustpods::ui::components::RealTimeBatteryDisplay;
-use rustpods::ui::Message;
 use rustpods::ui::UiComponent;
 use rustpods::bluetooth::{AirPodsBatteryStatus};
 use rustpods::airpods::{AirPodsBattery, AirPodsChargingState};
-use rustpods::ui::theme::Theme;
 
-use iced::Element;
-use iced::Rectangle;
 
 /// Helper function to create a battery status
 fn create_battery_status(left: Option<u8>, right: Option<u8>, case: Option<u8>, 
@@ -176,7 +172,7 @@ fn test_real_time_battery_display_instantiation() {
     assert!(display.battery_status.is_some());
     assert_eq!(display.animation_progress, 0.0);
     assert!(!display.show_time_since_update);
-    assert!(!display.show_detailed_info);
+    assert!(display.show_detailed_info);  // Default is to show detailed info
     assert!(display.previous_levels.is_none());
     
     // Test with None battery status

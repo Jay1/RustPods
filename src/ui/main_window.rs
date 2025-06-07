@@ -3,8 +3,8 @@
 //! Implements the main UI window component with device list and battery status display.
 
 use iced::{
-    widget::{button, column, container, row, text, scrollable, Svg, Space, image},
-    Element, Length, Command, Alignment, Color,
+    widget::{button, column, container, row, text, Svg, Space, image},
+    Element, Length, Command, Alignment,
     alignment::Horizontal
 };
 use iced::widget::svg::Handle;
@@ -15,7 +15,7 @@ use crate::ui::Message;
 use crate::ui::theme;
 use crate::config::AppConfig;
 use crate::ui::UiComponent;
-use crate::ui::components::svg_icons::{settings_icon_svg_string, headset_icon_svg_string};
+
 use crate::ui::theme::Theme;
 use crate::ui::state::MergedBluetoothDevice;
 
@@ -315,6 +315,7 @@ impl MainWindow {
 
     
     /// Create a simple battery bar indicator
+    #[allow(dead_code)]
     fn create_simple_battery_bar(&self, battery_level: Option<u8>) -> Element<'_, Message, iced::Renderer<Theme>> {
         let level = battery_level.unwrap_or(0);
         

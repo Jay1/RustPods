@@ -1,14 +1,13 @@
 //! Tests for the user interaction components
 //! This tests the user interaction functionality implemented in Task 10.3
 
-use std::collections::HashMap;
 
-use iced::{Event, keyboard, mouse, Rectangle, Point};
+use iced::{Event, keyboard, Rectangle, Point};
 use iced::keyboard::{KeyCode, Modifiers};
 
 use rustpods::ui::keyboard_shortcuts::{KeyboardShortcut, KeyboardShortcutManager, handle_events};
 use rustpods::ui::window_management::{WindowInteraction, DragRegion};
-use rustpods::ui::form_validation::{ValidationRule, FieldValidator, ValidationResult};
+use rustpods::ui::form_validation::FieldValidator;
 use rustpods::ui::Message;
 
 #[test]
@@ -112,7 +111,7 @@ fn test_window_drag_manager() {
     assert!(!window_interaction.dragging);
     
     // Start drag
-    let drag_area = Rectangle {
+    let _drag_area = Rectangle {
         x: 0.0,
         y: 0.0,
         width: 100.0,

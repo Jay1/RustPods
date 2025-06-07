@@ -7,10 +7,9 @@ use crate::ui::UiComponent;
 use crate::ui::components::UiSetting;
 use iced::{
     widget::{
-        button, column, container, row, text, Button, Column, Container, Text, scrollable,
-        checkbox, Checkbox, Space
+        button, column, container, row, text, Space, Checkbox
     },
-    Element, Length, Command, Alignment
+    Element, Length, Alignment
 };
 
 /// Represents the settings window of the application

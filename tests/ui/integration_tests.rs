@@ -4,8 +4,7 @@
 //! that all components work together correctly.
 
 use rustpods::ui::{
-    MainWindow,
-    Message, UiComponent,
+    MainWindow, UiComponent,
     theme::Theme,
 };
 use rustpods::ui::state::MergedBluetoothDevice;
@@ -89,7 +88,7 @@ fn test_ui_state_transitions() {
 #[test]
 fn test_window_layout_integration() {
     let window = MainWindow::new();
-    let element = window.view();
+    let _element = window.view();
     
     // Window should have fixed dimensions that accommodate all content
     // This verifies the UiComponent implementation
@@ -104,7 +103,7 @@ fn test_window_layout_integration() {
         ..Default::default()
     }];
     
-    let element_with_device = window_with_device.view();
+    let _element_with_device = window_with_device.view();
     // Layout should accommodate device display properly
 }
 
@@ -131,7 +130,7 @@ fn test_battery_color_consistency() {
             ..Default::default()
         }];
         
-        let element = window.view();
+        let _element = window.view();
         // Color coding should be consistent for both batteries
     }
 }
@@ -143,7 +142,7 @@ fn test_theme_integration() {
     let theme = Theme::CatppuccinMocha;
     
     // Main window should use theme consistently
-    let element = window.view();
+    let _element = window.view();
     
     // Test with devices to ensure battery colors use theme
     let mut window_with_device = MainWindow::new();
@@ -155,7 +154,7 @@ fn test_theme_integration() {
         ..Default::default()
     }];
     
-    let themed_element = window_with_device.view();
+    let _themed_element = window_with_device.view();
     // All colors should follow Catppuccin Mocha theme
 }
 
@@ -174,7 +173,7 @@ fn test_animation_integration() {
     // Test various animation progress values
     for progress in [0.0, 0.25, 0.5, 0.75, 1.0] {
         window.animation_progress = progress;
-        let element = window.view();
+        let _element = window.view();
         // Animation should integrate smoothly
     }
 }
@@ -185,7 +184,7 @@ fn test_button_integration() {
     let window = MainWindow::new();
     
     // Verify buttons are present in both states
-    let empty_view = window.view();
+    let _empty_view = window.view();
     // Should have settings and close buttons in header
     
     let mut window_with_device = MainWindow::new();
@@ -197,7 +196,7 @@ fn test_button_integration() {
         ..Default::default()
     }];
     
-    let device_view = window_with_device.view();
+    let _device_view = window_with_device.view();
     // Should have same buttons with proper sizing (21×21 pixels)
 }
 
@@ -215,7 +214,7 @@ fn test_error_state_handling() {
         ..Default::default()
     }];
     
-    let element = window.view();
+    let _element = window.view();
     // Should handle gracefully without panicking
 }
 
@@ -266,7 +265,7 @@ fn test_window_bounds_protection() {
     }];
     
     {
-        let element = window_with_long_name.view();
+        let _element = window_with_long_name.view();
         // Layout should handle long names gracefully
     }
     
@@ -289,7 +288,7 @@ fn test_window_bounds_protection() {
     ];
     
     {
-        let multi_device_element = window_with_long_name.view();
+        let _multi_device_element = window_with_long_name.view();
         // Should only show first device, no overflow
     }
 }
@@ -306,7 +305,7 @@ fn test_case_column_removal_compliance() {
         ..Default::default()
     }];
     
-    let element = window.view();
+    let _element = window.view();
     
     // Layout should be centered single column, not multi-column
     // Case battery data should be ignored in display logic
@@ -322,7 +321,7 @@ fn test_config_integration() {
     
     // Window should respect configuration settings
     {
-        let element = window.view();
+        let _element = window.view();
         // Should use default configuration
     }
     
@@ -332,7 +331,7 @@ fn test_config_integration() {
     window.config = custom_config;
     
     {
-        let custom_element = window.view();
+        let _custom_element = window.view();
         // Should adapt to configuration changes
     }
 }
@@ -363,7 +362,7 @@ fn test_responsive_layout() {
             ..Default::default()
         }];
         
-        let element = window_various_content.view();
+        let _element = window_various_content.view();
         // Layout should handle all combinations gracefully
     }
 }
@@ -375,7 +374,7 @@ fn test_ui_component_hierarchy() {
     
     // Test that all UI components integrate properly
     // MainWindow -> UiComponent -> view() -> container -> content
-    let element = window.view();
+    let _element = window.view();
     
     // Test nested component structure
     let mut window_with_content = MainWindow::new();
@@ -387,7 +386,7 @@ fn test_ui_component_hierarchy() {
         ..Default::default()
     }];
     
-    let complex_element = window_with_content.view();
+    let _complex_element = window_with_content.view();
     
     // All nested components should render correctly:
     // Container -> Column -> [Header Row, Content Row]
@@ -430,7 +429,7 @@ fn test_real_world_airpods_data() {
     
     for device in realistic_devices {
         window.merged_devices = vec![device];
-        let element = window.view();
+        let _element = window.view();
         // Should handle all real-world scenarios gracefully
     }
 } 

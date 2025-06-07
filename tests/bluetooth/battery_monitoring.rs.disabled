@@ -6,11 +6,9 @@ use std::time::Duration;
 use std::time::Instant;
 
 use btleplug::api::{Peripheral as _, ValueNotification};
-use chrono::Utc;
 use mockall::predicate::*;
 use mockall::mock;
 use futures::Stream;
-use tokio::sync::RwLock;
 
 use rustpods::airpods::{AirPodsBattery, AirPodsChargingState, APPLE_COMPANY_ID};
 use rustpods::bluetooth::AirPodsBatteryStatus;

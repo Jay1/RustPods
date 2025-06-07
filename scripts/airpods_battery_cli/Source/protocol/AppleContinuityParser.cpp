@@ -57,13 +57,31 @@ std::string AppleContinuityParser::GetParserVersion() const {
 }
 
 std::string AppleContinuityParser::ParseModelName(uint16_t modelId) const {
-    // Exact model detection logic from v5 scanner
+    // Comprehensive Apple audio product detection
     switch (modelId) {
-        case 0x2014: return "AirPods Pro 2";
-        case 0x200E: return "AirPods Pro";
-        case 0x2013: return "AirPods 3";
+        // AirPods Models
+        case 0x2002: return "AirPods 1";
         case 0x200F: return "AirPods 2";
-        default: return "Unknown AirPods";
+        case 0x2013: return "AirPods 3";
+        case 0x200E: return "AirPods Pro";
+        case 0x2014: return "AirPods Pro 2";
+        case 0x2024: return "AirPods Pro 2 (USB-C)";
+        case 0x200A: return "AirPods Max";
+        
+        // Beats Models
+        case 0x200B: return "PowerBeats Pro";
+        case 0x2012: return "Beats Fit Pro";
+        case 0x2017: return "Beats Studio Buds";
+        case 0x2019: return "Beats Fit Pro";
+        case 0x201B: return "Beats Solo Pro";
+        case 0x2005: return "BeatsX";
+        case 0x2006: return "Beats Solo3";
+        case 0x2009: return "Beats Studio3";
+        case 0x200C: return "Beats Studio Buds";
+        case 0x2010: return "Beats Flex";
+        case 0x2011: return "Beats Studio Buds+";
+        
+        default: return "Unknown Apple Audio Device";
     }
 }
 

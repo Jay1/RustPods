@@ -1,15 +1,11 @@
 //! Simplified test for the AppState component to demonstrate fixed initialization (post-refactor)
 //! Updated for native C++ AirPods battery helper and new state/message model
 
-use std::sync::Arc;
 use iced::Application;
-use tokio::sync::mpsc;
 
 use rustpods::ui::state::AppState;
 use rustpods::ui::theme::Theme;
-use rustpods::ui::state_manager::StateManager;
 
-use crate::test_helpers;
 
 /// Test default AppState initialization
 #[test]

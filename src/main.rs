@@ -17,28 +17,25 @@ pub mod diagnostics;
 pub mod assets;
 
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 use std::path::PathBuf;
 use std::env;
-use tokio::time::interval;
 
-use log::{info, error, warn};
+use log::{info, error};
 use error::{ErrorManager, RustPodsError, ErrorContext};
 use telemetry::TelemetryManager;
 use config::{AppConfig, LogLevel};
 use ui::state_manager::StateManager;
 use ui::Message;
 use tokio::sync::mpsc;
-use crate::lifecycle_manager::LifecycleManager;
+
 use crate::logging::DebugFlags;
 use env_logger;
 use chrono;
 
-use crate::app_controller::AppController;
-use crate::app_state_controller::AppStateController;
+
 
 #[derive(Debug, Clone)]
-enum AppCommand {
+pub enum AppCommand {
     Adapters,
     Scan,
     Interval,
@@ -188,7 +185,7 @@ async fn main_async(args: AppArgs) {
     let (ui_sender, _ui_receiver) = mpsc::unbounded_channel::<Message>();
     
     // Create the state manager
-    let state_manager = Arc::new(StateManager::new(ui_sender.clone()));
+    let _state_manager = Arc::new(StateManager::new(ui_sender.clone()));
     
     // Create error manager
     let error_manager = Arc::new(Mutex::new(ErrorManager::new()));

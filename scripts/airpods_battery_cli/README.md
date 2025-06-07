@@ -183,18 +183,26 @@ For detailed architecture information, see [docs/ARCHITECTURE.md](docs/ARCHITECT
 The scanner supports all major Apple AirPods and Beats models:
 
 ### AirPods Models
-- **AirPods (1st generation)** - Model ID: 0x200E
+- **AirPods (1st generation)** - Model ID: 0x2002
 - **AirPods (2nd generation)** - Model ID: 0x200F  
 - **AirPods (3rd generation)** - Model ID: 0x2013
 - **AirPods Pro** - Model ID: 0x200E
 - **AirPods Pro (2nd generation)** - Model ID: 0x2014
+- **AirPods Pro 2 (USB-C)** - Model ID: 0x2024
 - **AirPods Max** - Model ID: 0x200A
 
 ### Beats Models
-- **Beats Solo Pro** - Model ID: 0x201B
+- **PowerBeats Pro** - Model ID: 0x200B
+- **Beats Fit Pro** - Model ID: 0x2012
 - **Beats Studio Buds** - Model ID: 0x2017
 - **Beats Fit Pro** - Model ID: 0x2019
-- **PowerBeats Pro** - Model ID: 0x200B
+- **Beats Solo Pro** - Model ID: 0x201B
+- **BeatsX** - Model ID: 0x2005
+- **Beats Solo3** - Model ID: 0x2006
+- **Beats Studio3** - Model ID: 0x2009
+- **Beats Studio Buds** - Model ID: 0x200C
+- **Beats Flex** - Model ID: 0x2010
+- **Beats Studio Buds+** - Model ID: 0x2011
 
 ### Detection Method
 Devices are detected through Apple's Continuity Protocol using:

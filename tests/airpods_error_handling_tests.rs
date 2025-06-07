@@ -112,12 +112,9 @@ fn test_error_manager_integration() {
     assert_eq!(history.len(), 1, "Error should be recorded in history");
     
     let error_entry = &history[0];
-    match &error_entry.error_message {
-        msg => {
-            assert!(format!("{}", msg).contains("invalid data"), "Error message should contain 'invalid data'");
-        },
-        _ => panic!("Expected AirPods error variant but got something else"),
-    }
+    // Check that the error message contains the expected text
+    let msg = &error_entry.error_message;
+    assert!(format!("{}", msg).contains("invalid data"), "Error message should contain 'invalid data'");
 }
 
 #[test]

@@ -7,14 +7,14 @@ use iced::{
     Element, 
     widget::{container, progress_bar, text, row, Svg}, 
     Color, Length,
-    Alignment,
+
     alignment
 }; 
 
 use crate::ui::Message;
 use crate::ui::theme::Theme;
 use crate::ui::theme;
-use crate::ui::components::svg_icons::battery_icon_svg_string;
+
 
 /// Create a battery display row with label, level and charging indicator
 pub fn battery_display_row<'a>(
@@ -77,7 +77,7 @@ pub fn battery_icon_display<'a>(
     level: Option<u8>,
     is_charging: bool,
     size: f32,
-    animation_progress: f32,
+    _animation_progress: f32,
 ) -> Element<'a, Message, iced::Renderer<Theme>> {
     // Get battery level as percentage (0.0 to 1.0)
     let battery_level = level.unwrap_or(0);
@@ -229,6 +229,7 @@ pub fn battery_with_label<'a>(
 }
 
 /// Get a color for the battery level
+#[allow(dead_code)]
 fn battery_color(level: Option<u8>, is_charging: bool, animation_progress: f32) -> Color {
     if is_charging {
         // Pulse between two blues

@@ -110,16 +110,24 @@ set_target_properties(minimal_test PROPERTIES CXX_STANDARD 20)
 target_compile_options(minimal_test PRIVATE ${COMMON_COMPILE_OPTIONS})
 target_compile_definitions(minimal_test PRIVATE ${COMMON_COMPILE_DEFINITIONS})
 
-# ===== Production CLI Scanner (Future) =====
-# TODO: Complete integration of modular components with v5 functionality
-# add_executable(airpods_battery_cli Source/main.cpp)
-# set_target_properties(airpods_battery_cli PROPERTIES
-#     CXX_STANDARD 20
-#     CXX_STANDARD_REQUIRED YES
-# )
-# target_compile_options(airpods_battery_cli PRIVATE ${COMMON_COMPILE_OPTIONS})
-# target_compile_definitions(airpods_battery_cli PRIVATE ${COMMON_COMPILE_DEFINITIONS})
-# target_link_libraries(airpods_battery_cli ble_scanner protocol_parser windowsapp)
+# ===== Production CLI Scanner v6 (Modular Architecture) =====
+add_executable(airpods_battery_cli Source/main.cpp)
+
+set_target_properties(airpods_battery_cli PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED YES
+)
+
+target_compile_options(airpods_battery_cli PRIVATE ${COMMON_COMPILE_OPTIONS})
+target_compile_definitions(airpods_battery_cli PRIVATE ${COMMON_COMPILE_DEFINITIONS})
+
+target_link_libraries(airpods_battery_cli 
+    ble_scanner 
+    protocol_parser 
+    windowsapp
+)
+
+message(STATUS "V6 Scanner configured - Modular production implementation")
 
 message(STATUS "Modular architecture configured:")
 message(STATUS "  - protocol_parser: Static library for Apple Continuity Protocol parsing")

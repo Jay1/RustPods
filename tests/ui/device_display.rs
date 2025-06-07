@@ -38,6 +38,7 @@ impl Default for MockAppState {
 
 // Implement a mock state update function
 impl MockAppState {
+    #[allow(dead_code)]
     fn update(&mut self, message: Message) {
         match message {
             Message::DeviceDiscovered(device) => {

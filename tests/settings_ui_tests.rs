@@ -1,10 +1,10 @@
 //! Tests for the settings UI to ensure all configuration options are present
 
-use iced::Application;
-use rustpods::config::{AppConfig, BluetoothConfig, UiConfig, SystemConfig, Theme, LogLevel};
-use rustpods::ui::{state::AppState, Message};
+use rustpods::config::{AppConfig, Theme, LogLevel, BluetoothConfig, UiConfig, SystemConfig};
 use std::time::Duration;
 use rustpods::ui::state::AppState as UiAppState; // Use the correct AppState type
+use rustpods::ui::Message;
+use iced::Application;
 
 /// Test that verifies all Bluetooth settings are present
 #[test]
@@ -114,8 +114,9 @@ fn test_config_to_ui_mapping_completeness() {
     
     // Check Bluetooth fields
     assert!(config.bluetooth.auto_scan_on_startup || !config.bluetooth.auto_scan_on_startup);
-    assert!(config.bluetooth.scan_duration.as_secs() >= 0);
-    assert!(config.bluetooth.scan_interval.as_secs() >= 0);
+    // Duration values are always non-negative by type definition
+    assert!(config.bluetooth.scan_duration.as_secs() > 0);  
+    assert!(config.bluetooth.scan_interval.as_secs() > 0);
     assert!(config.bluetooth.battery_refresh_interval > Duration::from_secs(0));
     assert!(config.bluetooth.min_rssi.is_some() || config.bluetooth.min_rssi.is_none());
     assert!(config.bluetooth.auto_reconnect || !config.bluetooth.auto_reconnect);
@@ -149,15 +150,19 @@ fn test_save_button_present() {
     // Since we can't debug print Elements to check for button presence,
     // we'll use a different approach: verify that the settings functionality exists
     
-    // Create a modified config
-    let mut config = AppConfig::default();
-    config.ui.theme = if config.ui.theme == Theme::Light { Theme::Dark } else { Theme::Light };
+    // Test that we can modify theme through the proper settings system
+    let original_theme = state.config.ui.theme.clone();
+    let new_theme = if original_theme == Theme::Light { Theme::Dark } else { Theme::Light };
     
-    // Update the state with the new config
-    state.settings_window.update_config(config.clone());
+    // Create a modified config with the new theme
+    let mut new_config = state.config.clone();
+    new_config.ui.theme = new_theme.clone();
+    
+    // Update the config using the proper message-based approach
+    let _command = state.update(Message::SettingsChanged(new_config));
     
     // Verify the config was updated
-    assert_eq!(state.config.ui.theme, config.ui.theme, 
+    assert_eq!(state.config.ui.theme, new_theme, 
                "Config should be updateable, implying settings UI functionality");
 }
 

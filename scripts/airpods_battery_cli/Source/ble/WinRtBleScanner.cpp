@@ -34,11 +34,11 @@ bool WinRtBleScanner::Start() {
         std::lock_guard<std::mutex> lock{devicesMutex_};
         bleWatcher_.Start();
         
-        std::cout << "[INFO] Bluetooth AdvWatcher start succeeded." << std::endl;
+        std::cerr << "[INFO] Bluetooth AdvWatcher start succeeded." << std::endl;
         return true;
     }
     catch (const std::exception& ex) {
-        std::cout << "[ERROR] Start adv watcher exception: " << ex.what() << std::endl;
+        std::cerr << "[ERROR] Start adv watcher exception: " << ex.what() << std::endl;
         return false;
     }
 }
@@ -51,11 +51,11 @@ bool WinRtBleScanner::Stop() {
         std::lock_guard<std::mutex> lock{devicesMutex_};
         bleWatcher_.Stop();
         
-        std::cout << "[INFO] Bluetooth AdvWatcher stop succeeded." << std::endl;
+        std::cerr << "[INFO] Bluetooth AdvWatcher stop succeeded." << std::endl;
         return true;
     }
     catch (const std::exception& ex) {
-        std::cout << "[ERROR] Stop adv watcher exception: " << ex.what() << std::endl;
+        std::cerr << "[ERROR] Stop adv watcher exception: " << ex.what() << std::endl;
         return false;
     }
 }
@@ -114,7 +114,7 @@ void WinRtBleScanner::OnScannerStopped(
     auto status = bleWatcher_.Status();
     lock.unlock();
 
-    std::cout << "[INFO] BLE advertisement scan stopped." << std::endl;
+    std::cerr << "[INFO] BLE advertisement scan stopped." << std::endl;
 
     // Automatic restart logic (exactly as in v5 scanner)
     if (!destroyRequested_) {
@@ -153,12 +153,12 @@ void WinRtBleScanner::ProcessManufacturerData(
         // Log detection (exactly as in v5 scanner)
         if (device.airpodsData.has_value()) {
             const auto& airpods = device.airpodsData.value();
-            std::cout << "[INFO] AirPods detected: " << airpods.model 
+            std::cerr << "[INFO] AirPods detected: " << airpods.model 
                       << " - Left:" << airpods.batteryLevels.left 
                       << "% Right:" << airpods.batteryLevels.right 
                       << "% Case:" << airpods.batteryLevels.case_ << "%" << std::endl;
         } else {
-            std::cout << "[INFO] Apple device detected: " << device.GetManufacturerDataHex() << std::endl;
+            std::cerr << "[INFO] Apple device detected: " << device.GetManufacturerDataHex() << std::endl;
         }
         
         // Add device to collection

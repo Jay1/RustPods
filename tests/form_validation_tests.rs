@@ -1,8 +1,7 @@
 //! Tests for form validation
 //! These tests verify the functionality of form validation components
 
-use std::collections::HashMap;
-use rustpods::ui::form_validation::{FormValidator, ValidationRule, Result, ValidationError};
+use rustpods::ui::form_validation::ValidationError;
 
 // Create a test module locally instead of importing it
 mod test_helpers {

@@ -564,7 +564,7 @@ impl From<Theme> for crate::config::Theme {
 }
 
 // Badge style for status/battery badges
-pub fn badge_style(color: Color) -> iced::theme::Container {
+pub fn badge_style(_color: Color) -> iced::theme::Container {
     iced::theme::Container::Box // Use Box for now; can be extended for custom
 }
 

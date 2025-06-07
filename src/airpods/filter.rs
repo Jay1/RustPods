@@ -258,7 +258,15 @@ impl AirPodsFilterOptions {
 
 /// Create a filter for all AirPods models
 pub fn airpods_all_models_filter() -> AirPodsFilter {
-    let options = AirPodsFilterOptions::new();
+    let options = AirPodsFilterOptions::new()
+        .with_models(vec![
+            AirPodsType::AirPods1,
+            AirPodsType::AirPods2,
+            AirPodsType::AirPods3,
+            AirPodsType::AirPodsPro,
+            AirPodsType::AirPodsPro2,
+            AirPodsType::AirPodsMax,
+        ]);
     options.create_filter_function()
 }
 

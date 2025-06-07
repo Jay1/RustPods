@@ -5,10 +5,7 @@ use btleplug::platform::Peripheral;
 use crate::error::BluetoothError;
 
 use crate::bluetooth::{BleScanner, BleEvent, ScanConfig};
-use crate::airpods::{airpods_all_models_filter, airpods_pro_filter, airpods_nearby_filter};
-#[cfg(test)]
-use crate::bluetooth::scanner::MockAdapterEventsProvider;
-
+// Removed unused imports - now using CLI scanner directly
 // Example-only mock provider for demo purposes (not for production use)
 pub struct ExampleMockAdapterEventsProvider;
 impl crate::bluetooth::scanner::AdapterEventsProvider for ExampleMockAdapterEventsProvider {
@@ -195,81 +192,122 @@ pub async fn interval_scanning() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// AirPods filtering example
+/// AirPods filtering example using CLI scanner
 pub async fn airpods_filtering() -> Result<(), Box<dyn std::error::Error>> {
     println!("AirPods filtering demo...");
     
-    // Create scanner with extended scan time
-    let _config = ScanConfig {
-        scan_duration: Duration::from_secs(10),
-        auto_stop_scan: true,
-        ..ScanConfig::default()
-    };
+    // Use the CLI scanner directly for fast, reliable AirPods detection
+    let cli_path = "scripts/airpods_battery_cli/build/Release/airpods_battery_cli.exe";
     
-    let mut scanner = BleScanner::new(Arc::new(ExampleMockAdapterEventsProvider), ScanConfig::default());
-    scanner.initialize().await?;
-    
-    // Start scanning
-    let events = scanner.subscribe_all();
-    scanner.start_scanning().await?;
-    
-    // Set a timeout
-    let timeout = tokio::time::sleep(Duration::from_secs(12)); // Slightly longer than scan_duration
-    tokio::pin!(timeout);
-    
-    // Track discovered AirPods
+    println!("Using CLI scanner: {}", cli_path);
     println!("Scanning for AirPods...\n");
     
-    // Create a clone for filters
-    let scanner_clone = scanner.clone();
+    // Execute the CLI scanner with fast mode
+    let output = tokio::process::Command::new(cli_path)
+        .arg("--fast")  // Use fast 2-second scan with early exit
+        .output()
+        .await?;
     
-    tokio::spawn(async move {
-        let mut events = events;
-        while let Some(event) = events.recv().await {
-            match event {
-                BleEvent::AirPodsDetected(airpods) => {
-                    println!("🎧 Detected AirPods: {:?}", airpods.device_type);
-                    println!("    Battery: L:{}% R:{}% Case:{}%",
-                        airpods.battery.as_ref().and_then(|b| b.left).unwrap_or(0),
-                        airpods.battery.as_ref().and_then(|b| b.right).unwrap_or(0),
-                        airpods.battery.as_ref().and_then(|b| b.case).unwrap_or(0));
-                    
-                    // Get filtered devices
-                    let all_airpods = scanner_clone.get_filtered_airpods(&airpods_all_models_filter()).await;
-                    let pro_airpods = scanner_clone.get_filtered_airpods(&airpods_pro_filter()).await;
-                    let nearby_airpods = scanner_clone.get_filtered_airpods(&airpods_nearby_filter(-70)).await;
-                    
-                    // Custom filter: AirPods with strong signal
-                    let custom_airpods_filter = crate::airpods::detector::create_custom_airpods_filter(
-                        crate::airpods::AirPodsFilterOptions::new().with_min_rssi(-70)
-                    );
-                    
-                    let custom_filtered = scanner_clone.get_filtered_airpods(&custom_airpods_filter).await;
-                    
-                    // Display filter results
-                    println!();
-                    println!("🔍 Filtered results:");
-                    println!("  - All AirPods: {} device(s)", all_airpods.len());
-                    println!("  - Pro models only: {} device(s)", pro_airpods.len());
-                    println!("  - Nearby AirPods (-60 RSSI): {} device(s)", nearby_airpods.len());
-                    println!("  - Custom filter: {} device(s)", custom_filtered.len());
-
-                    // Print the battery status
-                    println!("Battery status:");
-                    println!("  Left: {:?}%", airpods.battery.as_ref().and_then(|b| b.left).unwrap_or(0));
-                    println!("  Right: {:?}%", airpods.battery.as_ref().and_then(|b| b.right).unwrap_or(0));
-                    println!("  Case: {:?}%", airpods.battery.as_ref().and_then(|b| b.case).unwrap_or(0));
-                },
-                _ => {} // Ignore other events
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("CLI scanner failed: {}", stderr).into());
+    }
+    
+    // Parse the JSON output (extract only the JSON part from stdout)
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    
+    // Find the JSON part (starts with '{' and ends with '}')
+    let json_start = stdout.find('{').ok_or("No JSON found in CLI output")?;
+    let json_end = stdout.rfind('}').ok_or("No JSON end found in CLI output")? + 1;
+    let json_str = &stdout[json_start..json_end];
+    
+    let scanner_result: crate::bluetooth::cli_scanner::CliScannerResult = 
+        serde_json::from_str(json_str)?;
+    
+    println!("🔍 CLI Scanner Results:");
+    println!("  - Scanner Version: {}", scanner_result.scanner_version);
+    println!("  - Total Devices Found: {}", scanner_result.total_devices);
+    println!("  - AirPods Devices: {}", scanner_result.airpods_count);
+    println!("  - Status: {}", scanner_result.status);
+    
+    if scanner_result.airpods_count > 0 {
+        println!("\n🎧 AirPods Detected:");
+        
+        for device in &scanner_result.devices {
+            if let Some(airpods_data) = &device.airpods_data {
+                println!("  Device: {} ({})", device.device_id, device.address);
+                println!("    Model: {} ({})", airpods_data.model, airpods_data.model_id);
+                println!("    Battery: L:{}% R:{}% Case:{}%", 
+                    airpods_data.left_battery, 
+                    airpods_data.right_battery, 
+                    airpods_data.case_battery);
+                println!("    Charging: L:{} R:{} Case:{}", 
+                    airpods_data.left_charging, 
+                    airpods_data.right_charging, 
+                    airpods_data.case_charging);
+                println!("    In Ear: L:{} R:{}", 
+                    airpods_data.left_in_ear, 
+                    airpods_data.right_in_ear);
+                println!("    Case Status: Lid Open:{}, Both in Case:{}", 
+                    airpods_data.lid_open, 
+                    airpods_data.both_in_case);
+                println!("    Broadcasting Ear: {}", airpods_data.broadcasting_ear);
+                println!("    RSSI: {} dBm", device.rssi);
+                println!();
             }
         }
-    });
+        
+        // Demonstrate filtering capabilities
+        println!("🔍 Filter Examples:");
+        
+        // Filter by model type
+        let pro_models: Vec<_> = scanner_result.devices.iter()
+            .filter(|d| d.airpods_data.as_ref()
+                .map(|a| a.model.contains("Pro"))
+                .unwrap_or(false))
+            .collect();
+        println!("  - Pro models only: {} device(s)", pro_models.len());
+        
+        // Filter by signal strength
+        let strong_signal: Vec<_> = scanner_result.devices.iter()
+            .filter(|d| d.rssi > -70)
+            .collect();
+        println!("  - Strong signal (>-70 dBm): {} device(s)", strong_signal.len());
+        
+        // Filter by charging status
+        let charging: Vec<_> = scanner_result.devices.iter()
+            .filter(|d| d.airpods_data.as_ref()
+                .map(|a| a.left_charging || a.right_charging || a.case_charging)
+                .unwrap_or(false))
+            .collect();
+        println!("  - Currently charging: {} device(s)", charging.len());
+        
+        // Filter by in-ear status
+        let in_ear: Vec<_> = scanner_result.devices.iter()
+            .filter(|d| d.airpods_data.as_ref()
+                .map(|a| a.left_in_ear || a.right_in_ear)
+                .unwrap_or(false))
+            .collect();
+        println!("  - In ear: {} device(s)", in_ear.len());
+        
+    } else {
+        println!("\n❌ No AirPods found");
+        println!("   Make sure your AirPods are:");
+        println!("   - Powered on and nearby");
+        println!("   - Not in deep sleep mode");
+        println!("   - Have Bluetooth enabled");
+        
+        if scanner_result.total_devices > 0 {
+            println!("\n📱 Other Apple devices found:");
+            for device in &scanner_result.devices {
+                if device.airpods_data.is_none() {
+                    println!("  - {} (RSSI: {} dBm)", device.device_id, device.rssi);
+                }
+            }
+        }
+    }
     
-    // Wait for timeout
-    timeout.await;
-    
-    // Stop scanning
-    scanner.stop_scanning().await?;
+    println!("\n✅ AirPods filtering demo completed using v6 modular CLI scanner");
     
     Ok(())
 } 

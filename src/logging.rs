@@ -4,7 +4,7 @@
 //! error handling system and provides context-aware logs with selective debug categories.
 
 use std::path::PathBuf;
-use std::sync::{Once, Arc, RwLock};
+use std::sync::{Once, RwLock};
 use log::{LevelFilter, Record, Metadata};
 use log::Level;
 use chrono::Local;

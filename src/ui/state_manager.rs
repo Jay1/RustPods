@@ -189,7 +189,7 @@ impl Default for UiState {
     fn default() -> Self {
         Self {
             visible: true,
-            show_settings: true,
+            show_settings: false,
             animation_progress: 0.0,
             error_message: None,
             show_error: false,

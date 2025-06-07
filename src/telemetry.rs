@@ -384,6 +384,7 @@ pub enum TelemetryEvent {
 
 /// Telemetry payload for upload
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct TelemetryPayload {
     /// Anonymous installation ID
     installation_id: String,

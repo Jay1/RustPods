@@ -49,6 +49,7 @@ impl AirPodsDetector {
 
 /// Constants for AirPods detection
 pub const APPLE_COMPANY_ID: u16 = 0x004C;
+#[allow(dead_code)]
 const AIRPODS_DATA_LENGTH: usize = 27;
 const AIRPODS_1_2_PREFIX: &[u8] = &[0x07, 0x19];
 const AIRPODS_PRO_PREFIX: &[u8] = &[0x0E, 0x19];
@@ -145,6 +146,7 @@ impl AirPodsScanner {
     }
 
     /// Record an error with context
+    #[allow(dead_code)]
     fn record_error(&self, error: AirPodsError, context: ErrorContext) {
         if let Some(_manager) = &self.error_manager {
             // Clone the error manager to get around the immutability

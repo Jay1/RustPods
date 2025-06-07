@@ -1,6 +1,6 @@
 use rustpods::airpods::detector::*;
 use rustpods::AirPodsType;
-use rustpods::error::{AirPodsError, Result};
+use rustpods::error::AirPodsError;
 
 #[test]
 fn test_identify_airpods_type() {

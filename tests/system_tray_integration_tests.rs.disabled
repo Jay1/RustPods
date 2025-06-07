@@ -1,14 +1,12 @@
 //! Tests for the system tray integration with app state
 //! These tests verify the functionality of the system tray
 
-use std::sync::Arc;
-
 // Import just what we can use from rustpods::ui::test_helpers
 use rustpods::ui::test_helpers::{
-    MockSystemTray, TrayIconType, ThemeMode, create_test_battery, create_test_state_manager, create_test_config
+    MockSystemTray, TrayIconType, ThemeMode, create_test_battery, create_test_config
 };
 use rustpods::ui::Message;
-use rustpods::config::{AppConfig, Theme as ConfigTheme};
+use rustpods::config::Theme as ConfigTheme;
 use rustpods::bluetooth::AirPodsBatteryStatus;
 use rustpods::airpods::{AirPodsBattery, AirPodsChargingState};
 
