@@ -105,7 +105,7 @@ fn test_bluetooth_config_defaults() {
     assert!(config.min_rssi.is_none() || config.min_rssi.unwrap() < 0, 
             "Default min RSSI should be negative (typical BLE values are negative) or None");
             
-    assert!(config.battery_refresh_interval > 0, 
+    assert!(config.battery_refresh_interval > Duration::from_secs(0), 
             "Default battery refresh interval should be positive");
             
     assert!(config.reconnect_attempts > 0, 

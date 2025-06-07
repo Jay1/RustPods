@@ -807,7 +807,7 @@ impl AppState {
                         address: airpods.address.to_string(),
                         paired: true,
                         connected: true,
-                        device_type: Some("AirPods".to_string()),
+                        device_type: DeviceType::AirPods,
                         battery: if airpods.left_battery >= 0 { Some(airpods.left_battery as u8) } else { None }
                             .or(if airpods.right_battery >= 0 { Some(airpods.right_battery as u8) } else { None }),
                         left_battery: if airpods.left_battery >= 0 { Some(airpods.left_battery as u8) } else { None },
@@ -821,6 +821,10 @@ impl AppState {
                         both_in_case: airpods.both_in_case,
                         color: airpods.color.map(|c| c.to_string()),
                         switch_count: airpods.switch_count.map(|s| s as u8),
+                        is_connected: true,
+                        last_seen: std::time::SystemTime::now(),
+                        rssi: airpods.rssi.map(|r| r as i16),
+                        manufacturer_data: airpods.raw_manufacturer_data.clone().map(|s| s.into_bytes()).unwrap_or_default(),
                     }
                 }).collect()
             },
@@ -840,7 +844,7 @@ impl AppState {
                 address: airpods.address.to_string(),
                 paired: true,
                 connected: true,
-                device_type: Some("AirPods".to_string()),
+                device_type: DeviceType::AirPods,
                 battery: if airpods.left_battery >= 0 { Some(airpods.left_battery as u8) } else { None }
                     .or(if airpods.right_battery >= 0 { Some(airpods.right_battery as u8) } else { None }),
                 left_battery: if airpods.left_battery >= 0 { Some(airpods.left_battery as u8) } else { None },
@@ -854,6 +858,10 @@ impl AppState {
                 both_in_case: airpods.both_in_case,
                 color: airpods.color.map(|c| c.to_string()),
                 switch_count: airpods.switch_count.map(|s| s as u8),
+                is_connected: true,
+                last_seen: std::time::SystemTime::now(),
+                rssi: airpods.rssi.map(|r| r as i16),
+                manufacturer_data: airpods.raw_manufacturer_data.clone().map(|s| s.into_bytes()).unwrap_or_default(),
             }
         }));
         
@@ -879,7 +887,7 @@ pub struct MergedBluetoothDevice {
     pub address: String,
     pub paired: bool,
     pub connected: bool,
-    pub device_type: Option<String>,
+    pub device_type: DeviceType,
     pub battery: Option<u8>,
     pub left_battery: Option<u8>,
     pub right_battery: Option<u8>,
@@ -892,6 +900,44 @@ pub struct MergedBluetoothDevice {
     pub both_in_case: Option<bool>,
     pub color: Option<String>,
     pub switch_count: Option<u8>,
+    pub is_connected: bool,
+    pub last_seen: std::time::SystemTime,
+    pub rssi: Option<i16>,
+    pub manufacturer_data: Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum DeviceType {
+    AirPods,
+    Other,
+}
+
+impl Default for MergedBluetoothDevice {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            address: String::new(),
+            paired: false,
+            connected: false,
+            device_type: DeviceType::Other,
+            battery: None,
+            left_battery: None,
+            right_battery: None,
+            case_battery: None,
+            device_subtype: None,
+            left_in_ear: None,
+            right_in_ear: None,
+            case_lid_open: None,
+            side: None,
+            both_in_case: None,
+            color: None,
+            switch_count: None,
+            is_connected: false,
+            last_seen: std::time::SystemTime::UNIX_EPOCH,
+            rssi: None,
+            manufacturer_data: Vec::new(),
+        }
+    }
 }
 
 /// Async function to scan for AirPods without blocking the UI

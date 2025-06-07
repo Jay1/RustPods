@@ -31,6 +31,11 @@ pub mod user_interaction_tests;
 pub mod real_time_battery_display_tests;
 pub mod fixed_state_test;
 
+// Bulletproof regression protection test suites
+pub mod visual_regression_tests;
+pub mod property_based_tests;
+pub mod integration_tests;
+
 // Re-export all test modules
 pub use state::*;
 pub use messages::*;

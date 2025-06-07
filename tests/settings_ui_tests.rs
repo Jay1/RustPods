@@ -3,6 +3,7 @@
 use iced::Application;
 use rustpods::config::{AppConfig, BluetoothConfig, UiConfig, SystemConfig, Theme, LogLevel};
 use rustpods::ui::{state::AppState, Message};
+use std::time::Duration;
 use rustpods::ui::state::AppState as UiAppState; // Use the correct AppState type
 
 /// Test that verifies all Bluetooth settings are present
@@ -23,7 +24,7 @@ fn test_bluetooth_settings_completeness() {
             "scan_duration field should exist and be positive");
     assert!(config.bluetooth.scan_interval.as_secs() > 0,
             "scan_interval field should exist and be positive");
-    assert!(config.bluetooth.battery_refresh_interval > 0,
+    assert!(config.bluetooth.battery_refresh_interval > Duration::from_secs(0),
             "battery_refresh_interval field should exist");
     assert!(config.bluetooth.min_rssi.is_some() || config.bluetooth.min_rssi.is_none(),
             "min_rssi field should exist");
@@ -115,7 +116,7 @@ fn test_config_to_ui_mapping_completeness() {
     assert!(config.bluetooth.auto_scan_on_startup || !config.bluetooth.auto_scan_on_startup);
     assert!(config.bluetooth.scan_duration.as_secs() >= 0);
     assert!(config.bluetooth.scan_interval.as_secs() >= 0);
-    assert!(config.bluetooth.battery_refresh_interval > 0);
+    assert!(config.bluetooth.battery_refresh_interval > Duration::from_secs(0));
     assert!(config.bluetooth.min_rssi.is_some() || config.bluetooth.min_rssi.is_none());
     assert!(config.bluetooth.auto_reconnect || !config.bluetooth.auto_reconnect);
     assert!(config.bluetooth.reconnect_attempts > 0);

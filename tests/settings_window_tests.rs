@@ -430,7 +430,7 @@ impl SettingsView {
                 self.config.bluetooth.scan_interval = std::time::Duration::from_secs(value as u64);
             },
             BluetoothSetting::BatteryRefreshInterval(value) => {
-                self.config.bluetooth.battery_refresh_interval = value as u64;
+                self.config.bluetooth.battery_refresh_interval = Duration::from_secs(value as u64);
             },
             BluetoothSetting::MinRssi(value) => {
                 self.config.bluetooth.min_rssi = Some(value as i16);
@@ -463,6 +463,9 @@ impl SettingsView {
             },
             UiSetting::LowBatteryThreshold(value) => {
                 self.config.ui.low_battery_threshold = if value > 100 { 100 } else { value };
+            },
+            UiSetting::MinimizeToTrayOnClose(value) => {
+                self.config.ui.minimize_to_tray_on_close = value;
             },
         }
     }
