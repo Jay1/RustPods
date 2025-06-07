@@ -19,6 +19,8 @@ pub mod assets;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::path::PathBuf;
+use std::env;
+use tokio::time::interval;
 
 use log::{info, error, warn};
 use error::{ErrorManager, RustPodsError, ErrorContext};
@@ -29,6 +31,11 @@ use ui::Message;
 use tokio::sync::mpsc;
 use crate::lifecycle_manager::LifecycleManager;
 use crate::logging::DebugFlags;
+use env_logger;
+use chrono;
+
+use crate::app_controller::AppController;
+use crate::app_state_controller::AppStateController;
 
 #[derive(Debug, Clone)]
 enum AppCommand {
@@ -53,6 +60,9 @@ pub struct AppArgs {
 }
 
 fn main() {
+    // Initialize logging with WGPU spam filtering
+    init_logging();
+
     // Parse command line arguments first
     let args = match parse_enhanced_args() {
         Ok(args) => args,
@@ -507,4 +517,32 @@ fn init_logging_from_config(config: &AppConfig) {
     if let Err(e) = logging::configure_logging(config.system.log_level.clone(), log_path, true) {
         eprintln!("Failed to configure logging: {}", e);
     }
+}
+
+fn init_logging() {
+    use std::io::Write;
+    
+    env_logger::Builder::from_default_env()
+        .format(|buf, record| {
+            // Suppress WGPU warnings that spam the output without adding value
+            // These are graphics resource lifecycle messages that don't indicate real problems
+            if record.target().starts_with("wgpu_") {
+                return Ok(());
+            }
+            
+            writeln!(
+                buf,
+                "[{}] {} [{}:{}] {}",
+                chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f"),
+                record.level(),
+                record.file().unwrap_or("unknown"),
+                record.line().unwrap_or(0),
+                record.args()
+            )
+        })
+        .filter_level(log::LevelFilter::Info)  // Default to Info level
+        .filter_module("wgpu_hal", log::LevelFilter::Off)  // Suppress WGPU warnings
+        .filter_module("wgpu_core", log::LevelFilter::Off) // Suppress WGPU core warnings  
+        .filter_module("winit", log::LevelFilter::Warn)    // Reduce winit noise
+        .init();
 }

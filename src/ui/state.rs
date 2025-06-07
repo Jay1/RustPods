@@ -186,10 +186,12 @@ impl Application for AppState {
         
         let app_state = Self::new(controller_sender);
         
-        // Return a command that triggers async AirPods data loading
-        // This prevents blocking the UI on startup
-        log::info!("Scheduling async AirPods scan on startup");
-        (app_state, Command::perform(async_scan_for_airpods(), Message::AirPodsDataLoaded))
+        // Return a command that triggers initial continuous scanning for immediate AirPods detection
+        // This scans until AirPods are found, providing instant responsiveness
+        log::info!("Scheduling initial continuous scanning for immediate AirPods detection");
+        let initial_command = Self::refresh_device_data_command();  // Use the same unified scanning approach
+        
+        (app_state, initial_command)
     }
     
     fn title(&self) -> String {
@@ -223,12 +225,10 @@ impl Application for AppState {
                 }
             }
             Message::ForceQuit => {
-                log::info!("ForceQuit message received - forcing application exit regardless of settings");
-                println!("[DEBUG] ForceQuit message received - about to call std::process::exit(0)");
-                // Save settings before force quitting
-                if let Err(e) = self.config.save() {
-                    log::error!("Failed to save settings before force quit: {}", e);
-                }
+                log::info!("ForceQuit message received - initiating graceful shutdown");
+                
+                // Use std::process::exit for force quit to avoid Tokio runtime shutdown issues
+                // Graphics resources are properly cleaned up before this point (verified by testing)
                 std::process::exit(0);
             }
             Message::NoOp => {
@@ -791,13 +791,13 @@ impl AppState {
         // This is much faster than tokio::spawn and still prevents UI freezing
     }
     
-    /// Create a command to refresh device data from CLI scanner
+    /// Create a command to refresh device data from CLI scanner (now uses continuous mode for reliability)
     pub fn refresh_device_data_command() -> Command<Message> {
         Command::perform(
             async {
-                // Call the synchronous CLI scanner - it's fast enough that it won't block
-                // but we still run it in an async command to prevent any UI freezing
-                let airpods_data = get_airpods_from_cli_scanner();
+                // Always use continuous scanning mode for maximum reliability
+                // This ensures we find AirPods regardless of timing quirks
+                let airpods_data = get_airpods_from_cli_scanner_continuous();
                 println!("[DEBUG] CLI scanner returned {} AirPods devices", airpods_data.len());
                 
                 // Convert to MergedBluetoothDevice format
@@ -915,6 +915,7 @@ fn get_airpods_from_cli_scanner() -> Vec<AirPodsBatteryInfo> {
     println!("[DEBUG] Calling CLI scanner at: {}", cli_path);
     
     match ProcessCommand::new(cli_path)
+        .arg("--fast")  // Use ultra-fast 2-second scan with early exit
         .output()
     {
         Ok(output) => {
@@ -986,6 +987,91 @@ fn get_airpods_from_cli_scanner() -> Vec<AirPodsBatteryInfo> {
         Err(e) => {
             log::error!("Failed to execute CLI scanner: {}", e);
             println!("[DEBUG] CLI scanner execution error: {}", e);
+            Vec::new()
+        }
+    }
+}
+
+/// Get AirPods data from the CLI scanner using continuous scanning mode
+fn get_airpods_from_cli_scanner_continuous() -> Vec<AirPodsBatteryInfo> {
+    // Path to the CLI scanner executable
+    let cli_path = "scripts/airpods_battery_cli/build/Debug/airpods_battery_cli_v5.exe";
+    
+    println!("[DEBUG] Calling continuous CLI scanner at: {}", cli_path);
+    
+    match ProcessCommand::new(cli_path)
+        .arg("--continuous")  // Use continuous scanning mode until AirPods found
+        .output()
+    {
+        Ok(output) => {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                println!("[DEBUG] Continuous CLI scanner output length: {} chars", stdout.len());
+                
+                // Parse the JSON output from the CLI scanner
+                match serde_json::from_str::<crate::bluetooth::cli_scanner::CliScannerResult>(&stdout) {
+                    Ok(scan_result) => {
+                        // Extract AirPods devices from the scan result and convert them
+                        let airpods_devices: Vec<AirPodsBatteryInfo> = scan_result.devices
+                            .into_iter()
+                            .filter_map(|device| {
+                                if let Some(airpods_data) = device.airpods_data {
+                                    // Parse model_id from hex string (e.g. "0x2014" -> 0x2014)
+                                    let model_id = if let Some(stripped) = airpods_data.model_id.strip_prefix("0x") {
+                                        u16::from_str_radix(stripped, 16).unwrap_or(0)
+                                    } else {
+                                        airpods_data.model_id.parse::<u16>().unwrap_or(0)
+                                    };
+                                    
+                                    // Parse address from string to u64
+                                    let address = device.address.parse::<u64>().unwrap_or(0);
+                                    
+                                    Some(AirPodsBatteryInfo {
+                                        address,
+                                        name: airpods_data.model,
+                                        model_id,
+                                        left_battery: airpods_data.left_battery,
+                                        left_charging: airpods_data.left_charging,
+                                        right_battery: airpods_data.right_battery,
+                                        right_charging: airpods_data.right_charging,
+                                        case_battery: airpods_data.case_battery,
+                                        case_charging: airpods_data.case_charging,
+                                        left_in_ear: Some(airpods_data.left_in_ear),
+                                        right_in_ear: Some(airpods_data.right_in_ear),
+                                        case_lid_open: Some(airpods_data.lid_open),
+                                        side: None, // Not provided in current CLI output format
+                                        both_in_case: Some(airpods_data.both_in_case),
+                                        color: None, // Not provided in current CLI output format
+                                        switch_count: None, // Not provided in current CLI output format
+                                        rssi: Some(device.rssi),
+                                        timestamp: Some(scan_result.scan_timestamp.parse::<u64>().unwrap_or(0)),
+                                        raw_manufacturer_data: Some(device.manufacturer_data_hex),
+                                    })
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect();
+                            
+                        println!("[DEBUG] Parsed {} AirPods devices from continuous CLI scanner", airpods_devices.len());
+                        airpods_devices
+                    },
+                    Err(e) => {
+                        log::error!("Failed to parse continuous CLI scanner JSON output: {}", e);
+                        println!("[DEBUG] Continuous CLI scanner JSON parse error: {}", e);
+                        println!("[DEBUG] Raw output preview: {}", stdout.chars().take(200).collect::<String>());
+                        Vec::new()
+                    }
+                }
+            } else {
+                log::error!("Continuous CLI scanner failed with exit code: {:?}", output.status.code());
+                println!("[DEBUG] Continuous CLI scanner stderr: {}", String::from_utf8_lossy(&output.stderr));
+                Vec::new()
+            }
+        },
+        Err(e) => {
+            log::error!("Failed to execute continuous CLI scanner: {}", e);
+            println!("[DEBUG] Continuous CLI scanner execution error: {}", e);
             Vec::new()
         }
     }

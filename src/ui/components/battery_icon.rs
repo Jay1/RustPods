@@ -3,27 +3,18 @@
 //! These components provide various ways to display battery status using
 //! the Catppuccin Mocha theme colors.
 
-use iced::widget::{container, progress_bar, row, text};
-use iced::{alignment, Color, Element, Length};
+use iced::{
+    Element, 
+    widget::{container, progress_bar, text, row, Svg}, 
+    Color, Length,
+    Alignment,
+    alignment
+}; 
 
 use crate::ui::Message;
 use crate::ui::theme::Theme;
-use crate::ui::theme::{RED, PEACH, GREEN, BLUE, SURFACE1, OVERLAY1};
-
-// Add missing color constants at the top level
-const YELLOW: Color = Color {
-    r: 0.98,
-    g: 0.84,
-    b: 0.24,
-    a: 1.0,
-};
-
-const WHITE: Color = Color {
-    r: 0.98,
-    g: 0.98,
-    b: 0.98,
-    a: 1.0,
-};
+use crate::ui::theme;
+use crate::ui::components::svg_icons::battery_icon_svg_string;
 
 /// Create a battery display row with label, level and charging indicator
 pub fn battery_display_row<'a>(
@@ -88,85 +79,119 @@ pub fn battery_icon_display<'a>(
     size: f32,
     animation_progress: f32,
 ) -> Element<'a, Message, iced::Renderer<Theme>> {
-    // Create a simplified battery icon using a container
-    let battery_level = level.unwrap_or(0) as f32 / 100.0;
+    // Get battery level as percentage (0.0 to 1.0)
+    let battery_level = level.unwrap_or(0);
+    let percentage = battery_level as f32 / 100.0;
     
     // Determine color based on level and charging
-    let color = battery_color(level, is_charging, animation_progress);
-    
-    // Create owned copies of colors and values for closures
-    let fill_color = color;
-    let border_color = OVERLAY1;
-    let bg_color = SURFACE1;
-    let cap_color = OVERLAY1;
-    let width = size * 0.8 * battery_level;
-    
-    // Create the battery body
-    let battery_body = container(
-        // Inner fill representing the charge level
-        container(iced::widget::Space::new(
-            Length::Fixed(width), 
-            Length::Fixed(size * 0.4)
-        ))
-        .style(iced::theme::Container::Custom(Box::new(move |_: &iced::Theme| {
-            iced::widget::container::Appearance {
-                background: Some(fill_color.into()),
-                ..Default::default()
-            }
-        })))
-        .width(Length::Fixed(width))
-        .height(Length::Fixed(size * 0.4))
-        .align_x(alignment::Horizontal::Left)
-    )
-    .style(iced::theme::Container::Custom(Box::new(move |_: &iced::Theme| {
-        iced::widget::container::Appearance {
-            background: Some(bg_color.into()),
-            border_radius: 2.0.into(),
-            border_width: 1.0,
-            border_color,
-            ..Default::default()
-        }
-    })))
-    .width(Length::Fixed(size * 0.8))
-    .height(Length::Fixed(size * 0.4))
-    .padding(1);
-    
-    // Create the battery cap
-    let battery_cap = container(iced::widget::Space::new(
-        Length::Fixed(size * 0.1), 
-        Length::Fixed(size * 0.2)
-    ))
-    .style(iced::theme::Container::Custom(Box::new(move |_: &iced::Theme| {
-        iced::widget::container::Appearance {
-            background: Some(cap_color.into()),
-            border_radius: 2.0.into(),
-            ..Default::default()
-        }
-    })))
-    .width(Length::Fixed(size * 0.1))
-    .height(Length::Fixed(size * 0.2));
-    
-    // Create charging indicator
-    let charging_indicator = if is_charging {
-        // Pulse animation for charging icon
-        let pulse = (1.0 + (animation_progress * 3.0 * std::f32::consts::PI).sin()) * 0.5;
-        text("⚡")
-            .size((size * 0.3) as u16)
-            .style(pulse_color(pulse))
+    let color = if is_charging {
+        theme::BLUE
+    } else if battery_level <= 20 {
+        theme::RED
+    } else if battery_level <= 50 {
+        theme::YELLOW  
     } else {
-        text("")
-            .size((size * 0.3) as u16)
+        theme::GREEN
     };
     
-    // Combine battery body and cap
-    row![
-        battery_body,
-        battery_cap,
-        charging_indicator,
-    ]
-    .spacing(2)
-    .align_items(alignment::Alignment::Center)
-    .into()
+    // Convert color to hex string for SVG
+    let hex_color = format!("#{:02X}{:02X}{:02X}",
+        (color.r * 255.0) as u8,
+        (color.g * 255.0) as u8,
+        (color.b * 255.0) as u8
+    );
+    
+    // Generate custom colored SVG string for the battery icon
+    let svg_string = create_colored_battery_svg(percentage, is_charging, &hex_color);
+    
+    // Convert string to bytes for Handle::from_memory
+    let svg_bytes = svg_string.into_bytes();
+    
+    // Create SVG element with fixed, reasonable sizing (the SVG viewBox handles scaling)
+    let svg_element = Svg::new(iced::widget::svg::Handle::from_memory(svg_bytes))
+        .width(Length::Fixed(32.0))   // Fixed reasonable width
+        .height(Length::Fixed(48.0)); // Fixed reasonable height (3:2 aspect ratio for battery)
+    
+    // Return the SVG directly without container wrapper since colors are baked into SVG
+    svg_element.into()
+}
+
+/// Create a colored SVG battery icon with specific hex color
+fn create_colored_battery_svg(percentage: f32, charging: bool, hex_color: &str) -> String {
+    // Clamp percentage between 0.0 and 1.0
+    let p = percentage.clamp(0.0, 1.0);
+
+    // Define horizontal battery dimensions
+    let battery_width = 24.0;
+    let battery_height = 12.0;
+    let battery_x = 2.0;
+    let battery_y = 6.0;
+    
+    // Terminal dimensions (small nub on the right)
+    let terminal_width = 2.0;
+    let terminal_height = 6.0;
+    let terminal_x = battery_x + battery_width;
+    let terminal_y = battery_y + 3.0;
+    
+    // Fill area (inside the battery)
+    let fill_padding = 1.0;
+    let fill_x = battery_x + fill_padding;
+    let fill_y = battery_y + fill_padding;
+    let fill_max_width = battery_width - (2.0 * fill_padding);
+    let fill_height = battery_height - (2.0 * fill_padding);
+    
+    let actual_fill_width = fill_max_width * p;
+
+    let mut svg_string = String::new();
+    use std::fmt::Write;
+    
+    // Define neutral gray color for battery outline
+    let gray_color = "#6C7086";
+    
+    write!(
+        &mut svg_string,
+        r#"<svg width="32" height="24" viewBox="0 0 32 24" xmlns="http://www.w3.org/2000/svg">"#,
+    ).unwrap();
+    
+    // Main battery body outline (horizontal rectangle)
+    write!(
+        &mut svg_string,
+        r#"<rect x="{}" y="{}" width="{}" height="{}" stroke="{}" stroke-width="1" fill="none" rx="2"/>"#,
+        battery_x, battery_y, battery_width, battery_height, gray_color
+    ).unwrap();
+    
+    // Battery terminal (small nub on the right)
+    write!(
+        &mut svg_string,
+        r#"<rect x="{}" y="{}" width="{}" height="{}" fill="{}" rx="1"/>"#,
+        terminal_x, terminal_y, terminal_width, terminal_height, gray_color
+    ).unwrap();
+
+    // Fill level rectangle with the actual battery level color (grows from left to right)
+    if p > 0.01 {
+        write!(
+            &mut svg_string,
+            r#"<rect x="{:.2}" y="{:.2}" width="{:.2}" height="{:.2}" fill="{}" rx="1"/>"#,
+            fill_x,
+            fill_y,
+            actual_fill_width,
+            fill_height,
+            hex_color
+        ).unwrap();
+    }
+
+    // Add charging bolt if charging (use same color as fill)
+    if charging {
+        // Simple lightning bolt in the center
+        write!(
+            &mut svg_string,
+            r#"<path d="M10 8L8 11H10L8 14L12 11H10L12 8Z" fill="{}"/>"#,
+            hex_color
+        ).unwrap();
+    }
+
+    write!(&mut svg_string, r#"</svg>"#).unwrap();
+    svg_string
 }
 
 /// Create a battery icon with a label
@@ -209,7 +234,7 @@ fn battery_color(level: Option<u8>, is_charging: bool, animation_progress: f32) 
     if is_charging {
         // Pulse between two blues
         let pulse = (1.0 + (animation_progress * 2.0 * std::f32::consts::PI).sin()) * 0.5;
-        let base_color = BLUE;
+        let base_color = theme::BLUE;
         let highlight_color = Color::from_rgb(
             base_color.r * 1.2,
             base_color.g * 1.2,
@@ -224,14 +249,14 @@ fn battery_color(level: Option<u8>, is_charging: bool, animation_progress: f32) 
         }
     } else if let Some(level) = level {
         if level <= 20 {
-            RED
+            theme::RED
         } else if level <= 50 {
-            PEACH
+            theme::PEACH
         } else {
-            GREEN
+            theme::GREEN
         }
     } else {
-        OVERLAY1
+        theme::OVERLAY1
     }
 }
 
@@ -239,22 +264,22 @@ fn battery_color(level: Option<u8>, is_charging: bool, animation_progress: f32) 
 fn battery_level_style(level: Option<u8>, is_charging: bool) -> iced::theme::ProgressBar {
     // Determine the color now, outside the closure
     let color = if is_charging {
-        BLUE
+        theme::BLUE
     } else if let Some(level) = level {
         if level <= 20 {
-            RED
+            theme::RED
         } else if level <= 50 {
-            PEACH
+            theme::PEACH
         } else {
-            GREEN
+            theme::GREEN
         }
     } else {
-        OVERLAY1
+        theme::OVERLAY1
     };
     
     // Create a new color that is owned and can be moved into the closure
     /* color already defined */
-    let bg_color = SURFACE1;
+    let bg_color = theme::SURFACE1;
     
     iced::theme::ProgressBar::Custom(Box::new(move |_: &iced::Theme| {
         iced::widget::progress_bar::Appearance {
@@ -268,23 +293,23 @@ fn battery_level_style(level: Option<u8>, is_charging: bool) -> iced::theme::Pro
 /// Get a text style for the battery level
 fn battery_text_style(level: Option<u8>, is_charging: bool) -> iced::Color {
     if is_charging {
-        BLUE // Blue for charging
+        theme::BLUE // Blue for charging
     } else if let Some(level) = level {
         if level <= 20 {
-            RED // Red for low battery
+            theme::RED // Red for low battery
         } else if level <= 50 {
-            YELLOW // Yellow for medium battery
+            theme::YELLOW // Yellow for medium battery
         } else {
-            GREEN // Green for good battery
+            theme::GREEN // Green for good battery
         }
     } else {
-        WHITE // White for unknown battery
+        theme::TEXT // White-ish text for unknown battery
     }
 }
 
 /// Get a pulsing color for charging animation
 fn pulse_color(pulse: f32) -> iced::Color {
-    let base_color = BLUE;
+    let base_color = theme::BLUE;
     let factor = (pulse * std::f32::consts::PI).sin() * 0.4 + 0.6; // Range: 0.2 - 1.0
     
     iced::Color {

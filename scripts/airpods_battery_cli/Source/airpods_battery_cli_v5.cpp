@@ -306,15 +306,91 @@ void output_json(const std::vector<BLEDevice>& devices) {
     std::cout << "}" << std::endl;
 }
 
-int main() {
+int main(int argc, char* argv[]) {
     try {
         std::cerr << "AirPods Battery CLI v5.0 - Standalone Battery Monitor" << std::endl;
+        
+        // Parse command line arguments
+        int scan_duration = 4; // Default reduced from 10 to 4 seconds (60% faster)
+        bool early_exit = false;
+        bool continuous_until_found = false; // New continuous mode
+        
+        for (int i = 1; i < argc; i++) {
+            std::string arg = argv[i];
+            if (arg == "--duration" && i + 1 < argc) {
+                scan_duration = std::stoi(argv[++i]);
+                if (scan_duration < 1 || scan_duration > 30) {
+                    scan_duration = 4; // Reset to default if invalid
+                }
+            } else if (arg == "--fast" || arg == "-f") {
+                scan_duration = 2; // Ultra-fast 2-second scan
+                early_exit = true;
+            } else if (arg == "--quick" || arg == "-q") {
+                scan_duration = 3; // Quick 3-second scan
+                early_exit = true;
+            } else if (arg == "--continuous" || arg == "-c") {
+                continuous_until_found = true; // Scan continuously until AirPods found
+                scan_duration = 30; // Maximum scan time as safety net
+                std::cerr << "[INFO] Continuous scanning mode - will stop when AirPods found" << std::endl;
+            } else if (arg == "--early-exit") {
+                early_exit = true;
+            }
+        }
         
         AdvertisementWatcher watcher;
         
         if (watcher.Start()) {
-            std::cerr << "[INFO] Scanning for 10 seconds..." << std::endl;
-            std::this_thread::sleep_for(std::chrono::seconds(10));
+            if (continuous_until_found) {
+                std::cerr << "[INFO] Scanning continuously until AirPods found (max " << scan_duration << " seconds)..." << std::endl;
+                
+                // Check for AirPods every 200ms for responsiveness
+                int max_checks = scan_duration * 5; // 200ms intervals
+                bool airpods_found = false;
+                
+                for (int i = 0; i < max_checks && !airpods_found; i++) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                    
+                    const auto& devices = watcher.GetDevices();
+                    for (const auto& device : devices) {
+                        if (device.airpods_data.has_value()) {
+                            airpods_found = true;
+                            std::cerr << "[INFO] AirPods found after " << ((i + 1) * 0.2) << " seconds - stopping scan" << std::endl;
+                            break;
+                        }
+                    }
+                }
+                
+                if (!airpods_found) {
+                    std::cerr << "[INFO] No AirPods found within " << scan_duration << " seconds - stopping scan" << std::endl;
+                }
+            } else {
+                std::cerr << "[INFO] Scanning for " << scan_duration << " seconds..." << std::endl;
+                
+                if (early_exit) {
+                    // Check for AirPods every 500ms and exit early if found
+                    int checks = scan_duration * 2; // 500ms intervals
+                    for (int i = 0; i < checks; i++) {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                        
+                        const auto& devices = watcher.GetDevices();
+                        bool airpods_found = false;
+                        for (const auto& device : devices) {
+                            if (device.airpods_data.has_value()) {
+                                airpods_found = true;
+                                break;
+                            }
+                        }
+                        
+                        if (airpods_found) {
+                            std::cerr << "[INFO] AirPods found, stopping early after " << ((i + 1) * 0.5) << " seconds" << std::endl;
+                            break;
+                        }
+                    }
+                } else {
+                    // Regular fixed-duration scan
+                    std::this_thread::sleep_for(std::chrono::seconds(scan_duration));
+                }
+            }
             
             watcher.Stop();
             

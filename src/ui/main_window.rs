@@ -186,8 +186,14 @@ impl MainWindow {
             let battery_indicators_row = row![
                 // Earbuds group: Left and Right together
                 row![
-                    // Left battery indicator
+                    // Left battery indicator with colored icon
                     column![
+                        crate::ui::components::battery_icon::battery_icon_display(
+                            device.left_battery,
+                            false, // TODO: Add charging status when available
+                            64.0,  // Increased icon size for better visibility
+                            self.animation_progress
+                        ),
                         text("Left")
                             .size(12)
                             .style(crate::ui::theme::SUBTEXT1)
@@ -200,8 +206,14 @@ impl MainWindow {
                     .align_items(Alignment::Center)
                     .spacing(4),
                     
-                    // Right battery indicator
+                    // Right battery indicator with colored icon
                     column![
+                        crate::ui::components::battery_icon::battery_icon_display(
+                            device.right_battery,
+                            false, // TODO: Add charging status when available
+                            64.0,  // Increased icon size for better visibility
+                            self.animation_progress
+                        ),
                         text("Right")
                             .size(12)
                             .style(crate::ui::theme::SUBTEXT1)
@@ -217,8 +229,14 @@ impl MainWindow {
                 .spacing(20)
                 .align_items(Alignment::Center),
                 
-                // Case indicator
+                // Case indicator with colored icon
                 column![
+                    crate::ui::components::battery_icon::battery_icon_display(
+                        device.case_battery,
+                        false, // TODO: Add charging status when available
+                        64.0,  // Increased icon size for better visibility
+                        self.animation_progress
+                    ),
                     text("Case")
                         .size(12)
                         .style(crate::ui::theme::SUBTEXT1)
