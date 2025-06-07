@@ -63,6 +63,6 @@ jobs:
         uses: Swatinem/rust-cache@v2
         
       - name: Security audit
-        uses: actions-rs/audit-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }} 
+        run: |
+          cargo install cargo-audit
+          cargo audit 
