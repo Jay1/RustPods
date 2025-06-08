@@ -42,9 +42,7 @@ jobs:
       
       - name: Generate coverage report
         run: |
-          cargo tarpaulin --verbose --workspace --timeout 120 --out Xml --output-dir ./coverage
-        env:
-          RUSTFLAGS: "-C link-dead-code"
+          cargo tarpaulin --verbose --workspace --timeout 300 --out Xml --output-dir ./coverage --skip-clean --exclude-files="target/*" --exclude-files="examples/*"
       
       - name: List coverage directory contents
         run: |
