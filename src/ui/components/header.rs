@@ -7,6 +7,12 @@ use crate::ui::UiComponent;
 #[derive(Debug, Clone)]
 pub struct Header;
 
+impl Default for Header {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Header {
     /// Create a new header
     pub fn new() -> Self {

@@ -49,11 +49,11 @@ fn test_app_state_toggle_visibility() {
     let mut state = AppState::default();
     // AppState always starts with visible = true regardless of start_minimized config
     // The start_minimized config is handled at the application startup level
-    assert_eq!(state.visible, true);
+    assert!(state.visible);
     state.toggle_visibility();
-    assert_eq!(state.visible, false);
+    assert!(!state.visible);
     state.toggle_visibility();
-    assert_eq!(state.visible, true);
+    assert!(state.visible);
 }
 
 #[test]

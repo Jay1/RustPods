@@ -39,7 +39,7 @@ mod test_helpers {
             form.validators.insert(
                 "number_field".to_string(),
                 ValidationRule::new("number_field").validator(|val| match val.parse::<i32>() {
-                    Ok(num) if num >= 0 && num <= 100 => Ok(()),
+                    Ok(num) if (0..=100).contains(&num) => Ok(()),
                     Ok(_) => Err(ValidationError::Custom("Number out of range".to_string())),
                     Err(_) => Err(ValidationError::Custom("Not a valid number".to_string())),
                 }),

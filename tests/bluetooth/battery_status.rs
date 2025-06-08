@@ -289,20 +289,16 @@ fn test_mixed_battery_levels() {
         Some(80),
         "Case should be 80%"
     );
-    match airpods_mixed_charging
+    if let Some(state) = airpods_mixed_charging
         .as_ref()
         .unwrap()
         .battery
         .as_ref()
         .unwrap()
-        .charging
-    {
-        Some(state) => {
-            assert!(!state.is_left_charging(), "Left should not be charging");
-            assert!(state.is_right_charging(), "Right should be charging");
-            assert!(!state.is_case_charging(), "Case should not be charging");
-        }
-        None => (),
+        .charging {
+        assert!(!state.is_left_charging(), "Left should not be charging");
+        assert!(state.is_right_charging(), "Right should be charging");
+        assert!(!state.is_case_charging(), "Case should not be charging");
     }
 }
 
@@ -420,218 +416,186 @@ fn test_all_combinations_charging() {
 
     // 1. Nothing charging (000)
     let airpods1 = detect_airpods(&device1).unwrap();
-    match airpods1
+    if let Some(state) = airpods1
         .as_ref()
         .unwrap()
         .battery
         .as_ref()
         .unwrap()
-        .charging
-    {
-        Some(state) => {
-            assert!(
-                !state.is_left_charging(),
-                "Combination 1: Left should not be charging"
-            );
-            assert!(
-                !state.is_right_charging(),
-                "Combination 1: Right should not be charging"
-            );
-            assert!(
-                !state.is_case_charging(),
-                "Combination 1: Case should not be charging"
-            );
-        }
-        None => (),
+        .charging {
+        assert!(
+            !state.is_left_charging(),
+            "Combination 1: Left should not be charging"
+        );
+        assert!(
+            !state.is_right_charging(),
+            "Combination 1: Right should not be charging"
+        );
+        assert!(
+            !state.is_case_charging(),
+            "Combination 1: Case should not be charging"
+        );
     }
 
     // 2. Only left charging (100)
     let airpods2 = detect_airpods(&device2).unwrap();
-    match airpods2
+    if let Some(state) = airpods2
         .as_ref()
         .unwrap()
         .battery
         .as_ref()
         .unwrap()
-        .charging
-    {
-        Some(state) => {
-            assert!(
-                state.is_left_charging(),
-                "Combination 2: Left should be charging"
-            );
-            assert!(
-                !state.is_right_charging(),
-                "Combination 2: Right should not be charging"
-            );
-            assert!(
-                !state.is_case_charging(),
-                "Combination 2: Case should not be charging"
-            );
-        }
-        None => (),
+        .charging {
+        assert!(
+            state.is_left_charging(),
+            "Combination 2: Left should be charging"
+        );
+        assert!(
+            !state.is_right_charging(),
+            "Combination 2: Right should not be charging"
+        );
+        assert!(
+            !state.is_case_charging(),
+            "Combination 2: Case should not be charging"
+        );
     }
 
     // 3. Only right charging (010)
     let airpods3 = detect_airpods(&device3).unwrap();
-    match airpods3
+    if let Some(state) = airpods3
         .as_ref()
         .unwrap()
         .battery
         .as_ref()
         .unwrap()
-        .charging
-    {
-        Some(state) => {
-            assert!(
-                !state.is_left_charging(),
-                "Combination 3: Left should not be charging"
-            );
-            assert!(
-                state.is_right_charging(),
-                "Combination 3: Right should be charging"
-            );
-            assert!(
-                !state.is_case_charging(),
-                "Combination 3: Case should not be charging"
-            );
-        }
-        None => (),
+        .charging {
+        assert!(
+            !state.is_left_charging(),
+            "Combination 3: Left should not be charging"
+        );
+        assert!(
+            state.is_right_charging(),
+            "Combination 3: Right should be charging"
+        );
+        assert!(
+            !state.is_case_charging(),
+            "Combination 3: Case should not be charging"
+        );
     }
 
     // 4. Left and right charging (110)
     let airpods4 = detect_airpods(&device4).unwrap();
-    match airpods4
+    if let Some(state) = airpods4
         .as_ref()
         .unwrap()
         .battery
         .as_ref()
         .unwrap()
-        .charging
-    {
-        Some(state) => {
-            assert!(
-                state.is_left_charging(),
-                "Combination 4: Left should be charging"
-            );
-            assert!(
-                state.is_right_charging(),
-                "Combination 4: Right should be charging"
-            );
-            assert!(
-                !state.is_case_charging(),
-                "Combination 4: Case should not be charging"
-            );
-        }
-        None => (),
+        .charging {
+        assert!(
+            state.is_left_charging(),
+            "Combination 4: Left should be charging"
+        );
+        assert!(
+            state.is_right_charging(),
+            "Combination 4: Right should be charging"
+        );
+        assert!(
+            !state.is_case_charging(),
+            "Combination 4: Case should not be charging"
+        );
     }
 
     // 5. Only case charging (001)
     let airpods5 = detect_airpods(&device5).unwrap();
-    match airpods5
+    if let Some(state) = airpods5
         .as_ref()
         .unwrap()
         .battery
         .as_ref()
         .unwrap()
-        .charging
-    {
-        Some(state) => {
-            assert!(
-                !state.is_left_charging(),
-                "Combination 5: Left should not be charging"
-            );
-            assert!(
-                !state.is_right_charging(),
-                "Combination 5: Right should not be charging"
-            );
-            assert!(
-                state.is_case_charging(),
-                "Combination 5: Case should be charging"
-            );
-        }
-        None => (),
+        .charging {
+        assert!(
+            !state.is_left_charging(),
+            "Combination 5: Left should not be charging"
+        );
+        assert!(
+            !state.is_right_charging(),
+            "Combination 5: Right should not be charging"
+        );
+        assert!(
+            state.is_case_charging(),
+            "Combination 5: Case should be charging"
+        );
     }
 
     // 6. Left and case charging - parser only supports one at a time, so just left
     let airpods6 = detect_airpods(&device6).unwrap();
-    match airpods6
+    if let Some(state) = airpods6
         .as_ref()
         .unwrap()
         .battery
         .as_ref()
         .unwrap()
-        .charging
-    {
-        Some(state) => {
-            assert!(
-                state.is_left_charging(),
-                "Combination 6: Left should be charging"
-            );
-            assert!(
-                !state.is_right_charging(),
-                "Combination 6: Right should not be charging"
-            );
-            assert!(
-                !state.is_case_charging(),
-                "Combination 6: Case should not be charging (parser limitation)"
-            );
-        }
-        None => (),
+        .charging {
+        assert!(
+            state.is_left_charging(),
+            "Combination 6: Left should be charging"
+        );
+        assert!(
+            !state.is_right_charging(),
+            "Combination 6: Right should not be charging"
+        );
+        assert!(
+            !state.is_case_charging(),
+            "Combination 6: Case should not be charging (parser limitation)"
+        );
     }
 
     // 7. Right and case charging - parser only supports one at a time, so just right
     let airpods7 = detect_airpods(&device7).unwrap();
-    match airpods7
+    if let Some(state) = airpods7
         .as_ref()
         .unwrap()
         .battery
         .as_ref()
         .unwrap()
-        .charging
-    {
-        Some(state) => {
-            assert!(
-                !state.is_left_charging(),
-                "Combination 7: Left should not be charging"
-            );
-            assert!(
-                state.is_right_charging(),
-                "Combination 7: Right should be charging"
-            );
-            assert!(
-                !state.is_case_charging(),
-                "Combination 7: Case should not be charging (parser limitation)"
-            );
-        }
-        None => (),
+        .charging {
+        assert!(
+            !state.is_left_charging(),
+            "Combination 7: Left should not be charging"
+        );
+        assert!(
+            state.is_right_charging(),
+            "Combination 7: Right should be charging"
+        );
+        assert!(
+            !state.is_case_charging(),
+            "Combination 7: Case should not be charging (parser limitation)"
+        );
     }
 
     // 8. All charging - parser supports both buds charging but not case simultaneously
     let airpods8 = detect_airpods(&device8).unwrap();
-    match airpods8
+    if let Some(state) = airpods8
         .as_ref()
         .unwrap()
         .battery
         .as_ref()
         .unwrap()
-        .charging
-    {
-        Some(state) => {
-            assert!(
-                state.is_left_charging(),
-                "Combination 8: Left should be charging"
-            );
-            assert!(
-                state.is_right_charging(),
-                "Combination 8: Right should be charging"
-            );
-            assert!(
-                !state.is_case_charging(),
-                "Combination 8: Case should not be charging (parser limitation)"
-            );
-        }
-        None => (),
+        .charging {
+        assert!(
+            state.is_left_charging(),
+            "Combination 8: Left should be charging"
+        );
+        assert!(
+            state.is_right_charging(),
+            "Combination 8: Right should be charging"
+        );
+        assert!(
+            !state.is_case_charging(),
+            "Combination 8: Case should not be charging (parser limitation)"
+        );
     }
 }
 

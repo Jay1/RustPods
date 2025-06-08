@@ -506,7 +506,7 @@ impl AppConfig {
 
         // Convert to JSON
         let json =
-            serde_json::to_string_pretty(self).map_err(|e| ConfigError::SerializationError(e))?;
+            serde_json::to_string_pretty(self).map_err(ConfigError::SerializationError)?;
 
         // Write to file with error handling
         std::fs::write(path, json).map_err(|e| match e.kind() {

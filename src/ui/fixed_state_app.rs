@@ -270,7 +270,7 @@ pub fn run_state_ui() -> Result<(), iced::Error> {
             icon,
             ..Default::default()
         },
-        flags: flags,
+        flags,
         default_font: iced::Font::default(),
         default_text_size: 16.0,
         antialiasing: false,

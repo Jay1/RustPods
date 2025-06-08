@@ -48,7 +48,7 @@ impl App {
         let (ui_tx, ui_rx) = mpsc::channel(100);
 
         // Create config manager and load config
-        let config_manager = ConfigManager::default();
+        let config_manager = ConfigManager::create_default();
         config_manager
             .load()
             .map_err(|e| RustPodsError::ConfigError(e.to_string()))?;
@@ -190,14 +190,14 @@ impl App {
                         *current = Some(airpods.clone());
                     }
                     // Notify UI about the detected device
-                    let _ = self.ui_tx.send(Message::AirPodsConnected(airpods));
+                    std::mem::drop(self.ui_tx.send(Message::AirPodsConnected(airpods)));
                 }
             }
             Message::BatteryStatusUpdated(status) => {
                 // Update battery status
                 *self.battery_status.lock().unwrap() = status.clone();
                 // Forward to UI
-                let _ = self.ui_tx.send(Message::BatteryStatusUpdated(status));
+                std::mem::drop(self.ui_tx.send(Message::BatteryStatusUpdated(status)));
             }
             _ => { /* Other messages are handled by the UI */ }
         }
@@ -245,7 +245,7 @@ impl App {
             // Check if we got valid battery information
             if !status.has_battery_info() {
                 // No battery info available, might indicate connection issue
-                let _ = error_tx.send(Message::ShowToast("Reconnection attempt".to_string()));
+                std::mem::drop(error_tx.send(Message::ShowToast("Reconnection attempt".to_string())));
                 return;
             }
 
@@ -253,7 +253,7 @@ impl App {
             *battery_status.lock().unwrap() = status.clone();
 
             // Send battery update to UI
-            let _ = ui_tx.send(Message::BatteryStatusUpdated(status));
+            std::mem::drop(ui_tx.send(Message::BatteryStatusUpdated(status)));
         };
 
         // Start the battery monitoring with error handling

@@ -115,13 +115,10 @@ fn test_detect_airpods_regular() {
         Some(60),
         "Case battery should be 60%"
     );
-    match airpods.battery.as_ref().unwrap().charging {
-        Some(state) => {
-            assert!(!state.is_left_charging(), "Left should not be charging");
-            assert!(!state.is_right_charging(), "Right should not be charging");
-            assert!(state.is_case_charging(), "Case should be charging");
-        }
-        None => (),
+    if let Some(state) = airpods.battery.as_ref().unwrap().charging {
+        assert!(!state.is_left_charging(), "Left should not be charging");
+        assert!(!state.is_right_charging(), "Right should not be charging");
+        assert!(state.is_case_charging(), "Case should be charging");
     }
 }
 
@@ -163,13 +160,10 @@ fn test_detect_airpods_pro() {
         Some(50),
         "Case battery should be 50%"
     );
-    match airpods.battery.as_ref().unwrap().charging {
-        Some(state) => {
-            assert!(state.is_left_charging(), "Left should be charging");
-            assert!(state.is_right_charging(), "Right should be charging");
-            assert!(!state.is_case_charging(), "Case should not be charging");
-        }
-        None => (),
+    if let Some(state) = airpods.battery.as_ref().unwrap().charging {
+        assert!(state.is_left_charging(), "Left should be charging");
+        assert!(state.is_right_charging(), "Right should be charging");
+        assert!(!state.is_case_charging(), "Case should not be charging");
     }
 }
 
@@ -211,13 +205,10 @@ fn test_detect_airpods_pro_2() {
         Some(100),
         "Case battery should be 100%"
     );
-    match airpods.battery.as_ref().unwrap().charging {
-        Some(state) => {
-            assert!(!state.is_left_charging(), "Left should not be charging");
-            assert!(!state.is_right_charging(), "Right should not be charging");
-            assert!(state.is_case_charging(), "Case should be charging");
-        }
-        None => (),
+    if let Some(state) = airpods.battery.as_ref().unwrap().charging {
+        assert!(!state.is_left_charging(), "Left should not be charging");
+        assert!(!state.is_right_charging(), "Right should not be charging");
+        assert!(state.is_case_charging(), "Case should be charging");
     }
 }
 
@@ -259,13 +250,10 @@ fn test_detect_airpods_max() {
         Some(0),
         "Case battery should be 0%"
     );
-    match airpods.battery.as_ref().unwrap().charging {
-        Some(state) => {
-            assert!(!state.is_left_charging(), "Left should not be charging");
-            assert!(!state.is_right_charging(), "Right should not be charging");
-            assert!(!state.is_case_charging(), "Case should not be charging");
-        }
-        None => (),
+    if let Some(state) = airpods.battery.as_ref().unwrap().charging {
+        assert!(!state.is_left_charging(), "Left should not be charging");
+        assert!(!state.is_right_charging(), "Right should not be charging");
+        assert!(!state.is_case_charging(), "Case should not be charging");
     }
 }
 
@@ -308,13 +296,10 @@ fn test_detect_airpods_3() {
         "Case battery should be 70%"
     );
     // Charging state
-    match airpods.battery.as_ref().unwrap().charging {
-        Some(state) => {
-            assert!(!state.is_left_charging(), "Left should not be charging");
-            assert!(!state.is_right_charging(), "Right should not be charging");
-            assert!(!state.is_case_charging(), "Case should not be charging");
-        }
-        None => (),
+    if let Some(state) = airpods.battery.as_ref().unwrap().charging {
+        assert!(!state.is_left_charging(), "Left should not be charging");
+        assert!(!state.is_right_charging(), "Right should not be charging");
+        assert!(!state.is_case_charging(), "Case should not be charging");
     }
 }
 

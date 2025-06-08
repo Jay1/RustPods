@@ -159,7 +159,7 @@ fn test_app_state_device_update_and_select() {
     let initial_device_count = state.devices.len();
     state.update_device(device.clone());
     // Should have at least the test device (may have more from CLI scanner)
-    assert!(state.devices.len() >= initial_device_count + 1);
+    assert!(state.devices.len() > initial_device_count);
     state.select_device(device.address.to_string());
     assert_eq!(state.selected_device, Some(device.address.to_string()));
 }

@@ -39,7 +39,7 @@ fn test_config_save_load() {
         Duration::from_secs(10)
     );
     assert_eq!(loaded_config.bluetooth.min_rssi, Some(-70));
-    assert_eq!(loaded_config.ui.show_notifications, false);
+    assert!(!loaded_config.ui.show_notifications);
     assert_eq!(loaded_config.ui.low_battery_threshold, 15);
     assert_eq!(loaded_config.system.log_level, LogLevel::Debug);
 }
@@ -185,9 +185,9 @@ fn test_nested_config_access() {
     config.system.launch_at_startup = true;
 
     // Verify changes were applied
-    assert_eq!(config.bluetooth.auto_scan_on_startup, false);
+    assert!(!config.bluetooth.auto_scan_on_startup);
     assert_eq!(config.ui.theme, Theme::Dark);
-    assert_eq!(config.system.launch_at_startup, true);
+    assert!(config.system.launch_at_startup);
 
     // Test deeper nested access through accessors if available
     assert_eq!(*config.bluetooth(), config.bluetooth);
@@ -329,7 +329,7 @@ fn test_config_manager_updates() {
     let updated_config = manager.get_config();
 
     // Verify changes were applied
-    assert_eq!(updated_config.bluetooth.auto_scan_on_startup, false);
+    assert!(!updated_config.bluetooth.auto_scan_on_startup);
     assert_eq!(updated_config.ui.theme, Theme::Dark);
 
     // Test that the file was saved (auto-save is enabled)
@@ -416,14 +416,14 @@ fn test_default_config_creation() {
     let config = AppConfig::default();
 
     // Test default bluetooth settings
-    assert_eq!(config.bluetooth.auto_scan_on_startup, true);
+    assert!(config.bluetooth.auto_scan_on_startup);
     assert_eq!(config.bluetooth.scan_duration, Duration::from_secs(5)); // Actual default is 5s
     assert_eq!(config.bluetooth.scan_interval, Duration::from_secs(30)); // Actual default is 30s
 
     // Test default UI settings that actually exist
-    assert_eq!(config.ui.show_notifications, true);
-    assert_eq!(config.ui.start_minimized, true); // Actual default is true (start minimized to tray)
+    assert!(config.ui.show_notifications);
+    assert!(config.ui.start_minimized); // Actual default is true (start minimized to tray)
 
     // Test system settings
-    assert_eq!(config.system.enable_telemetry, false); // Actual default is false for telemetry
+    assert!(!config.system.enable_telemetry); // Actual default is false for telemetry
 }

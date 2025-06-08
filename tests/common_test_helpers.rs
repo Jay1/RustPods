@@ -19,10 +19,7 @@ use rustpods::ui::state::AppState;
 /// Helper to convert tokio receiver to stream for testing
 pub fn receiver_to_stream<T>(rx: Receiver<T>) -> impl Stream<Item = T> {
     futures::stream::unfold(rx, |mut rx| async move {
-        match rx.recv().await {
-            Some(value) => Some((value, rx)),
-            None => None,
-        }
+        rx.recv().await.map(|value| (value, rx))
     })
 }
 
@@ -99,10 +96,10 @@ pub async fn very_long_delay() {
 
 /// Helper to create temporary test directory
 pub fn create_temp_dir() -> tempfile::TempDir {
-    let result = tempfile::tempdir().expect("Failed to create temporary directory");
+    
 
     // Temp directory will be automatically cleaned up when it goes out of scope
-    result
+    tempfile::tempdir().expect("Failed to create temporary directory")
 }
 
 /// Convert a tokio mpsc Receiver into a Stream

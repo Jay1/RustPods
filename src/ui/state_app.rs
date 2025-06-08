@@ -179,10 +179,8 @@ impl Application for StateApp {
         iced::Subscription::batch(vec![
             iced::time::every(Duration::from_secs(1)).map(|_| Message::Tick),
             iced::subscription::events_with(|event, _status| {
-                if let iced::Event::Window(window_event) = &event {
-                    if let window::Event::CloseRequested = window_event {
-                        return Some(Message::WindowCloseRequested);
-                    }
+                if let iced::Event::Window(window::Event::CloseRequested) = &event {
+                    return Some(Message::WindowCloseRequested);
                 }
                 None
             }),

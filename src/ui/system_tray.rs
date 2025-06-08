@@ -83,6 +83,12 @@ pub struct DirectWindowController {
     ui_sender: Option<UnboundedSender<Message>>,
 }
 
+impl Default for DirectWindowController {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DirectWindowController {
     pub fn new() -> Self {
         Self {

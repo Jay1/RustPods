@@ -229,7 +229,7 @@ impl StateManager {
             device_state: Arc::new(Mutex::new(DeviceState::default())),
             ui_state: Arc::new(Mutex::new(UiState::default())),
             config: Arc::new(Mutex::new(config)),
-            config_manager: Arc::new(Mutex::new(ConfigManager::default())),
+            config_manager: Arc::new(Mutex::new(ConfigManager::create_default())),
             ui_sender,
         }
     }
@@ -373,6 +373,7 @@ impl StateManager {
     }
 
     /// Get all state components for use by other components
+    #[allow(clippy::type_complexity)]
     pub fn get_state_components(
         &self,
     ) -> (

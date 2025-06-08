@@ -235,7 +235,7 @@ fn prop_animation_progress_valid() {
 
         // Clamped progress should be in [0.0, 1.0] range
         let clamped = progress.clamp(0.0, 1.0);
-        assert!(clamped >= 0.0 && clamped <= 1.0);
+        assert!((0.0..=1.0).contains(&clamped));
     }
 }
 

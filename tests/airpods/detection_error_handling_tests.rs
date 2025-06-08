@@ -28,7 +28,7 @@ fn create_test_device(
         rssi: Some(-60),
         manufacturer_data,
         services: vec![],
-        is_potential_airpods: is_potential_airpods,
+        is_potential_airpods,
         last_seen: Instant::now(),
         is_connected: false,
         service_data: HashMap::new(),

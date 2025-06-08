@@ -23,6 +23,7 @@ use crate::config::{AppConfig, Configurable};
 use crate::error::{BluetoothError, ErrorContext, RecoveryAction};
 
 /// Trait for providing Bluetooth adapter events and peripheral lookup, enabling dependency injection for testing.
+#[allow(clippy::type_complexity)]
 pub trait AdapterEventsProvider: Send + Sync {
     fn clone_box(&self) -> Box<dyn AdapterEventsProvider>;
     fn get_events<'a>(
@@ -1192,6 +1193,38 @@ pub fn parse_bdaddr(s: &str) -> Result<BDAddr, String> {
     Ok(BDAddr::from(addr))
 }
 
+pub struct MockAdapterEventsProvider;
+
+impl AdapterEventsProvider for MockAdapterEventsProvider {
+    fn clone_box(&self) -> Box<dyn AdapterEventsProvider> {
+        Box::new(MockAdapterEventsProvider)
+    }
+    fn get_events<'a>(
+        &'a self,
+    ) -> Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        Pin<Box<dyn Stream<Item = CentralEvent> + Send>>,
+                        BluetoothError,
+                    >,
+                > + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(async {
+            Ok(Box::pin(futures::stream::empty())
+                as Pin<Box<dyn Stream<Item = CentralEvent> + Send>>)
+        })
+    }
+    fn get_peripheral<'a>(
+        &'a self,
+        _address: &BDAddr,
+    ) -> Pin<Box<dyn Future<Output = Result<Peripheral, BluetoothError>> + Send + 'a>> {
+        Box::pin(async { panic!("MockAdapterEventsProvider::get_peripheral not implemented") })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1352,37 +1385,5 @@ mod tests {
             Err(BluetoothError::Timeout(_)) => { /* Success */ }
             _ => panic!("Wrong error type returned"),
         }
-    }
-}
-
-pub struct MockAdapterEventsProvider;
-
-impl AdapterEventsProvider for MockAdapterEventsProvider {
-    fn clone_box(&self) -> Box<dyn AdapterEventsProvider> {
-        Box::new(MockAdapterEventsProvider)
-    }
-    fn get_events<'a>(
-        &'a self,
-    ) -> Pin<
-        Box<
-            dyn Future<
-                    Output = Result<
-                        Pin<Box<dyn Stream<Item = CentralEvent> + Send>>,
-                        BluetoothError,
-                    >,
-                > + Send
-                + 'a,
-        >,
-    > {
-        Box::pin(async {
-            Ok(Box::pin(futures::stream::empty())
-                as Pin<Box<dyn Stream<Item = CentralEvent> + Send>>)
-        })
-    }
-    fn get_peripheral<'a>(
-        &'a self,
-        _address: &BDAddr,
-    ) -> Pin<Box<dyn Future<Output = Result<Peripheral, BluetoothError>> + Send + 'a>> {
-        Box::pin(async { panic!("MockAdapterEventsProvider::get_peripheral not implemented") })
     }
 }

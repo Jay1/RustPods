@@ -24,6 +24,7 @@ static INIT_LOGGER: Once = Once::new();
 
 /// Debug flag categories for selective logging
 #[derive(Debug, Clone)]
+#[derive(Default)]
 pub struct DebugFlags {
     pub ui: bool,        // UI events, window management, system tray
     pub bluetooth: bool, // Bluetooth scanning, device discovery, CLI scanner
@@ -33,18 +34,6 @@ pub struct DebugFlags {
     pub all: bool,       // Enable all debug output
 }
 
-impl Default for DebugFlags {
-    fn default() -> Self {
-        Self {
-            ui: false,
-            bluetooth: false,
-            airpods: false,
-            config: false,
-            system: false,
-            all: false,
-        }
-    }
-}
 
 /// Global debug flags storage
 static DEBUG_FLAGS: RwLock<DebugFlags> = RwLock::new(DebugFlags {

@@ -35,7 +35,7 @@ fn test_state_device_flow() {
     let initial_device_count = state.devices.len();
     state.update_device(paired_device.clone());
     // Should have at least the test device (may have more from CLI scanner)
-    assert!(state.devices.len() >= initial_device_count + 1);
+    assert!(state.devices.len() > initial_device_count);
     assert!(state.devices.contains_key(&paired_addr_str));
     // Select the paired device
     state.select_device(paired_addr_str.clone());
@@ -57,7 +57,7 @@ fn test_state_device_flow() {
     };
     state.update_device(updated_device);
     // Device count should remain the same (just updated existing device)
-    assert!(state.devices.len() >= initial_device_count + 1);
+    assert!(state.devices.len() > initial_device_count);
     let updated = state.devices.get(&paired_addr_str).unwrap();
     assert_eq!(updated.rssi, Some(-55));
     let selected = state.get_selected_device().unwrap();

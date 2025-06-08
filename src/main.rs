@@ -29,8 +29,6 @@ use ui::state_manager::StateManager;
 use ui::Message;
 
 use crate::logging::DebugFlags;
-use chrono;
-use env_logger;
 
 #[derive(Debug, Clone)]
 pub enum AppCommand {
@@ -207,6 +205,7 @@ async fn main_async(args: AppArgs) {
     let error_manager = Arc::new(Mutex::new(ErrorManager::new()));
 
     // Create telemetry manager
+    #[allow(clippy::arc_with_non_send_sync)]
     let telemetry_manager = Arc::new(Mutex::new(TelemetryManager::new(&config)));
 
     // Configure logger with settings from config
@@ -285,16 +284,12 @@ fn parse_enhanced_args() -> Result<AppArgs, String> {
     }
 
     // If any debug flags are set, enable debug log level
-    if debug_flags.ui
+    if (debug_flags.ui
         || debug_flags.bluetooth
         || debug_flags.airpods
         || debug_flags.config
-        || debug_flags.system
-        || debug_flags.all
-    {
-        if log_level == LogLevel::Warn {
-            log_level = LogLevel::Debug;
-        }
+        || debug_flags.system || debug_flags.all) && log_level == LogLevel::Warn {
+        log_level = LogLevel::Debug;
     }
 
     Ok(AppArgs {
@@ -538,7 +533,7 @@ fn init_logging_from_config(config: &AppConfig) {
     let log_path = if true {
         // Using hardcoded true since log_to_file doesn't exist
         let mut path = dirs::data_local_dir()
-            .unwrap_or_else(|| std::env::temp_dir())
+            .unwrap_or_else(std::env::temp_dir)
             .join("RustPods")
             .join("logs");
 

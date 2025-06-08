@@ -52,7 +52,7 @@ impl ConfigManager {
     }
 
     /// Create a default configuration manager
-    pub fn default() -> Self {
+    pub fn create_default() -> Self {
         Self::new(&default_config_path(), true)
     }
 
@@ -304,7 +304,7 @@ mod tests {
 
     #[test]
     fn test_config_manager_default() {
-        let manager = ConfigManager::default();
+        let manager = ConfigManager::create_default();
         let default_path = default_config_path();
 
         assert_eq!(manager.config_path(), &default_path);
@@ -313,7 +313,7 @@ mod tests {
 
     #[test]
     fn test_get_config() {
-        let manager = ConfigManager::default();
+        let manager = ConfigManager::create_default();
         let config = manager.get_config();
 
         // Default values should match
@@ -388,7 +388,7 @@ mod tests {
 
     #[test]
     fn test_validation() {
-        let manager = ConfigManager::default();
+        let manager = ConfigManager::create_default();
 
         // Set a valid initial state
         manager

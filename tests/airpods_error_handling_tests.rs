@@ -28,7 +28,7 @@ fn create_test_device(
         rssi: Some(-60),
         manufacturer_data,
         services: vec![],
-        is_potential_airpods: is_potential_airpods,
+        is_potential_airpods,
         last_seen: Instant::now(),
         is_connected: false,
         service_data: HashMap::new(),
@@ -126,7 +126,7 @@ fn test_error_manager_integration() {
     // Check that the error message contains the expected text
     let msg = &error_entry.error_message;
     assert!(
-        format!("{}", msg).contains("invalid data"),
+        msg.to_string().contains("invalid data"),
         "Error message should contain 'invalid data'"
     );
 }

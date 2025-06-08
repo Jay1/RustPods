@@ -93,7 +93,7 @@ impl ConnectionStatusWrapper {
                 border_radius: dot_size.into(),
                 border_width: 0.0,
                 border_color: iced::Color::TRANSPARENT,
-                ..Default::default()
+                text_color: None
             },
         )))
         .width(iced::Length::Fixed(dot_size))
@@ -139,8 +139,7 @@ impl ConnectionStatusWrapper {
                 border_radius: 4.0.into(),
                 border_width: 1.0,
                 border_color,
-                text_color: Some(text_color),
-                ..Default::default()
+                text_color: Some(text_color)
             },
         )))
         .padding(8)

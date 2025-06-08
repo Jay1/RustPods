@@ -178,10 +178,7 @@ mod tests {
 
     fn create_test_device(name: Option<&str>, addr: &str, rssi: Option<i16>) -> DiscoveredDevice {
         DiscoveredDevice {
-            address: match parse_bdaddr(addr) {
-                Ok(addr) => addr,
-                Err(_) => BDAddr::default(),
-            },
+            address: parse_bdaddr(addr).unwrap_or_default(),
             name: name.map(|s| s.to_string()),
             rssi,
             manufacturer_data: HashMap::new(),

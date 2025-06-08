@@ -43,7 +43,7 @@ fn build_cli_scanner() {
 
     // Check if v6 modular executable exists and is up-to-date
     let exe_path = cli_build_dir
-        .join(&cmake_build_type)
+        .join(cmake_build_type)
         .join("airpods_battery_cli.exe");
 
     let exe_exists = exe_path.exists();
@@ -66,7 +66,7 @@ fn build_cli_scanner() {
                 ];
 
                 for source_path in &source_paths {
-                    if let Ok(newer) = is_path_newer_than(&source_path, exe_modified) {
+                    if let Ok(newer) = is_path_newer_than(source_path, exe_modified) {
                         if newer {
                             needs_rebuild = true;
                             break;
@@ -105,7 +105,7 @@ fn build_cli_scanner() {
         println!("cargo:warning=Initializing Git submodules...");
         let status = Command::new("git")
             .current_dir(&manifest_dir)
-            .args(&["submodule", "update", "--init", "--recursive"])
+            .args(["submodule", "update", "--init", "--recursive"])
             .status();
 
         match status {
@@ -129,7 +129,7 @@ fn build_cli_scanner() {
         println!("cargo:warning=Configuring CLI scanner with CMake...");
         let cmake_configure = Command::new("cmake")
             .current_dir(&cli_source_dir)
-            .args(&[
+            .args([
                 "-B",
                 "build",
                 "-S",
@@ -151,7 +151,7 @@ fn build_cli_scanner() {
                 println!("cargo:warning=Visual Studio 2022 not found, trying 2019...");
                 let cmake_configure_alt = Command::new("cmake")
                     .current_dir(&cli_source_dir)
-                    .args(&[
+                    .args([
                         "-B",
                         "build",
                         "-S",
@@ -173,7 +173,7 @@ fn build_cli_scanner() {
                         println!("cargo:warning=Visual Studio generators failed, trying Ninja...");
                         let cmake_ninja = Command::new("cmake")
                             .current_dir(&cli_source_dir)
-                            .args(&[
+                            .args([
                                 "-B",
                                 "build",
                                 "-S",
@@ -209,7 +209,7 @@ fn build_cli_scanner() {
     );
     let cmake_build = Command::new("cmake")
         .current_dir(&cli_source_dir)
-        .args(&["--build", "build", "--config", &cmake_build_type])
+        .args(["--build", "build", "--config", cmake_build_type])
         .status();
 
     match cmake_build {

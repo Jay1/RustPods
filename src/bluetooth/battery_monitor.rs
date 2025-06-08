@@ -467,9 +467,9 @@ impl BatteryMonitor {
             battery.left.is_some() || battery.right.is_some() || battery.case.is_some();
 
         // Check if all readings are within valid range (0-100%)
-        let valid_left = battery.left.map_or(true, |level| level <= 100);
-        let valid_right = battery.right.map_or(true, |level| level <= 100);
-        let valid_case = battery.case.map_or(true, |level| level <= 100);
+        let valid_left = battery.left.is_none_or(|level| level <= 100);
+        let valid_right = battery.right.is_none_or(|level| level <= 100);
+        let valid_case = battery.case.is_none_or(|level| level <= 100);
 
         // Check charging status validity
         let valid_charging = battery.charging.is_some();

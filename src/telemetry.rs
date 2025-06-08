@@ -48,6 +48,7 @@ pub struct TelemetryManager {
     app_version: String,
 
     /// Error handler
+    #[allow(clippy::type_complexity)]
     error_handler: Option<Box<dyn FnMut(&RustPodsError)>>,
 
     /// Error queue for diagnostic triggering
@@ -420,5 +421,6 @@ pub fn init_telemetry(config: &AppConfig) -> Arc<Mutex<TelemetryManager>> {
         manager.record_event(TelemetryEvent::AppStart);
     }
 
+    #[allow(clippy::arc_with_non_send_sync)]
     Arc::new(Mutex::new(manager))
 }

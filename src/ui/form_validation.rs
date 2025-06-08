@@ -381,6 +381,7 @@ pub struct FieldValidator {
     /// Error message to display when validation fails
     pub error_message: String,
     /// Optional validator function
+    #[allow(clippy::type_complexity)]
     pub validator: Option<Box<dyn Fn(&str) -> Result<()> + Send + Sync>>,
 }
 

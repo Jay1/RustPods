@@ -35,7 +35,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 airpods.device_type,
                 AirPodsType::AirPodsPro | AirPodsType::AirPodsPro2
             );
-            let strong_signal = airpods.rssi.map_or(false, |rssi| rssi > -65);
+            let strong_signal = airpods.rssi.is_some_and(|rssi| rssi > -65);
 
             return is_pro && strong_signal;
         }
@@ -66,15 +66,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             // Print out AirPods discoveries
-            match &event {
-                BleEvent::AirPodsDetected(airpods) => {
-                    println!(
-                        "[ALL] AirPods: {:?} ({})",
-                        airpods.device_type,
-                        airpods.name.as_deref().unwrap_or("Unnamed")
-                    );
-                }
-                _ => {}
+            if let BleEvent::AirPodsDetected(airpods) = &event {
+                println!(
+                    "[ALL] AirPods: {:?} ({})",
+                    airpods.device_type,
+                    airpods.name.as_deref().unwrap_or("Unnamed")
+                );
             }
         }
     });

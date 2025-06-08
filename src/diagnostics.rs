@@ -533,8 +533,8 @@ impl DiagnosticsManager {
     /// Check hardware compatibility
     fn check_hardware_compatibility(
         &self,
-        _issues: &mut Vec<DiagnosticIssue>,
-        _recommendations: &mut Vec<String>,
+        _issues: &mut [DiagnosticIssue],
+        _recommendations: &mut [String],
         raw_data: &mut HashMap<String, String>,
     ) -> io::Result<()> {
         // On Windows, check for Bluetooth version

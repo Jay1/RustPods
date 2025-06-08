@@ -45,6 +45,12 @@ pub struct MockDevicePoller {
     pub devices: Arc<Mutex<HashMap<String, MockDevice>>>,
 }
 
+impl Default for MockDevicePoller {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MockDevicePoller {
     /// Create a new mock device poller
     pub fn new() -> Self {

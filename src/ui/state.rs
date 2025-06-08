@@ -227,7 +227,7 @@ impl Application for AppState {
                     if let Err(e) = self.config.save() {
                         log::error!("Failed to save settings: {}", e);
                     }
-                    return iced::window::change_mode(iced::window::Mode::Hidden);
+                    iced::window::change_mode(iced::window::Mode::Hidden)
                 } else {
                     log::info!("Exiting application");
                     std::process::exit(0);
@@ -254,10 +254,10 @@ impl Application for AppState {
                         log::error!("Failed to save settings on minimize: {}", e);
                     }
                     // Use Iced's proper window hiding command
-                    return iced::window::change_mode(iced::window::Mode::Hidden);
+                    iced::window::change_mode(iced::window::Mode::Hidden)
                 } else {
                     // Exit the application normally
-                    return self.update(Message::Exit);
+                    self.update(Message::Exit)
                 }
             }
             Message::ShowWindow => {
@@ -270,18 +270,18 @@ impl Application for AppState {
                     self.visible = true;
                     log::info!("Window visibility set to true, restoring window from hidden/minimized state");
                     // Use Iced's window restoration command to properly show the window
-                    return iced::window::change_mode(iced::window::Mode::Windowed);
+                    iced::window::change_mode(iced::window::Mode::Windowed)
                 } else {
                     // Window is already visible, but may be minimized - force restore
                     log::info!("Window already marked visible, forcing window restore and focus");
-                    return iced::window::change_mode(iced::window::Mode::Windowed);
+                    iced::window::change_mode(iced::window::Mode::Windowed)
                 }
             }
             Message::HideWindow => {
                 log::info!("HideWindow message received from system tray");
                 self.visible = false;
                 // Use Iced's proper window hiding command
-                return iced::window::change_mode(iced::window::Mode::Hidden);
+                iced::window::change_mode(iced::window::Mode::Hidden)
             }
             Message::DeviceDiscovered(device) => {
                 log::debug!("[UI] Device discovered: {:?}", device);
@@ -390,13 +390,13 @@ impl Application for AppState {
             }
             Message::ShowToast(msg) => {
                 self.toast_message = Some(msg);
-                return Command::perform(
+                Command::perform(
                     async {
                         tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-                        ()
+
                     },
                     |_| Message::Tick,
-                );
+                )
             }
             Message::MergedScanResult(devices) => {
                 println!(
@@ -431,7 +431,7 @@ impl Application for AppState {
             Message::Tick => {
                 println!("[DEBUG] Tick message received - refreshing device data");
                 // Refresh device data from CLI scanner on each tick using fast command approach
-                return Self::refresh_device_data_command();
+                Self::refresh_device_data_command()
             }
             Message::AirPodsDataLoaded(airpods_data) => {
                 // Handle the result of the async AirPods data loading
@@ -1046,7 +1046,7 @@ async fn async_scan_for_airpods() -> Vec<AirPodsBatteryInfo> {
     use tokio::task;
 
     // Run the CLI scanner in a blocking task to avoid blocking the async runtime
-    task::spawn_blocking(|| get_airpods_from_cli_scanner())
+    task::spawn_blocking(get_airpods_from_cli_scanner)
         .await
         .unwrap_or_else(|_| {
             log::error!("Failed to execute CLI scanner task");
