@@ -3,11 +3,9 @@
 // This file should be rust-analyzer error free.
 
 use crate::ui::state::AppState;
-use crate::ui::window_management::{DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH};
 use crate::ui::utils::load_window_icon;
+use crate::ui::window_management::{DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH};
 use iced::Application;
-
-
 
 /// Runs the UI application with system tray support
 pub fn run_ui() -> iced::Result {

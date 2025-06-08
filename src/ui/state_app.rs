@@ -1,37 +1,36 @@
 //! UI application using the improved state management architecture
 
-use iced::{Subscription, Application, Element, Command};
 use iced::window;
-use tokio::sync::mpsc;
+use iced::{Application, Command, Element, Subscription};
 use std::{sync::Arc, time::Duration};
+use tokio::sync::mpsc;
 
-use crate::ui::{Message, UiComponent, MainWindow, SettingsWindow};
+use crate::ui::{MainWindow, Message, SettingsWindow, UiComponent};
 // Temporarily disable system tray
 // use crate::ui::system_tray_controller::SystemTrayController;
 use crate::ui::state_manager::StateManager;
-use crate::ui::window_visibility::WindowVisibilityManager;
 use crate::ui::theme::Theme;
+use crate::ui::window_visibility::WindowVisibilityManager;
 
-use crate::ui::window_management::{DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT};
+use crate::ui::window_management::{DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH};
 // Import the AppController from the appropriate path
 
 /// State-based application implementation with improved state management
 pub struct StateApp {
     /// State manager
     state_manager: Arc<StateManager>,
-    
+
     /// Main window component
     main_window: MainWindow,
-    
+
     /// Settings window component
     settings_window: SettingsWindow,
-    
+
     /// Window visibility manager
     visibility_manager: WindowVisibilityManager,
-    
+
     /// Current application bounds
     bounds: iced::Rectangle,
-    
     // System tray controller (temporarily disabled)
     // system_tray_controller: Option<SystemTrayController>,
 }
@@ -44,22 +43,22 @@ impl Application for StateApp {
 
     fn new(flags: Self::Flags) -> (Self, Command<Message>) {
         let state_manager = flags;
-        
+
         // Refresh config
         let _config = state_manager.get_config();
-        
+
         // Get device state
         let _device_state = state_manager.get_device_state();
         let ui_state = state_manager.get_ui_state();
-        
+
         // Create main and settings windows
         let main_window = MainWindow::empty();
         let settings_window = SettingsWindow::new(_config.clone());
-        
+
         // Create window visibility manager with the current config
         let visibility_manager = WindowVisibilityManager::new(_config.clone())
             .with_state_manager(Arc::clone(&state_manager));
-        
+
         // Create initial command
         let start_command = if !ui_state.visible {
             // Start hidden if UI state is not visible
@@ -67,7 +66,7 @@ impl Application for StateApp {
         } else {
             Command::none()
         };
-        
+
         // Temporarily disable system tray controller
         // let (tray_tx, _tray_rx) = std::sync::mpsc::channel();
         // let mut system_tray_controller = Some(SystemTrayController::new(tray_tx, _config.clone(), Arc::clone(&state_manager)).unwrap());
@@ -77,7 +76,7 @@ impl Application for StateApp {
         //         Err(e) => log::error!("Failed to start system tray controller: {}", e),
         //     }
         // }
-        
+
         (
             Self {
                 state_manager,
@@ -87,20 +86,32 @@ impl Application for StateApp {
                 bounds: iced::Rectangle::default(),
                 // system_tray_controller, // Temporarily disabled
             },
-            start_command
+            start_command,
         )
     }
-    
+
     fn title(&self) -> String {
         let _config = self.state_manager.get_config();
-        
+
         // Show battery percentage in title if available
         let device_state = self.state_manager.get_device_state();
         if let Some(battery) = device_state.battery_status.as_ref() {
-            let left = battery.battery.left.map(|v| v.to_string()).unwrap_or_else(|| "?".to_string());
-            let right = battery.battery.right.map(|v| v.to_string()).unwrap_or_else(|| "?".to_string());
-            let case = battery.battery.case.map(|v| v.to_string()).unwrap_or_else(|| "?".to_string());
-            
+            let left = battery
+                .battery
+                .left
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "?".to_string());
+            let right = battery
+                .battery
+                .right
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "?".to_string());
+            let case = battery
+                .battery
+                .case
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "?".to_string());
+
             format!("RustPods - L: {}% R: {}% Case: {}%", left, right, case)
         } else {
             String::from("RustPods - AirPods Battery Monitor")
@@ -123,7 +134,7 @@ impl Application for StateApp {
             Message::ToggleVisibility => {
                 log::info!("StateApp: ToggleVisibility received");
                 self.visibility_manager.toggle(bounds)
-            },
+            }
             Message::Exit => {
                 // Temporarily disable system tray controller cleanup
                 // if let Some(controller) = &mut self.system_tray_controller {
@@ -134,38 +145,36 @@ impl Application for StateApp {
                     log::error!("Failed to save settings on exit: {}", e);
                 }
                 window::close()
-            },
+            }
             Message::WindowCloseRequested => {
                 log::info!("StateApp: WindowCloseRequested received, minimizing to tray");
                 // Minimize to tray instead of exiting
                 self.visibility_manager.hide(bounds)
-            },
+            }
             Message::AnimationTick => {
                 let progress = (self.state_manager.get_animation_progress() + 0.016) % 1.0;
                 self.state_manager.set_animation_progress(progress);
-                self.main_window = self.main_window.clone()
+                self.main_window = self
+                    .main_window
+                    .clone()
                     .with_animation_progress(progress)
                     .with_connection_transition(progress);
                 Command::none()
-            },
-            _ => {
-                Command::none()
             }
+            _ => Command::none(),
         }
     }
-    
+
     fn view(&self) -> Element<'_, Message, iced::Renderer<Theme>> {
         if !self.visibility_manager.is_visible() {
-            iced::widget::container::Container::new(
-                iced::widget::text("")
-            ).into()
+            iced::widget::container::Container::new(iced::widget::text("")).into()
         } else if self.state_manager.get_ui_state().show_settings {
             self.settings_window.view()
         } else {
             self.main_window.view()
         }
     }
-    
+
     fn subscription(&self) -> Subscription<Message> {
         iced::Subscription::batch(vec![
             iced::time::every(Duration::from_secs(1)).map(|_| Message::Tick),
@@ -206,14 +215,15 @@ pub fn run_state_ui() -> Result<(), iced::Error> {
 
     let mut lifecycle_manager = crate::lifecycle_manager::LifecycleManager::new(
         Arc::clone(&state_manager),
-        sender_clone.clone()
-    ).with_auto_save_interval(auto_save_interval);
+        sender_clone.clone(),
+    )
+    .with_auto_save_interval(auto_save_interval);
 
     // Start lifecycle manager with proper error handling
     match lifecycle_manager.start() {
         Ok(_) => {
             log::info!("Lifecycle manager started successfully");
-        },
+        }
         Err(e) => {
             log::error!("Failed to start lifecycle manager: {}", e);
             // Continue without full lifecycle management, but still try basic features
@@ -291,4 +301,4 @@ pub fn run_state_ui() -> Result<(), iced::Error> {
     }
 
     result
-} 
+}

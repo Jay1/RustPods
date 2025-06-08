@@ -24,32 +24,32 @@ impl KeyboardShortcut {
     pub fn new(key: KeyCode, modifiers: Modifiers) -> Self {
         Self { key, modifiers }
     }
-    
+
     /// Create a shortcut with Ctrl modifier
     pub fn ctrl(key: KeyCode) -> Self {
         Self::new(key, Modifiers::CTRL)
     }
-    
+
     /// Create a shortcut with Shift modifier
     pub fn shift(key: KeyCode) -> Self {
         Self::new(key, Modifiers::SHIFT)
     }
-    
+
     /// Create a shortcut with Alt modifier
     pub fn alt(key: KeyCode) -> Self {
         Self::new(key, Modifiers::ALT)
     }
-    
+
     /// Create a shortcut with Ctrl+Shift modifiers
     pub fn ctrl_shift(key: KeyCode) -> Self {
         Self::new(key, Modifiers::CTRL | Modifiers::SHIFT)
     }
-    
+
     /// Create a shortcut with Ctrl+Alt modifiers
     pub fn ctrl_alt(key: KeyCode) -> Self {
         Self::new(key, Modifiers::CTRL | Modifiers::ALT)
     }
-    
+
     /// Check if the shortcut matches a keyboard event
     pub fn matches(&self, key_code: KeyCode, modifiers: Modifiers) -> bool {
         self.key == key_code && self.modifiers == modifiers
@@ -72,7 +72,7 @@ impl Display for KeyboardShortcut {
         if self.modifiers.contains(Modifiers::LOGO) {
             parts.push("Win");
         }
-        
+
         let key_name = match self.key {
             KeyCode::A => "A",
             KeyCode::B => "B",
@@ -118,9 +118,9 @@ impl Display for KeyboardShortcut {
             KeyCode::Enter => "Enter",
             _ => "Unknown",
         };
-        
+
         parts.push(key_name);
-        
+
         write!(f, "{}", parts.join("+"))
     }
 }
@@ -147,27 +147,44 @@ impl KeyboardShortcutManager {
             shortcuts: HashMap::new(),
         }
     }
-    
+
     /// Register a new keyboard shortcut for a message
     pub fn register(&mut self, shortcut: KeyboardShortcut, message: Message) {
         self.shortcuts.insert(shortcut, message);
     }
-    
+
     /// Register the default keyboard shortcuts for the application
     pub fn register_default_shortcuts(&mut self) {
         // Main application shortcuts
         self.register(KeyboardShortcut::ctrl(KeyCode::Q), Message::Exit);
-        self.register(KeyboardShortcut::ctrl(KeyCode::H), Message::ToggleVisibility);
-        
+        self.register(
+            KeyboardShortcut::ctrl(KeyCode::H),
+            Message::ToggleVisibility,
+        );
+
         // Settings shortcuts
-        self.register(KeyboardShortcut::ctrl(KeyCode::Comma), Message::OpenSettings);
-        self.register(KeyboardShortcut::ctrl(KeyCode::Period), Message::CloseSettings);
-        self.register(KeyboardShortcut::ctrl_shift(KeyCode::S), Message::SaveSettings);
+        self.register(
+            KeyboardShortcut::ctrl(KeyCode::Comma),
+            Message::OpenSettings,
+        );
+        self.register(
+            KeyboardShortcut::ctrl(KeyCode::Period),
+            Message::CloseSettings,
+        );
+        self.register(
+            KeyboardShortcut::ctrl_shift(KeyCode::S),
+            Message::SaveSettings,
+        );
     }
-    
+
     /// Process keyboard events and generate corresponding messages
     pub fn handle_event(&self, event: &Event) -> Option<Message> {
-        if let Event::Keyboard(keyboard::Event::KeyPressed { key_code, modifiers, .. }) = event {
+        if let Event::Keyboard(keyboard::Event::KeyPressed {
+            key_code,
+            modifiers,
+            ..
+        }) = event
+        {
             // Check if this key combination matches any registered shortcut
             for (shortcut, message) in &self.shortcuts {
                 if shortcut.matches(*key_code, *modifiers) {
@@ -175,19 +192,19 @@ impl KeyboardShortcutManager {
                 }
             }
         }
-        
+
         None
     }
-    
+
     /// Get all registered shortcuts
     pub fn get_shortcuts(&self) -> &HashMap<KeyboardShortcut, Message> {
         &self.shortcuts
     }
-    
+
     /// Get human-readable descriptions of all keyboard shortcuts
     pub fn get_shortcut_descriptions(&self) -> Vec<(String, String)> {
         let mut descriptions = Vec::new();
-        
+
         for (shortcut, message) in &self.shortcuts {
             let description = match message {
                 Message::Exit => "Exit application",
@@ -197,23 +214,25 @@ impl KeyboardShortcutManager {
                 Message::SaveSettings => "Save settings",
                 _ => continue, // Skip messages without descriptions
             };
-            
+
             descriptions.push((shortcut.to_string(), description.to_string()));
         }
-        
+
         // Sort by description
         descriptions.sort_by(|a, b| a.1.cmp(&b.1));
-        
+
         descriptions
     }
 }
 
 /// Process events from Iced and handle keyboard shortcuts
-pub fn handle_events(
-    event: Event,
-    shortcut_manager: &KeyboardShortcutManager,
-) -> Option<Message> {
-    if let Event::Keyboard(keyboard::Event::KeyPressed { key_code, modifiers, .. }) = event {
+pub fn handle_events(event: Event, shortcut_manager: &KeyboardShortcutManager) -> Option<Message> {
+    if let Event::Keyboard(keyboard::Event::KeyPressed {
+        key_code,
+        modifiers,
+        ..
+    }) = event
+    {
         // Check if this key combination matches any registered shortcut
         for (shortcut, message) in shortcut_manager.get_shortcuts() {
             if shortcut.matches(key_code, modifiers) {
@@ -221,7 +240,7 @@ pub fn handle_events(
             }
         }
     }
-    
+
     None
 }
 
@@ -238,4 +257,4 @@ pub fn format_key_for_display(key: KeyCode) -> String {
         // ... rest of the function ...
         _ => format!("{:?}", key),
     }
-} 
+}

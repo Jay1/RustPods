@@ -6,9 +6,8 @@ use std::time::Instant;
 use btleplug::api::BDAddr;
 
 use rustpods::airpods::{
-    detect_airpods, identify_airpods_type, create_airpods_filter,
-    AirPodsType, AirPodsBattery, DetectedAirPods,
-    APPLE_COMPANY_ID
+    create_airpods_filter, detect_airpods, identify_airpods_type, AirPodsBattery, AirPodsType,
+    DetectedAirPods, APPLE_COMPANY_ID,
 };
 use rustpods::bluetooth::DiscoveredDevice;
 
@@ -17,7 +16,7 @@ fn create_test_device_with_data(
     address: [u8; 6],
     name: Option<&str>,
     rssi: Option<i16>,
-    manufacturer_data: HashMap<u16, Vec<u8>>
+    manufacturer_data: HashMap<u16, Vec<u8>>,
 ) -> DiscoveredDevice {
     DiscoveredDevice {
         address: BDAddr::from(address),
@@ -39,20 +38,20 @@ fn create_airpods_data(
     left_battery: u8,
     right_battery: u8,
     case_battery: u8,
-    charging_status: u8
+    charging_status: u8,
 ) -> Vec<u8> {
     // The data structure must exactly match what's expected in parse_airpods_data
     // Left battery is at index 12, right at 13, charging at 14, case at 15
-    
+
     let mut data = Vec::with_capacity(27);
-    
+
     // AirPods model prefix (first two bytes)
     data.push(prefix[0]);
     data.push(prefix[1]);
-    
+
     // Add 10 bytes of dummy data
     data.extend_from_slice(&[0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A]);
-    
+
     // Add battery and status data at the correct positions
     // Index 12: Left battery
     data.push(left_battery);
@@ -62,10 +61,10 @@ fn create_airpods_data(
     data.push(charging_status);
     // Index 15: Case battery
     data.push(case_battery);
-    
+
     // Add padding to ensure enough length
     data.extend_from_slice(&[0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
-    
+
     data
 }
 
@@ -82,29 +81,46 @@ fn test_detect_airpods_regular() {
     let mut manufacturer_data = HashMap::new();
     manufacturer_data.insert(
         APPLE_COMPANY_ID,
-        create_airpods_data(AIRPODS_1_2_PREFIX, 8, 7, 6, 4) // 80%, 70%, 60%, case charging
+        create_airpods_data(AIRPODS_1_2_PREFIX, 8, 7, 6, 4), // 80%, 70%, 60%, case charging
     );
     let device = create_test_device_with_data(
         [0x01, 0x02, 0x03, 0x04, 0x05, 0x06],
         Some("AirPods"),
         Some(-60),
-        manufacturer_data
+        manufacturer_data,
     );
     // Test detection
     let result = detect_airpods(&device).unwrap();
     assert!(result.is_some(), "Should detect AirPods device");
     let airpods = result.unwrap();
-    assert!(matches!(airpods.device_type, AirPodsType::AirPods1 | AirPodsType::AirPods2),
-            "Should detect as regular AirPods");
-    assert_eq!(airpods.battery.as_ref().unwrap().left, Some(80), "Left battery should be 80%");
-    assert_eq!(airpods.battery.as_ref().unwrap().right, Some(70), "Right battery should be 70%");
-    assert_eq!(airpods.battery.as_ref().unwrap().case, Some(60), "Case battery should be 60%");
+    assert!(
+        matches!(
+            airpods.device_type,
+            AirPodsType::AirPods1 | AirPodsType::AirPods2
+        ),
+        "Should detect as regular AirPods"
+    );
+    assert_eq!(
+        airpods.battery.as_ref().unwrap().left,
+        Some(80),
+        "Left battery should be 80%"
+    );
+    assert_eq!(
+        airpods.battery.as_ref().unwrap().right,
+        Some(70),
+        "Right battery should be 70%"
+    );
+    assert_eq!(
+        airpods.battery.as_ref().unwrap().case,
+        Some(60),
+        "Case battery should be 60%"
+    );
     match airpods.battery.as_ref().unwrap().charging {
         Some(state) => {
             assert!(!state.is_left_charging(), "Left should not be charging");
             assert!(!state.is_right_charging(), "Right should not be charging");
             assert!(state.is_case_charging(), "Case should be charging");
-        },
+        }
         None => (),
     }
 }
@@ -115,28 +131,44 @@ fn test_detect_airpods_pro() {
     let mut manufacturer_data = HashMap::new();
     manufacturer_data.insert(
         APPLE_COMPANY_ID,
-        create_airpods_data(AIRPODS_PRO_PREFIX, 9, 9, 5, 5) // 90%, 90%, 50%, both buds charging
+        create_airpods_data(AIRPODS_PRO_PREFIX, 9, 9, 5, 5), // 90%, 90%, 50%, both buds charging
     );
     let device = create_test_device_with_data(
         [0x02, 0x03, 0x04, 0x05, 0x06, 0x07],
         Some("AirPods Pro"),
         Some(-65),
-        manufacturer_data
+        manufacturer_data,
     );
     // Test detection
     let result = detect_airpods(&device).unwrap();
     assert!(result.is_some(), "Should detect AirPods Pro device");
     let airpods = result.unwrap();
-    assert_eq!(airpods.device_type, AirPodsType::AirPodsPro, "Should detect as AirPods Pro");
-    assert_eq!(airpods.battery.as_ref().unwrap().left, Some(90), "Left battery should be 90%");
-    assert_eq!(airpods.battery.as_ref().unwrap().right, Some(90), "Right battery should be 90%");
-    assert_eq!(airpods.battery.as_ref().unwrap().case, Some(50), "Case battery should be 50%");
+    assert_eq!(
+        airpods.device_type,
+        AirPodsType::AirPodsPro,
+        "Should detect as AirPods Pro"
+    );
+    assert_eq!(
+        airpods.battery.as_ref().unwrap().left,
+        Some(90),
+        "Left battery should be 90%"
+    );
+    assert_eq!(
+        airpods.battery.as_ref().unwrap().right,
+        Some(90),
+        "Right battery should be 90%"
+    );
+    assert_eq!(
+        airpods.battery.as_ref().unwrap().case,
+        Some(50),
+        "Case battery should be 50%"
+    );
     match airpods.battery.as_ref().unwrap().charging {
         Some(state) => {
             assert!(state.is_left_charging(), "Left should be charging");
             assert!(state.is_right_charging(), "Right should be charging");
             assert!(!state.is_case_charging(), "Case should not be charging");
-        },
+        }
         None => (),
     }
 }
@@ -147,28 +179,44 @@ fn test_detect_airpods_pro_2() {
     let mut manufacturer_data = HashMap::new();
     manufacturer_data.insert(
         APPLE_COMPANY_ID,
-        create_airpods_data(AIRPODS_PRO_2_PREFIX, 10, 10, 10, 4) // 100%, 100%, 100%, case charging
+        create_airpods_data(AIRPODS_PRO_2_PREFIX, 10, 10, 10, 4), // 100%, 100%, 100%, case charging
     );
     let device = create_test_device_with_data(
         [0x03, 0x04, 0x05, 0x06, 0x07, 0x08],
         Some("AirPods Pro 2"),
         Some(-70),
-        manufacturer_data
+        manufacturer_data,
     );
     // Test detection
     let result = detect_airpods(&device).unwrap();
     assert!(result.is_some(), "Should detect AirPods Pro 2 device");
     let airpods = result.unwrap();
-    assert_eq!(airpods.device_type, AirPodsType::AirPodsPro2, "Should detect as AirPods Pro 2");
-    assert_eq!(airpods.battery.as_ref().unwrap().left, Some(100), "Left battery should be 100%");
-    assert_eq!(airpods.battery.as_ref().unwrap().right, Some(100), "Right battery should be 100%");
-    assert_eq!(airpods.battery.as_ref().unwrap().case, Some(100), "Case battery should be 100%");
+    assert_eq!(
+        airpods.device_type,
+        AirPodsType::AirPodsPro2,
+        "Should detect as AirPods Pro 2"
+    );
+    assert_eq!(
+        airpods.battery.as_ref().unwrap().left,
+        Some(100),
+        "Left battery should be 100%"
+    );
+    assert_eq!(
+        airpods.battery.as_ref().unwrap().right,
+        Some(100),
+        "Right battery should be 100%"
+    );
+    assert_eq!(
+        airpods.battery.as_ref().unwrap().case,
+        Some(100),
+        "Case battery should be 100%"
+    );
     match airpods.battery.as_ref().unwrap().charging {
         Some(state) => {
             assert!(!state.is_left_charging(), "Left should not be charging");
             assert!(!state.is_right_charging(), "Right should not be charging");
             assert!(state.is_case_charging(), "Case should be charging");
-        },
+        }
         None => (),
     }
 }
@@ -179,28 +227,44 @@ fn test_detect_airpods_max() {
     let mut manufacturer_data = HashMap::new();
     manufacturer_data.insert(
         APPLE_COMPANY_ID,
-        create_airpods_data(AIRPODS_MAX_PREFIX, 6, 6, 0, 0) // 60%, 60%, N/A, none charging
+        create_airpods_data(AIRPODS_MAX_PREFIX, 6, 6, 0, 0), // 60%, 60%, N/A, none charging
     );
     let device = create_test_device_with_data(
         [0x04, 0x05, 0x06, 0x07, 0x08, 0x09],
         Some("AirPods Max"),
         Some(-55),
-        manufacturer_data
+        manufacturer_data,
     );
     // Test detection
     let result = detect_airpods(&device).unwrap();
     assert!(result.is_some(), "Should detect AirPods Max device");
     let airpods = result.unwrap();
-    assert_eq!(airpods.device_type, AirPodsType::AirPodsMax, "Should detect as AirPods Max");
-    assert_eq!(airpods.battery.as_ref().unwrap().left, Some(60), "Left battery should be 60%");
-    assert_eq!(airpods.battery.as_ref().unwrap().right, Some(60), "Right battery should be 60%");
-    assert_eq!(airpods.battery.as_ref().unwrap().case, Some(0), "Case battery should be 0%");
+    assert_eq!(
+        airpods.device_type,
+        AirPodsType::AirPodsMax,
+        "Should detect as AirPods Max"
+    );
+    assert_eq!(
+        airpods.battery.as_ref().unwrap().left,
+        Some(60),
+        "Left battery should be 60%"
+    );
+    assert_eq!(
+        airpods.battery.as_ref().unwrap().right,
+        Some(60),
+        "Right battery should be 60%"
+    );
+    assert_eq!(
+        airpods.battery.as_ref().unwrap().case,
+        Some(0),
+        "Case battery should be 0%"
+    );
     match airpods.battery.as_ref().unwrap().charging {
         Some(state) => {
             assert!(!state.is_left_charging(), "Left should not be charging");
             assert!(!state.is_right_charging(), "Right should not be charging");
             assert!(!state.is_case_charging(), "Case should not be charging");
-        },
+        }
         None => (),
     }
 }
@@ -211,29 +275,45 @@ fn test_detect_airpods_3() {
     let mut manufacturer_data = HashMap::new();
     manufacturer_data.insert(
         APPLE_COMPANY_ID,
-        create_airpods_data(AIRPODS_3_PREFIX, 8, 8, 7, 0) // 80%, 80%, 70%, none charging
+        create_airpods_data(AIRPODS_3_PREFIX, 8, 8, 7, 0), // 80%, 80%, 70%, none charging
     );
     let device = create_test_device_with_data(
         [0x05, 0x06, 0x07, 0x08, 0x09, 0x0A],
         Some("AirPods 3"),
         Some(-65),
-        manufacturer_data
+        manufacturer_data,
     );
     // Test detection
     let result = detect_airpods(&device).unwrap();
     assert!(result.is_some(), "Should detect AirPods 3 device");
     let airpods = result.unwrap();
-    assert_eq!(airpods.device_type, AirPodsType::AirPods3, "Should detect as AirPods 3");
-    assert_eq!(airpods.battery.as_ref().unwrap().left, Some(80), "Left battery should be 80%");
-    assert_eq!(airpods.battery.as_ref().unwrap().right, Some(80), "Right battery should be 80%");
-    assert_eq!(airpods.battery.as_ref().unwrap().case, Some(70), "Case battery should be 70%");
+    assert_eq!(
+        airpods.device_type,
+        AirPodsType::AirPods3,
+        "Should detect as AirPods 3"
+    );
+    assert_eq!(
+        airpods.battery.as_ref().unwrap().left,
+        Some(80),
+        "Left battery should be 80%"
+    );
+    assert_eq!(
+        airpods.battery.as_ref().unwrap().right,
+        Some(80),
+        "Right battery should be 80%"
+    );
+    assert_eq!(
+        airpods.battery.as_ref().unwrap().case,
+        Some(70),
+        "Case battery should be 70%"
+    );
     // Charging state
     match airpods.battery.as_ref().unwrap().charging {
         Some(state) => {
             assert!(!state.is_left_charging(), "Left should not be charging");
             assert!(!state.is_right_charging(), "Right should not be charging");
             assert!(!state.is_case_charging(), "Case should not be charging");
-        },
+        }
         None => (),
     }
 }
@@ -244,16 +324,16 @@ fn test_detect_non_airpods_apple_device() {
     let mut manufacturer_data = HashMap::new();
     manufacturer_data.insert(
         APPLE_COMPANY_ID,
-        vec![0x01, 0x02, 0x03, 0x04, 0x05] // Some random data
+        vec![0x01, 0x02, 0x03, 0x04, 0x05], // Some random data
     );
-    
+
     let device = create_test_device_with_data(
         [0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F],
         Some("Apple Device"),
         Some(-65),
-        manufacturer_data
+        manufacturer_data,
     );
-    
+
     // Test detection
     let result = detect_airpods(&device).unwrap();
     assert!(result.is_none(), "Should not detect as AirPods");
@@ -265,16 +345,16 @@ fn test_detect_non_apple_device() {
     let mut manufacturer_data = HashMap::new();
     manufacturer_data.insert(
         0x0081, // Sony Company ID
-        vec![0x01, 0x02, 0x03, 0x04, 0x05]
+        vec![0x01, 0x02, 0x03, 0x04, 0x05],
     );
-    
+
     let device = create_test_device_with_data(
         [0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F],
         Some("Sony Headphones"),
         Some(-65),
-        manufacturer_data
+        manufacturer_data,
     );
-    
+
     // Test detection
     let result = detect_airpods(&device).unwrap();
     assert!(result.is_none(), "Should not detect as AirPods");
@@ -286,22 +366,28 @@ fn test_detect_airpods_empty_battery() {
     let mut manufacturer_data = HashMap::new();
     manufacturer_data.insert(
         APPLE_COMPANY_ID,
-        create_airpods_data(AIRPODS_1_2_PREFIX, 0xFF, 0xFF, 0xFF, 0) // Unknown battery levels
+        create_airpods_data(AIRPODS_1_2_PREFIX, 0xFF, 0xFF, 0xFF, 0), // Unknown battery levels
     );
-    
+
     let device = create_test_device_with_data(
         [0x01, 0x02, 0x03, 0x04, 0x05, 0x06],
         Some("AirPods"),
         Some(-60),
-        manufacturer_data
+        manufacturer_data,
     );
-    
+
     // Test detection
     let result = detect_airpods(&device).unwrap();
-    assert!(result.is_some(), "Should detect AirPods device even with unknown battery");
+    assert!(
+        result.is_some(),
+        "Should detect AirPods device even with unknown battery"
+    );
     let airpods = result.unwrap();
-    assert!(matches!(airpods.device_type, AirPodsType::AirPods1 | AirPodsType::AirPods2));
-    
+    assert!(matches!(
+        airpods.device_type,
+        AirPodsType::AirPods1 | AirPodsType::AirPods2
+    ));
+
     // Handle case where battery info might be None for unknown values
     if let Some(battery) = airpods.battery.as_ref() {
         assert_eq!(battery.left, None, "Left battery should be None");
@@ -358,51 +444,57 @@ fn test_identify_airpods_type() {
 fn test_airpods_filter() {
     // Create the filter
     let filter = create_airpods_filter();
-    
+
     // Create test devices
     let mut airpods_data = HashMap::new();
     airpods_data.insert(
         APPLE_COMPANY_ID,
-        create_airpods_data(AIRPODS_1_2_PREFIX, 8, 7, 6, 0)
+        create_airpods_data(AIRPODS_1_2_PREFIX, 8, 7, 6, 0),
     );
-    
+
     let airpods_device = create_test_device_with_data(
         [0x01, 0x02, 0x03, 0x04, 0x05, 0x06],
         Some("AirPods"),
         Some(-60),
-        airpods_data
+        airpods_data,
     );
-    
+
     let mut other_apple_data = HashMap::new();
     other_apple_data.insert(
         APPLE_COMPANY_ID,
-        vec![0x01, 0x02, 0x03, 0x04, 0x05] // Some random Apple data
+        vec![0x01, 0x02, 0x03, 0x04, 0x05], // Some random Apple data
     );
-    
+
     let other_apple_device = create_test_device_with_data(
         [0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F],
         Some("Apple Device"),
         Some(-65),
-        other_apple_data
+        other_apple_data,
     );
-    
+
     let mut non_apple_data = HashMap::new();
     non_apple_data.insert(
         0x0081, // Sony
-        vec![0x01, 0x02, 0x03, 0x04, 0x05]
+        vec![0x01, 0x02, 0x03, 0x04, 0x05],
     );
-    
+
     let non_apple_device = create_test_device_with_data(
         [0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F],
         Some("Sony Headphones"),
         Some(-65),
-        non_apple_data
+        non_apple_data,
     );
-    
+
     // Test the filter
     assert!(filter(&airpods_device), "Should identify AirPods device");
-    assert!(!filter(&other_apple_device), "Should not identify other Apple devices");
-    assert!(!filter(&non_apple_device), "Should not identify non-Apple devices");
+    assert!(
+        !filter(&other_apple_device),
+        "Should not identify other Apple devices"
+    );
+    assert!(
+        !filter(&non_apple_device),
+        "Should not identify non-Apple devices"
+    );
 }
 
 #[test]
@@ -417,4 +509,4 @@ fn test_airpods_default_trait_implementations() {
     assert_eq!(default_battery.right, None);
     assert_eq!(default_battery.case, None);
     assert!(default_battery.charging.is_none());
-} 
+}

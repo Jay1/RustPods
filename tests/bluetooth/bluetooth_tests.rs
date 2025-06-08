@@ -1,18 +1,18 @@
 //! Tests for AirPods device and battery info model (post-refactor)
 //! Updated for native C++ AirPods battery helper and new state/message model
 
+use btleplug::api::BDAddr;
+use rustpods::airpods::{AirPodsBattery, AirPodsChargingState};
+use rustpods::bluetooth::DiscoveredDevice;
 use std::collections::HashMap;
 use std::time::Instant;
-use btleplug::api::BDAddr;
-use rustpods::bluetooth::DiscoveredDevice;
-use rustpods::airpods::{AirPodsBattery, AirPodsChargingState};
 
 /// Test helper to create a sample discovered device
 fn create_test_device(
     address: [u8; 6],
     name: Option<&str>,
     rssi: Option<i16>,
-    is_airpods: bool
+    is_airpods: bool,
 ) -> DiscoveredDevice {
     let manufacturer_data = HashMap::new();
     DiscoveredDevice {
@@ -45,9 +45,9 @@ fn test_airpods_battery_struct() {
 
 #[test]
 fn test_discovered_device_fields() {
-    let device = create_test_device([1,2,3,4,5,6], Some("AirPods Pro"), Some(-55), true);
-    assert_eq!(device.address, BDAddr::from([1,2,3,4,5,6]));
+    let device = create_test_device([1, 2, 3, 4, 5, 6], Some("AirPods Pro"), Some(-55), true);
+    assert_eq!(device.address, BDAddr::from([1, 2, 3, 4, 5, 6]));
     assert_eq!(device.name.as_deref(), Some("AirPods Pro"));
     assert_eq!(device.rssi, Some(-55));
     assert!(device.is_potential_airpods);
-} 
+}

@@ -1,11 +1,11 @@
-use iced::{executor, Application, Command, Element, Settings, Length, Color, Background};
-use iced::widget::{column, container, row, text};
 use iced::alignment::{Alignment, Horizontal};
 use iced::theme;
+use iced::widget::{column, container, row, text};
+use iced::{executor, Application, Background, Color, Command, Element, Length, Settings};
 
+use rustpods::airpods::{AirPodsBattery, AirPodsChargingState};
 use rustpods::init_logging;
 use rustpods::ui::theme::Theme as RustPodsTheme;
-use rustpods::airpods::{AirPodsChargingState, AirPodsBattery};
 
 /// Edge case test application for RustPods UI
 pub struct EdgeCaseTestApp {
@@ -85,7 +85,7 @@ impl Application for EdgeCaseTestApp {
                 }),
             },
         ];
-        
+
         (
             Self {
                 title: "RustPods Edge Case Test".to_string(),
@@ -109,71 +109,112 @@ impl Application for EdgeCaseTestApp {
             .size(36)
             .style(Color::WHITE)
             .horizontal_alignment(Horizontal::Center);
-            
+
         let subtitle = text("Visual verification - Battery Display Edge Cases")
             .size(24)
             .style(Color::WHITE)
             .horizontal_alignment(Horizontal::Center);
-        
+
         // Create device rows with battery information
         let device_rows = column(
-            self.mock_airpods.iter().map(|device| {
-                let battery_info = if let Some(battery) = &device.battery {
-                    let is_left_charging = battery.charging.as_ref()
-                        .map(|state| state.is_left_charging())
-                        .unwrap_or(false);
-                    
-                    let is_right_charging = battery.charging.as_ref()
-                        .map(|state| state.is_right_charging())
-                        .unwrap_or(false);
-                    
-                    let is_case_charging = battery.charging.as_ref()
-                        .map(|state| state.is_case_charging())
-                        .unwrap_or(false);
-                    
-                    column![
-                        row![
-                            text("Left Pod:").width(Length::Fixed(140.0)).size(18).style(Color::WHITE),
-                            match battery.left {
-                                Some(level) => text(format!("{}% {}", level, if is_left_charging { "(Charging)" } else { "" })).size(18).style(Color::WHITE),
-                                None => text("N/A").size(18).style(Color::WHITE),
-                            }
-                        ].spacing(15),
-                        row![
-                            text("Right Pod:").width(Length::Fixed(140.0)).size(18).style(Color::WHITE),
-                            match battery.right {
-                                Some(level) => text(format!("{}% {}", level, if is_right_charging { "(Charging)" } else { "" })).size(18).style(Color::WHITE),
-                                None => text("N/A").size(18).style(Color::WHITE),
-                            }
-                        ].spacing(15),
-                        row![
-                            text("Case:").width(Length::Fixed(140.0)).size(18).style(Color::WHITE),
-                            match battery.case {
-                                Some(level) => text(format!("{}% {}", level, if is_case_charging { "(Charging)" } else { "" })).size(18).style(Color::WHITE),
-                                None => text("N/A").size(18).style(Color::WHITE),
-                            }
-                        ].spacing(15)
-                    ].spacing(15)
-                } else {
-                    column![text("Battery information not available").size(18).style(Color::WHITE)]
-                };
+            self.mock_airpods
+                .iter()
+                .map(|device| {
+                    let battery_info = if let Some(battery) = &device.battery {
+                        let is_left_charging = battery
+                            .charging
+                            .as_ref()
+                            .map(|state| state.is_left_charging())
+                            .unwrap_or(false);
 
-                // Container with a visible border and background
-                container(
-                    column![
-                        text(&device.name).size(28).style(Color::WHITE),
-                        text(&device.address).size(20).style(Color::WHITE),
-                        battery_info
-                    ]
-                    .spacing(15)
+                        let is_right_charging = battery
+                            .charging
+                            .as_ref()
+                            .map(|state| state.is_right_charging())
+                            .unwrap_or(false);
+
+                        let is_case_charging = battery
+                            .charging
+                            .as_ref()
+                            .map(|state| state.is_case_charging())
+                            .unwrap_or(false);
+
+                        column![
+                            row![
+                                text("Left Pod:")
+                                    .width(Length::Fixed(140.0))
+                                    .size(18)
+                                    .style(Color::WHITE),
+                                match battery.left {
+                                    Some(level) => text(format!(
+                                        "{}% {}",
+                                        level,
+                                        if is_left_charging { "(Charging)" } else { "" }
+                                    ))
+                                    .size(18)
+                                    .style(Color::WHITE),
+                                    None => text("N/A").size(18).style(Color::WHITE),
+                                }
+                            ]
+                            .spacing(15),
+                            row![
+                                text("Right Pod:")
+                                    .width(Length::Fixed(140.0))
+                                    .size(18)
+                                    .style(Color::WHITE),
+                                match battery.right {
+                                    Some(level) => text(format!(
+                                        "{}% {}",
+                                        level,
+                                        if is_right_charging { "(Charging)" } else { "" }
+                                    ))
+                                    .size(18)
+                                    .style(Color::WHITE),
+                                    None => text("N/A").size(18).style(Color::WHITE),
+                                }
+                            ]
+                            .spacing(15),
+                            row![
+                                text("Case:")
+                                    .width(Length::Fixed(140.0))
+                                    .size(18)
+                                    .style(Color::WHITE),
+                                match battery.case {
+                                    Some(level) => text(format!(
+                                        "{}% {}",
+                                        level,
+                                        if is_case_charging { "(Charging)" } else { "" }
+                                    ))
+                                    .size(18)
+                                    .style(Color::WHITE),
+                                    None => text("N/A").size(18).style(Color::WHITE),
+                                }
+                            ]
+                            .spacing(15)
+                        ]
+                        .spacing(15)
+                    } else {
+                        column![text("Battery information not available")
+                            .size(18)
+                            .style(Color::WHITE)]
+                    };
+
+                    // Container with a visible border and background
+                    container(
+                        column![
+                            text(&device.name).size(28).style(Color::WHITE),
+                            text(&device.address).size(20).style(Color::WHITE),
+                            battery_info
+                        ]
+                        .spacing(15)
+                        .padding(20),
+                    )
                     .padding(20)
-                )
-                .padding(20)
-                .style(theme::Container::Custom(Box::new(DeviceCardStyle)))
-                .width(Length::Fill)
-                .into()
-            })
-            .collect()
+                    .style(theme::Container::Custom(Box::new(DeviceCardStyle)))
+                    .width(Length::Fill)
+                    .into()
+                })
+                .collect(),
         )
         .spacing(30)
         .width(Length::Fill);
@@ -183,10 +224,12 @@ impl Application for EdgeCaseTestApp {
             title,
             subtitle,
             device_rows,
-            text("Verifying edge cases: missing data, low battery, all charging, and unknown states")
-                .size(20)
-                .style(Color::WHITE)
-                .horizontal_alignment(Horizontal::Center),
+            text(
+                "Verifying edge cases: missing data, low battery, all charging, and unknown states"
+            )
+            .size(20)
+            .style(Color::WHITE)
+            .horizontal_alignment(Horizontal::Center),
         ]
         .spacing(30)
         .padding(30)
@@ -241,11 +284,11 @@ impl container::StyleSheet for MainBackgroundStyle {
 fn main() -> Result<(), iced::Error> {
     // Initialize logging
     init_logging();
-    
+
     println!("\nStarting RustPods edge case test with mock AirPods data...");
-    
+
     let mut settings = Settings::with_flags(());
     settings.window.size = (800, 800);
-    
+
     EdgeCaseTestApp::run(settings)
-} 
+}

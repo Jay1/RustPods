@@ -7,10 +7,8 @@ use std::time::{Duration, Instant};
 use btleplug::api::BDAddr;
 use iced::Theme;
 
+use rustpods::airpods::{AirPodsBattery, AirPodsChargingState, AirPodsType, DetectedAirPods};
 use rustpods::bluetooth::DiscoveredDevice;
-use rustpods::airpods::{
-    DetectedAirPods, AirPodsType, AirPodsBattery, AirPodsChargingState
-};
 use rustpods::ui::Message;
 
 // Simplified version of the UI state - for testing only
@@ -43,24 +41,24 @@ impl MockAppState {
         match message {
             Message::DeviceDiscovered(device) => {
                 self.devices.insert(device.address.to_string(), device);
-            },
+            }
             Message::SelectDevice(address) => {
                 self.selected_device = Some(address);
-            },
+            }
             Message::StartScan => {
                 self.is_scanning = true;
-            },
+            }
             Message::StopScan => {
                 self.is_scanning = false;
-            },
+            }
             Message::ToggleAutoScan(enabled) => {
                 self.auto_scan = enabled;
-            },
+            }
             Message::ToggleVisibility => {
                 self.visible = !self.visible;
-            },
+            }
             // Implement other messages as needed
-            _ => {},
+            _ => {}
         }
     }
 }
@@ -70,7 +68,7 @@ fn create_test_device(
     address: [u8; 6],
     name: Option<&str>,
     rssi: Option<i16>,
-    is_airpods: bool
+    is_airpods: bool,
 ) -> DiscoveredDevice {
     let mut mfg_data = HashMap::new();
     if is_airpods {
@@ -91,11 +89,15 @@ fn create_test_device(
 }
 
 /// Create AirPods for rendering tests
-fn create_test_airpods(battery_left: Option<u8>, battery_right: Option<u8>, battery_case: Option<u8>) -> DetectedAirPods {
+fn create_test_airpods(
+    battery_left: Option<u8>,
+    battery_right: Option<u8>,
+    battery_case: Option<u8>,
+) -> DetectedAirPods {
     DetectedAirPods {
         address: BDAddr::from([0x01, 0x02, 0x03, 0x04, 0x05, 0x06]),
         name: Some("AirPods Pro".to_string()),
-        device_type: AirPodsType::AirPodsPro, 
+        device_type: AirPodsType::AirPodsPro,
         battery: Some(AirPodsBattery {
             left: battery_left,
             right: battery_right,
@@ -116,31 +118,27 @@ fn test_mock_device_entry_rendering() {
         [0x01, 0x02, 0x03, 0x04, 0x05, 0x06],
         Some("Regular Device"),
         Some(-70),
-        false
+        false,
     );
-    let unnamed_device = create_test_device(
-        [0x02, 0x03, 0x04, 0x05, 0x06, 0x07],
-        None,
-        Some(-75),
-        false
-    );
+    let unnamed_device =
+        create_test_device([0x02, 0x03, 0x04, 0x05, 0x06, 0x07], None, Some(-75), false);
     let strong_signal_device = create_test_device(
         [0x03, 0x04, 0x05, 0x06, 0x07, 0x08],
         Some("Strong Signal"),
         Some(-30),
-        false
+        false,
     );
     let no_signal_device = create_test_device(
         [0x04, 0x05, 0x06, 0x07, 0x08, 0x09],
         Some("No Signal"),
         None,
-        false
+        false,
     );
     let airpods_device = create_test_device(
         [0x05, 0x06, 0x07, 0x08, 0x09, 0x0A],
         Some("AirPods Pro"),
         Some(-60),
-        true
+        true,
     );
     assert_eq!(regular_device.name, Some("Regular Device".to_string()));
     assert_eq!(unnamed_device.name, None);
@@ -176,22 +174,18 @@ fn test_mock_device_list() {
         [0x01, 0x02, 0x03, 0x04, 0x05, 0x06],
         Some("Regular Device"),
         Some(-70),
-        false
+        false,
     );
     devices.insert(regular_device.address.to_string(), regular_device);
     let airpods_device = create_test_device(
         [0x02, 0x03, 0x04, 0x05, 0x06, 0x07],
         Some("AirPods Pro"),
         Some(-60),
-        true
+        true,
     );
     devices.insert(airpods_device.address.to_string(), airpods_device.clone());
-    let unnamed_device = create_test_device(
-        [0x03, 0x04, 0x05, 0x06, 0x07, 0x08],
-        None,
-        Some(-80),
-        false
-    );
+    let unnamed_device =
+        create_test_device([0x03, 0x04, 0x05, 0x06, 0x07, 0x08], None, Some(-80), false);
     devices.insert(unnamed_device.address.to_string(), unnamed_device);
     assert_eq!(devices.len(), 3);
     assert!(devices.contains_key(&airpods_device.address.to_string()));
@@ -203,15 +197,15 @@ fn test_device_display_age_indication() {
         [0x01, 0x02, 0x03, 0x04, 0x05, 0x06],
         Some("Recent Device"),
         Some(-60),
-        false
+        false,
     );
     let mut old_device = create_test_device(
         [0x02, 0x03, 0x04, 0x05, 0x06, 0x07],
         Some("Old Device"),
         Some(-65),
-        false
+        false,
     );
     old_device.last_seen = Instant::now() - Duration::from_secs(10 * 60);
     assert!((Instant::now() - current_device.last_seen).as_secs() < 1);
     assert!((Instant::now() - old_device.last_seen).as_secs() >= 10 * 60);
-} 
+}

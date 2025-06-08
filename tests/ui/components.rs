@@ -6,8 +6,8 @@ use std::time::Instant;
 
 use btleplug::api::BDAddr;
 
-use rustpods::ui::AppState;
 use rustpods::bluetooth::DiscoveredDevice;
+use rustpods::ui::AppState;
 
 /// Helper to create a test device (paired)
 fn create_test_device(address: [u8; 6], name: &str, rssi: i16) -> DiscoveredDevice {
@@ -69,7 +69,10 @@ fn test_app_state_update_device() {
     updated_device.rssi = Some(-50);
     state.update_device(updated_device);
     assert_eq!(state.devices.len(), 1);
-    assert_eq!(state.devices.get(&addr_str).unwrap().name, Some("Updated Name".to_string()));
+    assert_eq!(
+        state.devices.get(&addr_str).unwrap().name,
+        Some("Updated Name".to_string())
+    );
     assert_eq!(state.devices.get(&addr_str).unwrap().rssi, Some(-50));
 }
 
@@ -82,4 +85,4 @@ fn test_toast_notification_system() {
 
 // Additional UI tests would require more complex setup with mock rendering
 // Since Iced's Element is hard to test directly, we focus on state updates
-// For full UI testing, consider using a headless browser or similar approach 
+// For full UI testing, consider using a headless browser or similar approach

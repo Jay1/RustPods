@@ -10,8 +10,8 @@ use std::time::Instant;
 
 use btleplug::api::BDAddr;
 
-use rustpods::bluetooth::{DiscoveredDevice, AirPodsBatteryStatus};
 use rustpods::airpods::AirPodsType;
+use rustpods::bluetooth::{AirPodsBatteryStatus, DiscoveredDevice};
 
 /// Mock device that stores additional testing details
 #[derive(Debug, Clone)]
@@ -62,36 +62,45 @@ impl MockDevicePoller {
     /// Poll for paired devices (simulates helper script output)
     pub fn poll_paired_devices(&self) -> Vec<DiscoveredDevice> {
         let devices = self.devices.lock().unwrap();
-        devices.values().map(|mock| DiscoveredDevice {
-            address: BDAddr::from_str_hex(&mock.address).unwrap_or(BDAddr::default()),
-            name: mock.name.clone(),
-            rssi: mock.rssi,
-            manufacturer_data: mock.manufacturer_data.clone(),
-            is_potential_airpods: mock.is_airpods,
-            last_seen: mock.last_seen,
-            is_connected: mock.is_connected,
-            service_data: HashMap::new(),
-            services: Vec::new(),
-            tx_power_level: None,
-        }).collect()
+        devices
+            .values()
+            .map(|mock| DiscoveredDevice {
+                address: BDAddr::from_str_hex(&mock.address).unwrap_or(BDAddr::default()),
+                name: mock.name.clone(),
+                rssi: mock.rssi,
+                manufacturer_data: mock.manufacturer_data.clone(),
+                is_potential_airpods: mock.is_airpods,
+                last_seen: mock.last_seen,
+                is_connected: mock.is_connected,
+                service_data: HashMap::new(),
+                services: Vec::new(),
+                tx_power_level: None,
+            })
+            .collect()
     }
 
     /// Get AirPods battery info for a device
     pub fn get_airpods_battery(&self, address: &str) -> Option<AirPodsBatteryStatus> {
         let devices = self.devices.lock().unwrap();
-        devices.get(address).and_then(|mock| mock.battery_status.clone())
+        devices
+            .get(address)
+            .and_then(|mock| mock.battery_status.clone())
     }
 }
 
 /// Helper trait for BDAddr conversion
 trait BDAddrExt {
-    fn from_str_hex(s: &str) -> Option<Self> where Self: Sized;
+    fn from_str_hex(s: &str) -> Option<Self>
+    where
+        Self: Sized;
 }
 
 impl BDAddrExt for BDAddr {
     fn from_str_hex(s: &str) -> Option<Self> {
         let parts: Vec<_> = s.split(':').collect();
-        if parts.len() != 6 { return None; }
+        if parts.len() != 6 {
+            return None;
+        }
         let mut bytes = [0u8; 6];
         for (i, part) in parts.iter().enumerate() {
             bytes[i] = u8::from_str_radix(part, 16).ok()?;
@@ -103,7 +112,7 @@ impl BDAddrExt for BDAddr {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     use rustpods::airpods::{AirPodsBattery, AirPodsChargingState};
 
     #[test]
@@ -163,4 +172,4 @@ mod tests {
         assert!(battery.is_some());
         assert_eq!(battery.unwrap().battery.left, Some(100));
     }
-} 
+}

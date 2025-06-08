@@ -2,9 +2,9 @@ use btleplug::api::BDAddr;
 use std::default::Default;
 // use std::collections::HashMap;
 
+use super::{parse_airpods_data, AirPodsBattery, AirPodsType, Result};
 use crate::bluetooth::scanner::DiscoveredDevice;
 use crate::error::{AirPodsError, ErrorContext, ErrorManager};
-use super::{AirPodsType, AirPodsBattery, parse_airpods_data, Result};
 
 /// A simple detector for AirPods devices
 #[derive(Clone, Debug)]
@@ -35,7 +35,7 @@ impl AirPodsDetector {
                 return false;
             }
         }
-        
+
         // Basic check for whether this could be an AirPods device
         device.manufacturer_data.contains_key(&0x004C) // Apple company ID
     }
@@ -177,9 +177,15 @@ pub fn detect_airpods(device: &DiscoveredDevice) -> Result<Option<DetectedAirPod
     // Create context for error reporting
     let _ctx = ErrorContext::new("AirPodsScanner", "detect_airpods")
         .with_metadata("device_address", device.address.to_string())
-        .with_metadata("device_name", device.name.clone().unwrap_or_else(|| "Unknown".to_string()))
-        .with_metadata("is_potential_airpods", device.is_potential_airpods.to_string());
-    
+        .with_metadata(
+            "device_name",
+            device.name.clone().unwrap_or_else(|| "Unknown".to_string()),
+        )
+        .with_metadata(
+            "is_potential_airpods",
+            device.is_potential_airpods.to_string(),
+        );
+
     // Check if we have Apple manufacturer data
     let apple_data = match device.manufacturer_data.get(&APPLE_COMPANY_ID) {
         Some(data) => data,
@@ -207,11 +213,12 @@ pub fn detect_airpods(device: &DiscoveredDevice) -> Result<Option<DetectedAirPod
             let _err_ctx = _ctx
                 .with_metadata("raw_data", format!("{:?}", apple_data))
                 .with_metadata("error", err.to_string());
-                
+
             // Convert the error to a DetectionFailed with more context
-            return Err(AirPodsError::DetectionFailed(
-                format!("Failed to identify AirPods type: {}", err)
-            ));
+            return Err(AirPodsError::DetectionFailed(format!(
+                "Failed to identify AirPods type: {}",
+                err
+            )));
         }
     };
 
@@ -226,7 +233,7 @@ pub fn detect_airpods(device: &DiscoveredDevice) -> Result<Option<DetectedAirPod
                 device.address,
                 err
             );
-            
+
             // Continue with None battery
             None
         }
@@ -251,19 +258,19 @@ pub fn identify_airpods_type(name: &Option<String>, data: &[u8]) -> Result<AirPo
     let mut _ctx = ErrorContext::new("AirPodsScanner", "identify_airpods_type")
         .with_metadata("data_length", data.len().to_string())
         .with_metadata("data_hex", format!("{:02X?}", data));
-        
+
     if let Some(name) = name {
         _ctx = _ctx.with_metadata("device_name", name);
     }
-    
+
     // Check data length for validity
     if data.len() < 2 {
-        return Err(AirPodsError::InvalidData(
-            format!("Manufacturer data too short for AirPods identification: {} bytes (need at least 2)", 
-                    data.len())
-        ));
+        return Err(AirPodsError::InvalidData(format!(
+            "Manufacturer data too short for AirPods identification: {} bytes (need at least 2)",
+            data.len()
+        )));
     }
-    
+
     // Try to identify by prefix
     let device_type = match &data[0..2] {
         prefix if prefix == AIRPODS_1_2_PREFIX => {
@@ -290,16 +297,22 @@ pub fn identify_airpods_type(name: &Option<String>, data: &[u8]) -> Result<AirPo
                     log::debug!("Using name-based AirPods detection for device: {}", name);
                     AirPodsType::from_name(name)
                 } else {
-                    log::debug!("Unknown Apple device with prefix {:02X?}, not AirPods", &data[0..2]);
+                    log::debug!(
+                        "Unknown Apple device with prefix {:02X?}, not AirPods",
+                        &data[0..2]
+                    );
                     AirPodsType::Unknown
                 }
             } else {
-                log::debug!("Unknown Apple device prefix {:02X?} and no name available", &data[0..2]);
+                log::debug!(
+                    "Unknown Apple device prefix {:02X?} and no name available",
+                    &data[0..2]
+                );
                 AirPodsType::Unknown
             }
         }
     };
-    
+
     Ok(device_type)
 }
 
@@ -356,34 +369,34 @@ mod tests {
             identify_airpods_type(&Some("AirPods".to_string()), &data).unwrap(),
             AirPodsType::AirPods1
         );
-        
+
         // AirPods 2
         assert_eq!(
             identify_airpods_type(&Some("AirPods 2".to_string()), &data).unwrap(),
             AirPodsType::AirPods2
         );
-        
+
         // AirPods Pro
         let data = vec![0x0E, 0x19, 0x01, 0x02, 0x03];
         assert_eq!(
             identify_airpods_type(&Some("AirPods Pro".to_string()), &data).unwrap(),
             AirPodsType::AirPodsPro
         );
-        
+
         // AirPods Pro 2
         let data = vec![0x0F, 0x19, 0x01, 0x02, 0x03];
         assert_eq!(
             identify_airpods_type(&Some("AirPods Pro 2".to_string()), &data).unwrap(),
             AirPodsType::AirPodsPro2
         );
-        
+
         // AirPods 3
         let data = vec![0x13, 0x19, 0x01, 0x02, 0x03];
         assert_eq!(
             identify_airpods_type(&Some("AirPods 3".to_string()), &data).unwrap(),
             AirPodsType::AirPods3
         );
-        
+
         // AirPods Max
         let data = vec![0x0A, 0x19, 0x01, 0x02, 0x03];
         assert_eq!(
@@ -391,7 +404,7 @@ mod tests {
             AirPodsType::AirPodsMax
         );
     }
-    
+
     #[test]
     fn test_identify_airpods_type_fallback_to_name() {
         // Unknown prefix but recognizable name
@@ -401,7 +414,7 @@ mod tests {
             AirPodsType::AirPodsPro
         );
     }
-    
+
     #[test]
     fn test_identify_airpods_type_invalid_data() {
         // Empty data should result in an error
@@ -411,7 +424,7 @@ mod tests {
             Err(AirPodsError::InvalidData(_))
         ));
     }
-    
+
     #[test]
     fn test_detect_airpods_missing_manufacturer_data() {
         let device_type_bytes = &[0x07, 0x19, 0x01, 0x02, 0x03];
@@ -428,11 +441,11 @@ mod tests {
             services: Vec::new(),
             tx_power_level: None,
         };
-        
+
         let result = detect_airpods(&device).unwrap();
         // Updated expectation: now expecting Some result since the implementation has changed
         assert!(result.is_some());
-        
+
         // Additional assertions about the result
         if let Some(detected) = result {
             // Check that the battery data is None since manufacturer data is too short
@@ -441,17 +454,19 @@ mod tests {
             assert_eq!(detected.device_type, AirPodsType::AirPods1);
         }
     }
-    
+
     #[test]
     fn test_detect_airpods_with_valid_data() {
         // Create valid AirPods data
         let mut mfr_data = HashMap::new();
         mfr_data.insert(
             APPLE_COMPANY_ID,
-            vec![0x07, 0x19, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A,
-                0x05, 0x08, 0x00, 0x0A, 0x00] // Battery levels and flags
+            vec![
+                0x07, 0x19, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x05, 0x08,
+                0x00, 0x0A, 0x00,
+            ], // Battery levels and flags
         );
-        
+
         let device = DiscoveredDevice {
             address: BDAddr::default(),
             name: Some("AirPods".to_string()),
@@ -464,14 +479,14 @@ mod tests {
             service_data: HashMap::new(),
             tx_power_level: None,
         };
-        
+
         let result = detect_airpods(&device).unwrap();
         assert!(result.is_some());
-        
+
         let airpods = result.unwrap();
         assert_eq!(airpods.device_type, AirPodsType::AirPods1);
         assert!(airpods.battery.is_some());
-        
+
         // Check battery values
         if let Some(battery) = airpods.battery {
             assert_eq!(battery.left, Some(50));
@@ -481,17 +496,19 @@ mod tests {
             panic!("Battery should be present");
         }
     }
-    
+
     #[test]
     fn test_detect_airpods_with_partial_battery_data() {
         // Create AirPods data with missing left earbud info
         let mut mfr_data = HashMap::new();
         mfr_data.insert(
             APPLE_COMPANY_ID,
-            vec![0x07, 0x19, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A,
-                0xFF, 0x08, 0x00, 0x0A, 0x00] // Left battery missing (0xFF)
+            vec![
+                0x07, 0x19, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0xFF, 0x08,
+                0x00, 0x0A, 0x00,
+            ], // Left battery missing (0xFF)
         );
-        
+
         let device = DiscoveredDevice {
             address: BDAddr::default(),
             name: Some("AirPods".to_string()),
@@ -504,13 +521,13 @@ mod tests {
             service_data: HashMap::new(),
             tx_power_level: None,
         };
-        
+
         let result = detect_airpods(&device).unwrap();
         assert!(result.is_some());
-        
+
         let airpods = result.unwrap();
         assert!(airpods.battery.is_some());
-        
+
         // Check partial battery data
         if let Some(battery) = airpods.battery {
             assert_eq!(battery.left, None, "Left battery should be None");
@@ -520,16 +537,16 @@ mod tests {
             panic!("Battery should be present");
         }
     }
-    
+
     #[test]
     fn test_detect_airpods_graceful_degradation() {
         // Create valid AirPods device data but with corrupted battery section
         let mut mfr_data = HashMap::new();
         mfr_data.insert(
             APPLE_COMPANY_ID,
-            vec![0x07, 0x19, 0x01, 0x02, 0x03] // Too short for battery data
+            vec![0x07, 0x19, 0x01, 0x02, 0x03], // Too short for battery data
         );
-        
+
         let device = DiscoveredDevice {
             address: BDAddr::default(),
             name: Some("AirPods".to_string()),
@@ -542,24 +559,27 @@ mod tests {
             service_data: HashMap::new(),
             tx_power_level: None,
         };
-        
+
         // Should still detect the device but without battery info
         let result = detect_airpods(&device).unwrap();
         assert!(result.is_some());
-        
+
         let airpods = result.unwrap();
         assert_eq!(airpods.device_type, AirPodsType::AirPods1);
-        assert!(airpods.battery.is_none(), "Battery should be None when data is corrupt");
+        assert!(
+            airpods.battery.is_none(),
+            "Battery should be None when data is corrupt"
+        );
     }
-    
+
     #[test]
     fn test_create_airpods_filter() {
         let filter = create_airpods_filter();
-        
+
         // Should match AirPods
         let mut mfr_data = HashMap::new();
         mfr_data.insert(APPLE_COMPANY_ID, vec![0x07, 0x19, 0x01, 0x02, 0x03]);
-        
+
         let airpods_device = DiscoveredDevice {
             address: BDAddr::from([1, 2, 3, 4, 5, 6]),
             name: Some("AirPods".to_string()),
@@ -572,7 +592,7 @@ mod tests {
             services: Vec::new(),
             tx_power_level: None,
         };
-        
+
         // Should not match non-Apple device
         let non_apple_device = DiscoveredDevice {
             address: BDAddr::from([9, 8, 7, 6, 5, 4]),
@@ -586,8 +606,8 @@ mod tests {
             services: Vec::new(),
             tx_power_level: None,
         };
-        
+
         assert!(filter(&airpods_device));
         assert!(!filter(&non_apple_device));
     }
-} 
+}

@@ -5,16 +5,16 @@
 
 use std::path::PathBuf;
 
+use serde::Deserialize;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::task::JoinHandle;
 use tokio::time::interval;
-use serde::Deserialize;
 
-use crate::airpods::{AirPodsBattery, DetectedAirPods, AirPodsType, AirPodsChargingState};
+use crate::airpods::{AirPodsBattery, AirPodsChargingState, AirPodsType, DetectedAirPods};
 use crate::bluetooth::BluetoothError;
-use btleplug::api::BDAddr;
 use crate::config::AppConfig;
+use btleplug::api::BDAddr;
 
 /// Default polling interval for CLI scanner (30 seconds)
 const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(30);
@@ -77,16 +77,16 @@ pub struct CliAirPodsData {
 pub struct CliScannerConfig {
     /// Path to the CLI scanner executable
     pub scanner_path: PathBuf,
-    
+
     /// Base polling interval
     pub poll_interval: Duration,
-    
+
     /// Whether to use adaptive polling
     pub adaptive_polling: bool,
-    
+
     /// Maximum number of consecutive errors before stopping
     pub max_errors: u32,
-    
+
     /// Whether to enable detailed logging
     pub verbose_logging: bool,
 }
@@ -94,7 +94,9 @@ pub struct CliScannerConfig {
 impl Default for CliScannerConfig {
     fn default() -> Self {
         Self {
-            scanner_path: PathBuf::from("scripts/airpods_battery_cli/build/Release/airpods_battery_cli.exe"),
+            scanner_path: PathBuf::from(
+                "scripts/airpods_battery_cli/build/Release/airpods_battery_cli.exe",
+            ),
             poll_interval: DEFAULT_POLL_INTERVAL,
             adaptive_polling: true,
             max_errors: 5,
@@ -107,32 +109,38 @@ impl CliScannerConfig {
     /// Create configuration from app config
     pub fn from_app_config(config: &AppConfig) -> Self {
         Self {
-            scanner_path: Self::resolve_scanner_path(&std::env::current_dir().unwrap_or_else(|_| ".".into())),
-            poll_interval: config.bluetooth.battery_refresh_interval.max(MIN_POLL_INTERVAL),
+            scanner_path: Self::resolve_scanner_path(
+                &std::env::current_dir().unwrap_or_else(|_| ".".into()),
+            ),
+            poll_interval: config
+                .bluetooth
+                .battery_refresh_interval
+                .max(MIN_POLL_INTERVAL),
             adaptive_polling: config.bluetooth.adaptive_polling,
             max_errors: 5,
-            verbose_logging: config.system.log_level == crate::config::LogLevel::Debug || config.system.log_level == crate::config::LogLevel::Trace,
+            verbose_logging: config.system.log_level == crate::config::LogLevel::Debug
+                || config.system.log_level == crate::config::LogLevel::Trace,
         }
     }
-    
+
     /// Resolve the scanner path based on build configuration
     fn resolve_scanner_path(project_root: &std::path::Path) -> PathBuf {
         let mut path = project_root.to_path_buf();
         path.push("scripts");
         path.push("airpods_battery_cli");
         path.push("build");
-        
+
         // Try Release first, then Debug (v6 modular architecture only)
         let release_path = path.join("Release").join("airpods_battery_cli.exe");
         if release_path.exists() {
             return release_path;
         }
-        
+
         let debug_path = path.join("Debug").join("airpods_battery_cli.exe");
         if debug_path.exists() {
             return debug_path;
         }
-        
+
         // Fallback to relative path
         PathBuf::from("scripts/airpods_battery_cli/build/Release/airpods_battery_cli.exe")
     }
@@ -181,7 +189,7 @@ impl CliScanner {
             runtime_handle: Arc::new(tokio::runtime::Handle::current()),
         }
     }
-    
+
     /// Start continuous monitoring with callback
     pub fn start_monitoring<F>(&self, callback: F) -> JoinHandle<()>
     where
@@ -189,34 +197,34 @@ impl CliScanner {
     {
         let config = self.config.clone();
         let state = Arc::clone(&self.state);
-        
+
         tokio::spawn(async move {
             let mut interval_timer = interval(config.poll_interval);
-            
+
             loop {
                 interval_timer.tick().await;
-                
+
                 // Perform scan
                 let scan_result = Self::execute_scan(&config).await;
-                
+
                 // Update state and determine next interval
                 let next_interval = {
                     let mut state_guard = state.lock().unwrap();
                     state_guard.total_scans += 1;
                     state_guard.last_scan_time = Some(Instant::now());
-                    
+
                     match &scan_result {
                         Ok(airpods_list) => {
                             state_guard.consecutive_errors = 0;
                             state_guard.successful_scans += 1;
-                            
+
                             // Check for changes and update adaptive polling
                             let should_use_fast_polling = if config.adaptive_polling {
                                 Self::detect_significant_changes(&mut state_guard, airpods_list)
                             } else {
                                 false
                             };
-                            
+
                             if should_use_fast_polling {
                                 state_guard.fast_polls_remaining = FAST_POLL_COUNT;
                                 state_guard.current_interval = FAST_POLL_INTERVAL;
@@ -229,40 +237,49 @@ impl CliScanner {
                         }
                         Err(error) => {
                             state_guard.consecutive_errors += 1;
-                            
+
                             if config.verbose_logging {
-                                log::warn!("CLI scanner error (attempt {}): {}", 
-                                         state_guard.consecutive_errors, error);
+                                log::warn!(
+                                    "CLI scanner error (attempt {}): {}",
+                                    state_guard.consecutive_errors,
+                                    error
+                                );
                             }
-                            
+
                             // Exponential backoff on errors, but cap at max interval
                             let backoff_multiplier = (state_guard.consecutive_errors as u64).min(4);
-                            let error_interval = config.poll_interval.mul_f64(1.5_f64.powi(backoff_multiplier as i32));
+                            let error_interval = config
+                                .poll_interval
+                                .mul_f64(1.5_f64.powi(backoff_multiplier as i32));
                             state_guard.current_interval = error_interval.min(MAX_POLL_INTERVAL);
-                            
+
                             // Stop if too many consecutive errors
                             if state_guard.consecutive_errors >= config.max_errors {
-                                log::error!("CLI scanner stopped after {} consecutive errors", 
-                                           state_guard.consecutive_errors);
+                                log::error!(
+                                    "CLI scanner stopped after {} consecutive errors",
+                                    state_guard.consecutive_errors
+                                );
                                 break;
                             }
                         }
                     }
-                    
+
                     state_guard.current_interval
                 };
-                
+
                 // Call the callback with results
                 callback(scan_result);
-                
+
                 // Update interval timer
                 interval_timer = interval(next_interval);
-                
+
                 // Log statistics periodically
                 if config.verbose_logging {
                     let state_guard = state.lock().unwrap();
                     if state_guard.total_scans % 10 == 0 {
-                        let success_rate = (state_guard.successful_scans as f64 / state_guard.total_scans as f64) * 100.0;
+                        let success_rate = (state_guard.successful_scans as f64
+                            / state_guard.total_scans as f64)
+                            * 100.0;
                         log::info!("CLI scanner stats: {} total scans, {:.1}% success rate, current interval: {:?}",
                                  state_guard.total_scans, success_rate, state_guard.current_interval);
                     }
@@ -270,55 +287,68 @@ impl CliScanner {
             }
         })
     }
-    
+
     /// Execute a single scan
-    async fn execute_scan(config: &CliScannerConfig) -> Result<Vec<DetectedAirPods>, BluetoothError> {
+    async fn execute_scan(
+        config: &CliScannerConfig,
+    ) -> Result<Vec<DetectedAirPods>, BluetoothError> {
         let start_time = Instant::now();
-        
+
         // Spawn the CLI process
         let output = tokio::process::Command::new(&config.scanner_path)
             .output()
             .await
             .map_err(|e| BluetoothError::Other(format!("Failed to execute CLI scanner: {}", e)))?;
-        
+
         let execution_time = start_time.elapsed();
-        
+
         // Check if execution took too long
         if execution_time > CLI_TIMEOUT {
             return Err(BluetoothError::Timeout(execution_time));
         }
-        
+
         // Check exit status
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(BluetoothError::Other(format!("CLI scanner failed: {}", stderr)));
+            return Err(BluetoothError::Other(format!(
+                "CLI scanner failed: {}",
+                stderr
+            )));
         }
-        
+
         // Parse JSON output
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let scanner_result: CliScannerResult = serde_json::from_str(&stdout)
-            .map_err(|e| BluetoothError::InvalidData(format!("Failed to parse CLI output: {}", e)))?;
-        
+        let scanner_result: CliScannerResult = serde_json::from_str(&stdout).map_err(|e| {
+            BluetoothError::InvalidData(format!("Failed to parse CLI output: {}", e))
+        })?;
+
         // Convert CLI results to DetectedAirPods
         let mut airpods_list = Vec::new();
-        
+
         for device in scanner_result.devices {
             if let Some(airpods_data) = device.airpods_data {
-                let detected_airpods = Self::convert_cli_data_to_airpods(device.device_id, airpods_data)?;
+                let detected_airpods =
+                    Self::convert_cli_data_to_airpods(device.device_id, airpods_data)?;
                 airpods_list.push(detected_airpods);
             }
         }
-        
+
         if config.verbose_logging {
-            log::debug!("CLI scanner found {} AirPods devices in {:?}", 
-                       airpods_list.len(), execution_time);
+            log::debug!(
+                "CLI scanner found {} AirPods devices in {:?}",
+                airpods_list.len(),
+                execution_time
+            );
         }
-        
+
         Ok(airpods_list)
     }
-    
+
     /// Convert CLI data to DetectedAirPods
-    fn convert_cli_data_to_airpods(device_id: String, cli_data: CliAirPodsData) -> Result<DetectedAirPods, BluetoothError> {
+    fn convert_cli_data_to_airpods(
+        device_id: String,
+        cli_data: CliAirPodsData,
+    ) -> Result<DetectedAirPods, BluetoothError> {
         // Map model string to AirPodsType
         let airpods_type = match cli_data.model.as_str() {
             "AirPods 1" => AirPodsType::AirPods1,
@@ -329,7 +359,7 @@ impl CliScanner {
             "AirPods Max" => AirPodsType::AirPodsMax,
             _ => AirPodsType::Unknown,
         };
-        
+
         // Convert battery levels (CLI uses -1 for unavailable, we use None)
         let charging_state = if cli_data.left_charging && cli_data.right_charging {
             AirPodsChargingState::BothBudsCharging
@@ -344,15 +374,27 @@ impl CliScanner {
         };
 
         let battery = AirPodsBattery {
-            left: if cli_data.left_battery >= 0 { Some(cli_data.left_battery as u8) } else { None },
-            right: if cli_data.right_battery >= 0 { Some(cli_data.right_battery as u8) } else { None },
-            case: if cli_data.case_battery >= 0 { Some(cli_data.case_battery as u8) } else { None },
+            left: if cli_data.left_battery >= 0 {
+                Some(cli_data.left_battery as u8)
+            } else {
+                None
+            },
+            right: if cli_data.right_battery >= 0 {
+                Some(cli_data.right_battery as u8)
+            } else {
+                None
+            },
+            case: if cli_data.case_battery >= 0 {
+                Some(cli_data.case_battery as u8)
+            } else {
+                None
+            },
             charging: Some(charging_state),
         };
-        
+
         // Create a BDAddr from device_id (using a simple conversion for now)
         let address = BDAddr::from([0; 6]); // TODO: Parse actual address from device_id
-        
+
         Ok(DetectedAirPods {
             address,
             name: Some(format!("{} ({})", cli_data.model, device_id)),
@@ -363,9 +405,12 @@ impl CliScanner {
             is_connected: false, // CLI scanner doesn't provide connection status
         })
     }
-    
+
     /// Detect significant changes that warrant faster polling
-    fn detect_significant_changes(state: &mut ScannerState, current_airpods: &[DetectedAirPods]) -> bool {
+    fn detect_significant_changes(
+        state: &mut ScannerState,
+        current_airpods: &[DetectedAirPods],
+    ) -> bool {
         // If this is the first scan, no changes to detect
         let previous_data = match &state.last_airpods_data {
             Some(data) => data,
@@ -377,35 +422,37 @@ impl CliScanner {
                 return false;
             }
         };
-        
+
         // Check if we found new AirPods or lost existing ones
         if current_airpods.is_empty() {
             return !current_airpods.is_empty(); // Change if we had data before
         }
-        
+
         if let Some(current) = current_airpods.first() {
             let current_cli_data = Self::airpods_to_cli_data(current);
-            
+
             // Detect significant changes
             let battery_change = Self::significant_battery_change(previous_data, &current_cli_data);
             let charging_change = Self::charging_state_change(previous_data, &current_cli_data);
             let usage_change = Self::usage_state_change(previous_data, &current_cli_data);
-            
+
             // Update stored data
             state.last_airpods_data = Some(current_cli_data);
-            
+
             battery_change || charging_change || usage_change
         } else {
             false
         }
     }
-    
+
     /// Convert DetectedAirPods back to CliAirPodsData for comparison
     fn airpods_to_cli_data(airpods: &DetectedAirPods) -> CliAirPodsData {
         let default_battery = AirPodsBattery::default();
         let battery = airpods.battery.as_ref().unwrap_or(&default_battery);
-        let charging = battery.charging.unwrap_or(AirPodsChargingState::NotCharging);
-        
+        let charging = battery
+            .charging
+            .unwrap_or(AirPodsChargingState::NotCharging);
+
         CliAirPodsData {
             model: format!("{:?}", airpods.device_type),
             model_id: "".to_string(),
@@ -415,40 +462,40 @@ impl CliScanner {
             left_charging: charging.is_left_charging(),
             right_charging: charging.is_right_charging(),
             case_charging: charging.is_case_charging(),
-            left_in_ear: false, // Not available in DetectedAirPods
+            left_in_ear: false,  // Not available in DetectedAirPods
             right_in_ear: false, // Not available in DetectedAirPods
             both_in_case: false, // Not available in DetectedAirPods
-            lid_open: false, // Not available in DetectedAirPods
+            lid_open: false,     // Not available in DetectedAirPods
             broadcasting_ear: "unknown".to_string(),
         }
     }
-    
+
     /// Check for significant battery level changes (>10% change)
     fn significant_battery_change(prev: &CliAirPodsData, curr: &CliAirPodsData) -> bool {
         const THRESHOLD: i32 = 10;
-        
+
         let left_change = (prev.left_battery - curr.left_battery).abs();
         let right_change = (prev.right_battery - curr.right_battery).abs();
         let case_change = (prev.case_battery - curr.case_battery).abs();
-        
+
         left_change >= THRESHOLD || right_change >= THRESHOLD || case_change >= THRESHOLD
     }
-    
+
     /// Check for charging state changes
     fn charging_state_change(prev: &CliAirPodsData, curr: &CliAirPodsData) -> bool {
-        prev.left_charging != curr.left_charging ||
-        prev.right_charging != curr.right_charging ||
-        prev.case_charging != curr.case_charging
+        prev.left_charging != curr.left_charging
+            || prev.right_charging != curr.right_charging
+            || prev.case_charging != curr.case_charging
     }
-    
+
     /// Check for usage state changes (in-ear, case lid)
     fn usage_state_change(prev: &CliAirPodsData, curr: &CliAirPodsData) -> bool {
-        prev.left_in_ear != curr.left_in_ear ||
-        prev.right_in_ear != curr.right_in_ear ||
-        prev.both_in_case != curr.both_in_case ||
-        prev.lid_open != curr.lid_open
+        prev.left_in_ear != curr.left_in_ear
+            || prev.right_in_ear != curr.right_in_ear
+            || prev.both_in_case != curr.both_in_case
+            || prev.lid_open != curr.lid_open
     }
-    
+
     /// Get current scanner statistics
     pub fn get_stats(&self) -> ScannerStats {
         let state = self.state.lock().unwrap();
@@ -481,7 +528,7 @@ pub struct ScannerStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_scanner_config_default() {
         let config = CliScannerConfig::default();
@@ -489,7 +536,7 @@ mod tests {
         assert!(config.adaptive_polling);
         assert_eq!(config.max_errors, 5);
     }
-    
+
     #[test]
     fn test_significant_battery_change_detection() {
         let prev = CliAirPodsData {
@@ -507,24 +554,24 @@ mod tests {
             lid_open: false,
             broadcasting_ear: "left".to_string(),
         };
-        
+
         let curr = CliAirPodsData {
-            left_battery: 65, // 15% drop - significant
+            left_battery: 65,  // 15% drop - significant
             right_battery: 70, // 5% drop - not significant
             ..prev.clone()
         };
-        
+
         assert!(CliScanner::significant_battery_change(&prev, &curr));
-        
+
         let curr_small = CliAirPodsData {
-            left_battery: 75, // 5% drop - not significant
+            left_battery: 75,  // 5% drop - not significant
             right_battery: 70, // 5% drop - not significant
             ..prev.clone()
         };
-        
+
         assert!(!CliScanner::significant_battery_change(&prev, &curr_small));
     }
-    
+
     #[test]
     fn test_charging_state_change_detection() {
         let prev = CliAirPodsData {
@@ -542,15 +589,15 @@ mod tests {
             lid_open: false,
             broadcasting_ear: "left".to_string(),
         };
-        
+
         let curr = CliAirPodsData {
             case_charging: true, // Started charging
             ..prev.clone()
         };
-        
+
         assert!(CliScanner::charging_state_change(&prev, &curr));
-        
+
         let curr_same = prev.clone();
         assert!(!CliScanner::charging_state_change(&prev, &curr_same));
     }
-} 
+}

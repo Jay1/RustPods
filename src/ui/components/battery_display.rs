@@ -1,4 +1,5 @@
-use iced::widget::{column, container, progress_bar, row, text};use iced::Length;
+use iced::widget::{column, container, progress_bar, row, text};
+use iced::Length;
 
 use crate::ui::{Message, UiComponent};
 
@@ -22,7 +23,7 @@ impl BatteryDisplay {
             case_level: case_level.map(|c| c.min(100)),
         }
     }
-    
+
     /// Create an empty battery display
     pub fn empty() -> Self {
         Self {
@@ -35,18 +36,11 @@ impl BatteryDisplay {
 
 impl UiComponent for BatteryDisplay {
     fn view(&self) -> iced::Element<'static, Message, iced::Renderer<crate::ui::theme::Theme>> {
-        let mut content = column![]
-            .spacing(20)
-            .padding(20)
-            .width(Length::Fill);
-        
+        let mut content = column![].spacing(20).padding(20).width(Length::Fill);
+
         // Title
-        content = content.push(
-            text("Battery Levels")
-                .size(24)
-                .width(Length::Fill),
-        );
-        
+        content = content.push(text("Battery Levels").size(24).width(Length::Fill));
+
         // Left earbud
         content = content.push(
             row![
@@ -56,7 +50,7 @@ impl UiComponent for BatteryDisplay {
             .spacing(10)
             .width(Length::Fill),
         );
-        
+
         // Right earbud
         content = content.push(
             row![
@@ -66,7 +60,7 @@ impl UiComponent for BatteryDisplay {
             .spacing(10)
             .width(Length::Fill),
         );
-        
+
         // Case
         content = content.push(
             row![
@@ -76,17 +70,19 @@ impl UiComponent for BatteryDisplay {
             .spacing(10)
             .width(Length::Fill),
         );
-        
+
         container(content).width(Length::Fill).into()
     }
 }
 
 /// Helper function to create a battery indicator
-fn create_battery_indicator(level: Option<u8>) -> iced::Element<'static, Message, iced::Renderer<crate::ui::theme::Theme>> {
+fn create_battery_indicator(
+    level: Option<u8>,
+) -> iced::Element<'static, Message, iced::Renderer<crate::ui::theme::Theme>> {
     match level {
         Some(level) => {
             let level_f32 = level as f32 / 100.0;
-            
+
             row![
                 progress_bar(0.0..=1.0, level_f32).width(Length::Fill),
                 text(format!("{}%", level)).width(Length::Shrink),
@@ -95,8 +91,6 @@ fn create_battery_indicator(level: Option<u8>) -> iced::Element<'static, Message
             .width(Length::Fill)
             .into()
         }
-        None => {
-            text("Not connected").into()
-        }
+        None => text("Not connected").into(),
     }
-} 
+}

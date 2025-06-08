@@ -2,38 +2,38 @@
 
 // Module exports
 mod app;
-mod state_app;
-mod fixed_state_app;
 pub mod components;
-pub mod state;
-pub mod state_manager;
+mod fixed_state_app;
 mod message;
+pub mod state;
+mod state_app;
+pub mod state_manager;
 mod system_tray;
 // mod system_tray_controller; // Keep controller disabled for now
+pub mod form_validation;
+pub mod keyboard_shortcuts;
 mod main_window;
 mod settings_window;
+pub mod test_helpers;
 pub mod theme;
-pub mod keyboard_shortcuts;
+pub mod utils;
 pub mod window_management;
 pub mod window_visibility;
-pub mod form_validation;
-pub mod test_helpers;
-pub mod utils;
 
 // Re-exports for easier access
 pub use app::run_ui;
-pub use fixed_state_app::{StateApp, run_state_ui};
-pub use state::AppState;
+pub use fixed_state_app::{run_state_ui, StateApp};
 pub use message::Message;
+pub use state::AppState;
 pub use system_tray::SystemTray;
 // pub use system_tray_controller::SystemTrayController; // Keep controller disabled
+pub use form_validation::{FormValidator, ValidationRule};
+pub use keyboard_shortcuts::{handle_events, KeyboardShortcut, KeyboardShortcutManager};
 pub use main_window::MainWindow;
 pub use settings_window::SettingsWindow;
 pub use state_manager::StateManager;
-pub use keyboard_shortcuts::{KeyboardShortcut, KeyboardShortcutManager, handle_events};
-pub use window_management::{WindowInteraction, DragRegion};
-pub use window_visibility::{WindowVisibilityManager, WindowPosition};
-pub use form_validation::{ValidationRule, FormValidator};
+pub use window_management::{DragRegion, WindowInteraction};
+pub use window_visibility::{WindowPosition, WindowVisibilityManager};
 
 /// Manager for UI operations
 pub struct UiManager;
@@ -42,4 +42,4 @@ pub struct UiManager;
 pub trait UiComponent {
     /// Convert the component to an element
     fn view(&self) -> iced::Element<'_, Message, iced::Renderer<theme::Theme>>;
-} 
+}

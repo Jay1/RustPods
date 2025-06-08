@@ -11,7 +11,10 @@ fn main() {
                     println!("No AirPods found.");
                 } else {
                     for ap in airpods {
-                        println!("Found: {} ({}), battery: {}%", ap.name, ap.address, ap.battery);
+                        println!(
+                            "Found: {} ({}), battery: {}%",
+                            ap.name, ap.address, ap.battery
+                        );
                     }
                 }
             }
@@ -20,4 +23,4 @@ fn main() {
             }
         }
     });
-} 
+}

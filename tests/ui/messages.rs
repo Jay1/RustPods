@@ -11,10 +11,10 @@ use rustpods::ui::AppState;
 
 /// Create a test paired device with the given address and name
 fn create_test_device(
-    address: [u8; 6], 
-    name: Option<&str>, 
-    rssi: Option<i16>, 
-    is_airpods: bool
+    address: [u8; 6],
+    name: Option<&str>,
+    rssi: Option<i16>,
+    is_airpods: bool,
 ) -> DiscoveredDevice {
     let mut mfg_data = HashMap::new();
     if is_airpods {
@@ -59,7 +59,12 @@ fn test_device_update_cycle() {
     let device = create_test_device([1, 2, 3, 4, 5, 6], Some("Device 1"), Some(-60), false);
     state.update_device(device.clone());
     assert_eq!(state.devices.len(), 1);
-    let updated_device = create_test_device([1, 2, 3, 4, 5, 6], Some("Device 1 Updated"), Some(-50), false);
+    let updated_device = create_test_device(
+        [1, 2, 3, 4, 5, 6],
+        Some("Device 1 Updated"),
+        Some(-50),
+        false,
+    );
     state.update_device(updated_device.clone());
     assert_eq!(state.devices.len(), 1);
     let updated = state.devices.get(&device.address.to_string()).unwrap();
@@ -91,6 +96,9 @@ fn test_device_selection_edge_cases() {
             state.selected_device = None;
         }
     }
-    assert!(state.selected_device.is_none(), "Selection should be cleared when device is removed");
+    assert!(
+        state.selected_device.is_none(),
+        "Selection should be cleared when device is removed"
+    );
     assert!(state.get_selected_device().is_none());
-} 
+}

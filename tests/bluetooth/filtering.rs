@@ -5,13 +5,12 @@ use std::time::Instant;
 
 use btleplug::api::BDAddr;
 
+use crate::bluetooth::common_utils::{create_airpods_manufacturer_data, create_test_device};
 use rustpods::airpods::{
-    airpods_all_models_filter, airpods_pro_filter, 
-    airpods_with_battery_filter, airpods_nearby_filter,
-    APPLE_COMPANY_ID, detect_airpods
+    airpods_all_models_filter, airpods_nearby_filter, airpods_pro_filter,
+    airpods_with_battery_filter, detect_airpods, APPLE_COMPANY_ID,
 };
 use rustpods::bluetooth::DiscoveredDevice;
-use crate::bluetooth::common_utils::{create_test_device, create_airpods_manufacturer_data};
 
 #[test]
 fn test_all_models_filter() {
@@ -22,25 +21,31 @@ fn test_all_models_filter() {
         Some(-60),
         true,
         Some(&[0x07, 0x19]), // Regular AirPods
-        true
+        true,
     );
-    
+
     let regular_device = create_test_device(
         [0x06, 0x05, 0x04, 0x03, 0x02, 0x01],
         Some("Bluetooth Speaker"),
         Some(-70),
         false,
         None,
-        false
+        false,
     );
-    
+
     // Use the filter directly as a function
     let filter = airpods_all_models_filter();
     let filter_fn = &filter;
-    
+
     // Test the filter
-    assert!(filter_fn(&airpods_device), "AirPods should match the all models filter");
-    assert!(!filter_fn(&regular_device), "Non-AirPods device should not match");
+    assert!(
+        filter_fn(&airpods_device),
+        "AirPods should match the all models filter"
+    );
+    assert!(
+        !filter_fn(&regular_device),
+        "Non-AirPods device should not match"
+    );
 }
 
 #[test]
@@ -52,33 +57,36 @@ fn test_pro_filter() {
         Some(-60),
         true,
         Some(&[0x07, 0x19]), // Regular AirPods
-        true
+        true,
     );
-    
+
     let airpods_pro = create_test_device(
         [0x02, 0x03, 0x04, 0x05, 0x06, 0x07],
         Some("AirPods Pro"),
         Some(-60),
         true,
         Some(&[0x0E, 0x19]), // AirPods Pro prefix
-        true
+        true,
     );
-    
+
     let airpods_pro_2 = create_test_device(
         [0x03, 0x04, 0x05, 0x06, 0x07, 0x08],
         Some("AirPods Pro 2"),
         Some(-60),
         true,
         Some(&[0x0F, 0x19]), // AirPods Pro 2 prefix
-        true
+        true,
     );
-    
+
     // Use the filter directly as a function
     let filter = airpods_pro_filter();
     let filter_fn = &filter;
-    
+
     // Test the filter
-    assert!(!filter_fn(&airpods_regular), "Regular AirPods should not match");
+    assert!(
+        !filter_fn(&airpods_regular),
+        "Regular AirPods should not match"
+    );
     assert!(filter_fn(&airpods_pro), "AirPods Pro should match");
     assert!(filter_fn(&airpods_pro_2), "AirPods Pro 2 should match");
 }
@@ -88,7 +96,7 @@ async fn test_battery_filter() {
     // Notice that our test AirPods Pro prefix is different from the actual implementation
     // In the test utilities it's [0x0E, 0x20] but in src/airpods/detector.rs it's [0x0E, 0x19]
     // We need to use the correct implementation value
-    
+
     // Create test device with valid AirPods Pro data including battery information
     // using create_airpods_manufacturer_data directly since it gives us more control
     let device_with_battery = DiscoveredDevice {
@@ -96,11 +104,11 @@ async fn test_battery_filter() {
         name: Some("AirPods Pro with battery".to_string()),
         rssi: Some(-60),
         manufacturer_data: create_airpods_manufacturer_data(
-            &[0x0E, 0x19],  // Use detector.rs value
-            8,               // Left battery (80%)
-            7,               // Right battery (70%)
-            6,               // Case battery (60%)
-            0x01             // Charging flags: left charging
+            &[0x0E, 0x19], // Use detector.rs value
+            8,             // Left battery (80%)
+            7,             // Right battery (70%)
+            6,             // Case battery (60%)
+            0x01,          // Charging flags: left charging
         ),
         is_potential_airpods: true,
         last_seen: Instant::now(),
@@ -128,26 +136,40 @@ async fn test_battery_filter() {
     let mut invalid_battery_data = Vec::new();
     invalid_battery_data.extend_from_slice(&[0x0E, 0x19]); // AirPods Pro prefix
     invalid_battery_data.extend_from_slice(&[0x01, 0x02, 0x03]); // Too short to contain battery
-    device_without_battery.manufacturer_data.insert(APPLE_COMPANY_ID, invalid_battery_data);
-    
+    device_without_battery
+        .manufacturer_data
+        .insert(APPLE_COMPANY_ID, invalid_battery_data);
+
     // Create a regular BLE device (not AirPods)
     let non_airpods_device = create_test_device(
         [0x03, 0x04, 0x05, 0x06, 0x07, 0x08],
         Some("Regular BLE device"),
         Some(-70),
-        false,                            // Not AirPods
-        None,                             // No prefix
-        false                             // No battery
+        false, // Not AirPods
+        None,  // No prefix
+        false, // No battery
     );
-    
+
     // For device with battery, verify the detected AirPods has battery information
     let airpods_with_battery = detect_airpods(&device_with_battery).unwrap();
-    assert!(airpods_with_battery.is_some(), "AirPods with battery should be detected");
+    assert!(
+        airpods_with_battery.is_some(),
+        "AirPods with battery should be detected"
+    );
     let detected = airpods_with_battery.unwrap();
-    assert!(detected.battery.as_ref().unwrap().left.is_some(), "Left battery should be present");
-    assert!(detected.battery.as_ref().unwrap().right.is_some(), "Right battery should be present");
-    assert!(detected.battery.as_ref().unwrap().case.is_some(), "Case battery should be present");
-    
+    assert!(
+        detected.battery.as_ref().unwrap().left.is_some(),
+        "Left battery should be present"
+    );
+    assert!(
+        detected.battery.as_ref().unwrap().right.is_some(),
+        "Right battery should be present"
+    );
+    assert!(
+        detected.battery.as_ref().unwrap().case.is_some(),
+        "Case battery should be present"
+    );
+
     // For device without battery, verify no battery info is detected
     let airpods_without_battery = detect_airpods(&device_without_battery).unwrap();
     if airpods_without_battery.is_some() {
@@ -155,23 +177,41 @@ async fn test_battery_filter() {
     } else {
         println!("No AirPods detected for device_without_battery");
     }
-    
+
     // Create the battery filter
     let filter = airpods_with_battery_filter();
-    
+
     // Use the filter directly as a function
     let filter_fn = &filter;
-    
+
     // Test on all device types and print debug info
     println!("\nFilter test results:");
-    println!("Device with battery passes filter: {}", filter_fn(&device_with_battery));
-    println!("Device without battery passes filter: {}", filter_fn(&device_without_battery));
-    println!("Non-AirPods device passes filter: {}", filter_fn(&non_airpods_device));
-    
+    println!(
+        "Device with battery passes filter: {}",
+        filter_fn(&device_with_battery)
+    );
+    println!(
+        "Device without battery passes filter: {}",
+        filter_fn(&device_without_battery)
+    );
+    println!(
+        "Non-AirPods device passes filter: {}",
+        filter_fn(&non_airpods_device)
+    );
+
     // Make assertions
-    assert!(filter_fn(&device_with_battery), "Filter should match AirPods with battery");
-    assert!(!filter_fn(&device_without_battery), "Filter should not match AirPods without battery");
-    assert!(!filter_fn(&non_airpods_device), "Filter should not match non-AirPods device");
+    assert!(
+        filter_fn(&device_with_battery),
+        "Filter should match AirPods with battery"
+    );
+    assert!(
+        !filter_fn(&device_without_battery),
+        "Filter should not match AirPods without battery"
+    );
+    assert!(
+        !filter_fn(&non_airpods_device),
+        "Filter should not match non-AirPods device"
+    );
 }
 
 #[test]
@@ -183,7 +223,7 @@ fn test_nearby_filter() {
         Some(-50), // Strong signal
         true,
         Some(&[0x07, 0x19]),
-        true
+        true,
     );
     let distant_airpods = create_test_device(
         [0x02, 0x03, 0x04, 0x05, 0x06, 0x07],
@@ -191,7 +231,7 @@ fn test_nearby_filter() {
         Some(-80), // Weak signal
         true,
         Some(&[0x0E, 0x19]),
-        true
+        true,
     );
     let airpods_no_rssi = create_test_device(
         [0x03, 0x04, 0x05, 0x06, 0x07, 0x08],
@@ -199,17 +239,23 @@ fn test_nearby_filter() {
         None, // No RSSI
         true,
         Some(&[0x0A, 0x19]),
-        true
+        true,
     );
-    
+
     // Create the filter and get filter function
     let filter = airpods_nearby_filter(-60); // Filter for RSSI > -60
     let filter_fn = &filter;
-    
+
     // Test the filter
     assert!(filter_fn(&nearby_airpods), "Nearby AirPods should match");
-    assert!(!filter_fn(&distant_airpods), "Distant AirPods should not match");
-    assert!(!filter_fn(&airpods_no_rssi), "AirPods with no RSSI should not match");
+    assert!(
+        !filter_fn(&distant_airpods),
+        "Distant AirPods should not match"
+    );
+    assert!(
+        !filter_fn(&airpods_no_rssi),
+        "AirPods with no RSSI should not match"
+    );
 }
 
 #[test]
@@ -221,18 +267,18 @@ fn test_combined_filters() {
         Some(-50), // Strong signal
         true,
         Some(&[0x0E, 0x19]), // Pro prefix
-        true
+        true,
     );
-    
+
     // Manually set manufacturer data
     pro_nearby_with_battery.manufacturer_data = create_airpods_manufacturer_data(
         &[0x0E, 0x19], // Pro prefix
-        80, // Left battery
-        75, // Right battery
-        90, // Case battery
-        0x01 // Charging flags
+        80,            // Left battery
+        75,            // Right battery
+        90,            // Case battery
+        0x01,          // Charging flags
     );
-    
+
     // Create a far away AirPods Pro with battery
     let mut pro_distant_with_battery = create_test_device(
         [0x02, 0x03, 0x04, 0x05, 0x06, 0x07],
@@ -240,18 +286,18 @@ fn test_combined_filters() {
         Some(-80), // Weak signal
         true,
         Some(&[0x0E, 0x19]), // Pro prefix
-        true
+        true,
     );
-    
+
     // Manually set manufacturer data
     pro_distant_with_battery.manufacturer_data = create_airpods_manufacturer_data(
         &[0x0E, 0x19], // Pro prefix
-        80, // Left battery
-        75, // Right battery
-        90, // Case battery
-        0x01 // Charging flags
+        80,            // Left battery
+        75,            // Right battery
+        90,            // Case battery
+        0x01,          // Charging flags
     );
-    
+
     // Create a nearby regular AirPods with battery
     let mut regular_nearby_with_battery = create_test_device(
         [0x03, 0x04, 0x05, 0x06, 0x07, 0x08],
@@ -259,18 +305,18 @@ fn test_combined_filters() {
         Some(-50), // Strong signal
         true,
         Some(&[0x07, 0x19]), // Regular prefix
-        true
+        true,
     );
-    
+
     // Manually set manufacturer data
     regular_nearby_with_battery.manufacturer_data = create_airpods_manufacturer_data(
         &[0x07, 0x19], // Regular prefix
-        80, // Left battery
-        75, // Right battery
-        90, // Case battery
-        0x01 // Charging flags
+        80,            // Left battery
+        75,            // Right battery
+        90,            // Case battery
+        0x01,          // Charging flags
     );
-    
+
     // Combining filters: Pro + Nearby + Battery
     let pro_filter = airpods_pro_filter();
     let nearby_filter = airpods_nearby_filter(-60);
@@ -278,8 +324,17 @@ fn test_combined_filters() {
     let combined_filter = |device: &DiscoveredDevice| {
         pro_filter(device) && nearby_filter(device) && battery_filter(device)
     };
-    
-    assert!(combined_filter(&pro_nearby_with_battery), "Nearby AirPods Pro with battery should match all filters");
-    assert!(!combined_filter(&pro_distant_with_battery), "Distant AirPods Pro should not match nearby filter");
-    assert!(!combined_filter(&regular_nearby_with_battery), "Regular AirPods should not match Pro filter");
-} 
+
+    assert!(
+        combined_filter(&pro_nearby_with_battery),
+        "Nearby AirPods Pro with battery should match all filters"
+    );
+    assert!(
+        !combined_filter(&pro_distant_with_battery),
+        "Distant AirPods Pro should not match nearby filter"
+    );
+    assert!(
+        !combined_filter(&regular_nearby_with_battery),
+        "Regular AirPods should not match Pro filter"
+    );
+}

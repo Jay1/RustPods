@@ -3,12 +3,12 @@
 //! This module handles window-related operations like dragging, positioning,
 //! and maintaining window state.
 
-use iced::{Event, Rectangle, Point, Vector, Length, mouse};
 use iced::widget::container;
+use iced::{mouse, Event, Length, Point, Rectangle, Vector};
 
-use crate::ui::Message;
-use crate::config::AppConfig;
 use crate::config::app_config::WindowPosition;
+use crate::config::AppConfig;
+use crate::ui::Message;
 
 /// Regions of a window that can be dragged
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,7 +55,7 @@ impl WindowInteraction {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     /// Handle a mouse press event to potentially start dragging
     pub fn handle_mouse_press(
         &mut self,
@@ -70,27 +70,27 @@ impl WindowInteraction {
             self.drag_region = region;
         }
     }
-    
+
     /// Handle a mouse release event to stop dragging
     pub fn handle_mouse_release(&mut self) {
         self.dragging = false;
         self.drag_start = None;
     }
-    
+
     /// Calculate the new window position based on mouse movement
     pub fn calculate_window_position(&self, current_position: Point) -> Option<Point> {
         if !self.dragging || self.drag_start.is_none() || self.window_start_position.is_none() {
             return None;
         }
-        
+
         let drag_start = self.drag_start.unwrap();
         let window_start = self.window_start_position.unwrap();
-        
+
         let delta = Vector::new(
             current_position.x - drag_start.x,
             current_position.y - drag_start.y,
         );
-        
+
         Some(Point::new(
             window_start.x + delta.x,
             window_start.y + delta.y,
@@ -119,7 +119,9 @@ pub fn handle_window_events(
         Event::Mouse(mouse_event) => match mouse_event {
             mouse::Event::ButtonPressed(mouse::Button::Left) => {
                 let window_position = Point::new(bounds.x, bounds.y);
-                let last_cursor_pos = window_state.last_window_position.unwrap_or(Point::new(0.0, 0.0));
+                let last_cursor_pos = window_state
+                    .last_window_position
+                    .unwrap_or(Point::new(0.0, 0.0));
                 let is_in_title_bar = last_cursor_pos.y - bounds.y <= 40.0;
                 if is_in_title_bar {
                     window_state.handle_mouse_press(
@@ -134,9 +136,7 @@ pub fn handle_window_events(
                 window_state.handle_mouse_release();
                 None
             }
-            mouse::Event::CursorMoved { position: _ } => {
-                None
-            }
+            mouse::Event::CursorMoved { position: _ } => None,
             _ => None,
         },
         _ => None,
@@ -149,7 +149,7 @@ pub fn create_draggable<'a, Message>(
     _drag_region: DragRegion,
 ) -> container::Container<'a, Message> {
     let content = content.into();
-    
+
     container(content)
         .width(Length::Fill)
         .height(Length::Shrink)
@@ -161,27 +161,29 @@ pub const DEFAULT_WINDOW_WIDTH: u32 = 360;
 pub const DEFAULT_WINDOW_HEIGHT: u32 = 500;
 
 /// Create a drag region that allows the user to move the window
-pub fn create_drag_region(title_bar_height: u16) -> iced::widget::Container<'static, crate::ui::Message> {
+pub fn create_drag_region(
+    title_bar_height: u16,
+) -> iced::widget::Container<'static, crate::ui::Message> {
     use iced::widget::{container, Space};
     use iced::Length;
-    
-    container(Space::new(Length::Fill, Length::Fixed(title_bar_height.into())))
-        .width(Length::Fill)
-        .height(Length::Fixed(title_bar_height.into()))
+
+    container(Space::new(
+        Length::Fill,
+        Length::Fixed(title_bar_height.into()),
+    ))
+    .width(Length::Fill)
+    .height(Length::Fixed(title_bar_height.into()))
 }
 
 /// Load saved window position and make sure it's on screen
-pub fn load_window_position(
-    app_config: &AppConfig,
-) -> Option<Point> 
-{
+pub fn load_window_position(app_config: &AppConfig) -> Option<Point> {
     // Use saved position if available
     match &app_config.ui.last_window_position {
         Some(pos) => {
             // Convert WindowPosition to Point
             let position = Point::new(pos.x as f32, pos.y as f32);
             Some(position)
-        },
+        }
         None => {
             // Fallback to a sensible default position
             Some(Point::new(100.0, 100.0))
@@ -203,9 +205,9 @@ pub fn save_window_position(
     } else {
         app_config.ui.last_window_position = None;
     }
-    
+
     // Save config
     app_config.save()?;
-    
+
     Ok(())
-} 
+}

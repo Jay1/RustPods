@@ -5,10 +5,10 @@ use std::sync::Arc;
 // Removed unused imports
 use std::convert::TryInto;
 
-use rustpods::ui::state_manager::{StateManager, Action};
-use rustpods::bluetooth::DiscoveredDevice;
-use rustpods::bluetooth::AirPodsBatteryStatus;
 use rustpods::airpods::{AirPodsBattery, AirPodsChargingState};
+use rustpods::bluetooth::AirPodsBatteryStatus;
+use rustpods::bluetooth::DiscoveredDevice;
+use rustpods::ui::state_manager::{Action, StateManager};
 // Removed unused import
 use rustpods::config::AppConfig;
 
@@ -33,12 +33,15 @@ fn create_test_battery() -> AirPodsBatteryStatus {
 
 /// Helper function to create a test device
 fn create_test_device(address: &str, name: &str) -> DiscoveredDevice {
-    let address_bytes = address.split(':')
+    let address_bytes = address
+        .split(':')
         .map(|x| u8::from_str_radix(x, 16).unwrap())
         .collect::<Vec<u8>>();
-    
+
     DiscoveredDevice {
-        address: btleplug::api::BDAddr::from(address_bytes.try_into().unwrap_or([0, 0, 0, 0, 0, 0])),
+        address: btleplug::api::BDAddr::from(
+            address_bytes.try_into().unwrap_or([0, 0, 0, 0, 0, 0]),
+        ),
         name: Some(name.to_string()),
         rssi: Some(-60),
         manufacturer_data: std::collections::HashMap::new(),
@@ -56,10 +59,10 @@ fn create_test_device(address: &str, name: &str) -> DiscoveredDevice {
 fn test_state_manager_init() {
     // Create a state manager
     let state_manager = create_test_state_manager();
-    
+
     // Get initial device state
     let device_state = state_manager.get_device_state();
-    
+
     // Check initial state
     assert!(device_state.devices.is_empty());
     assert!(device_state.selected_device.is_none());
@@ -71,37 +74,37 @@ fn test_state_manager_init() {
 fn test_state_manager_device_updates() {
     // Create a state manager
     let state_manager = create_test_state_manager();
-    
+
     // Create a test device
     let device = create_test_device("00:11:22:33:44:55", "Test Device");
     let device_id = device.address.to_string();
-    
+
     // Update the device state
     state_manager.dispatch(Action::UpdateDevice(device.clone()));
-    
+
     // Get updated device state
     let device_state = state_manager.get_device_state();
-    
+
     // Check that the device was added
     assert_eq!(device_state.devices.len(), 1);
     assert!(device_state.devices.contains_key(&device_id));
-    
+
     // Select the device
     state_manager.dispatch(Action::SelectDevice(device_id.clone()));
-    
+
     // Get updated device state
     let device_state = state_manager.get_device_state();
-    
+
     // Check that the device was selected
     assert!(device_state.selected_device.is_some());
     assert_eq!(device_state.selected_device.unwrap(), device_id);
-    
+
     // Remove the device
     state_manager.dispatch(Action::RemoveDevice(device_id));
-    
+
     // Get updated device state
     let device_state = state_manager.get_device_state();
-    
+
     // Check that the device was removed
     assert!(device_state.devices.is_empty());
     assert!(device_state.selected_device.is_none());
@@ -112,21 +115,30 @@ fn test_state_manager_device_updates() {
 fn test_state_manager_battery_status() {
     // Create a state manager
     let state_manager = create_test_state_manager();
-    
+
     // Create a test battery status
     let battery_status = create_test_battery();
-    
+
     // Update the battery status
     state_manager.dispatch(Action::UpdateBatteryStatus(battery_status.clone()));
-    
+
     // Get updated device state
     let device_state = state_manager.get_device_state();
-    
+
     // Check that the battery status was updated
     assert!(device_state.battery_status.is_some());
-    assert_eq!(device_state.battery_status.as_ref().unwrap().battery.left, battery_status.battery.left);
-    assert_eq!(device_state.battery_status.as_ref().unwrap().battery.right, battery_status.battery.right);
-    assert_eq!(device_state.battery_status.as_ref().unwrap().battery.case, battery_status.battery.case);
+    assert_eq!(
+        device_state.battery_status.as_ref().unwrap().battery.left,
+        battery_status.battery.left
+    );
+    assert_eq!(
+        device_state.battery_status.as_ref().unwrap().battery.right,
+        battery_status.battery.right
+    );
+    assert_eq!(
+        device_state.battery_status.as_ref().unwrap().battery.case,
+        battery_status.battery.case
+    );
 }
 
 /// Test config updates
@@ -134,43 +146,46 @@ fn test_state_manager_battery_status() {
 fn test_state_manager_config_updates() {
     // Create a state manager
     let state_manager = create_test_state_manager();
-    
+
     // Create a test config
     let config = AppConfig::default();
-    
+
     // Update the config
     state_manager.dispatch(Action::UpdateSettings(config.clone()));
-    
+
     // Get updated config
     let updated_config = state_manager.get_config();
-    
+
     // Check that the config was updated
-    assert_eq!(updated_config.bluetooth.auto_scan_on_startup, config.bluetooth.auto_scan_on_startup);
+    assert_eq!(
+        updated_config.bluetooth.auto_scan_on_startup,
+        config.bluetooth.auto_scan_on_startup
+    );
 }
 
 #[test]
 fn test_ui_actions() {
     let state_manager = create_test_state_manager();
-    
+
     // Initial UI state
     let ui_state = state_manager.get_ui_state();
     assert!(!ui_state.show_settings);
     assert_eq!(ui_state.animation_progress, 0.0);
-    
+
     // Show settings
     state_manager.dispatch(Action::ShowSettings);
-    
+
     // Verify settings are shown
     let ui_state = state_manager.get_ui_state();
     assert!(ui_state.show_settings);
-    
+
     // Update animation progress
     state_manager.dispatch(Action::UpdateAnimationProgress(0.5));
-    
+
     // Verify animation progress updated
     let ui_state = state_manager.get_ui_state();
     assert_eq!(ui_state.animation_progress, 0.5);
-    
+
     // Update settings
     let config = AppConfig::default();
     state_manager.dispatch(Action::UpdateSettings(config));
@@ -179,13 +194,13 @@ fn test_ui_actions() {
 #[test]
 fn test_visibility_action() {
     let state_manager = create_test_state_manager();
-    
+
     // The initial visibility state isn't directly readable through the API
     // But we can verify the action doesn't fail
-    
+
     // Toggle visibility
     state_manager.dispatch(Action::ToggleVisibility);
-    
+
     // Since this doesn't directly expose state, we'd verify via integration tests
     // that the visibility actually changes
 }
@@ -194,27 +209,27 @@ fn test_visibility_action() {
 fn test_notification_generation() {
     let (tokio_tx, _tokio_rx) = tokio::sync::mpsc::unbounded_channel();
     let state_manager = Arc::new(StateManager::new(tokio_tx));
-    
+
     // Create a test device
     let device = create_test_device("11:22:33:44:55:66", "Test Device");
-    
+
     // Dispatch a message that should generate a notification
     state_manager.dispatch(Action::UpdateDevice(device));
-    
+
     // In a real test with tokio runtime, we'd try to receive the message:
     // let message = _tokio_rx.try_recv();
     // assert!(message.is_ok());
-    
+
     // Here we just verify the state manager doesn't panic
 }
 
 #[test]
 fn test_auto_toggle_action() {
     let state_manager = create_test_state_manager();
-    
+
     // Toggle auto scan
     state_manager.dispatch(Action::ToggleAutoScan(false));
-    
+
     // Since auto scan state isn't directly accessible, we'd verify
     // in integration tests that auto scanning behavior changes
 }
@@ -223,13 +238,13 @@ fn test_auto_toggle_action() {
 fn test_shutdown_action() {
     let (tokio_tx, _tokio_rx) = tokio::sync::mpsc::unbounded_channel();
     let state_manager = Arc::new(StateManager::new(tokio_tx));
-    
+
     // Dispatch shutdown action
     state_manager.dispatch(Action::Shutdown);
-    
+
     // This should trigger an Exit message to be sent
     // In a tokio runtime test, we would verify:
     // let message = _tokio_rx.try_recv();
     // assert!(message.is_ok());
     // assert!(matches!(message.unwrap(), Message::Exit));
-} 
+}

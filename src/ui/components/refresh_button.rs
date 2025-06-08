@@ -1,8 +1,7 @@
 use iced::{
-    Length, alignment,
-    theme,
-    widget::{text, container, button},
-    Element,
+    alignment, theme,
+    widget::{button, container, text},
+    Element, Length,
 };
 
 /// A button for refreshing data that can display a loading spinner
@@ -25,30 +24,27 @@ impl RefreshButton {
             label: None,
         }
     }
-    
+
     /// Set whether the button is in a loading state
     pub fn loading(mut self, is_loading: bool) -> Self {
         self.is_loading = is_loading;
         self
     }
-    
+
     /// Set the animation progress (0.0 - 1.0)
     pub fn with_animation_progress(mut self, progress: f32) -> Self {
         self.animation_progress = progress;
         self
     }
-    
+
     /// Add a text label to the button
     pub fn with_text<S: Into<String>>(mut self, text: S) -> Self {
         self.label = Some(text.into());
         self
     }
-    
+
     /// Create a view of this component
-    pub fn view<'a, Message>(
-        &self,
-        on_press: Message,
-    ) -> Element<'a, Message>
+    pub fn view<'a, Message>(&self, on_press: Message) -> Element<'a, Message>
     where
         Message: 'a + Clone,
     {
@@ -64,23 +60,19 @@ impl RefreshButton {
         } else {
             "↻".to_string()
         };
-        
+
         let btn = button(
-            container(
-                text(btn_text)
-                    .width(Length::Shrink)
-                    .height(Length::Shrink)
-            )
-            .width(Length::Shrink)
-            .align_x(alignment::Horizontal::Center)
-            .padding(8)
+            container(text(btn_text).width(Length::Shrink).height(Length::Shrink))
+                .width(Length::Shrink)
+                .align_x(alignment::Horizontal::Center)
+                .padding(8),
         )
         .style(if self.is_loading {
             theme::Button::Secondary
         } else {
             theme::Button::Primary
         });
-        
+
         // Add on press handler if not loading
         if self.is_loading {
             btn.into()
@@ -94,4 +86,4 @@ impl Default for RefreshButton {
     fn default() -> Self {
         Self::new()
     }
-} 
+}

@@ -5,10 +5,10 @@ use btleplug::api::BDAddr;
 use std::collections::HashMap;
 use std::time::Instant;
 
+use iced::Application;
 use rustpods::bluetooth::DiscoveredDevice;
 use rustpods::config::AppConfig;
 use rustpods::ui::state::AppState;
-use iced::Application;
 
 /// Test the full state update flow with simulated device events (paired devices)
 #[test]
@@ -82,9 +82,18 @@ fn test_default_config() {
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
     let state = AppState::new(tx);
     let default_config = AppConfig::default();
-    assert_eq!(state.config.bluetooth.scan_duration, default_config.bluetooth.scan_duration);
-    assert_eq!(state.config.bluetooth.scan_interval, default_config.bluetooth.scan_interval);
-    assert_eq!(state.config.bluetooth.auto_scan_on_startup, default_config.bluetooth.auto_scan_on_startup);
+    assert_eq!(
+        state.config.bluetooth.scan_duration,
+        default_config.bluetooth.scan_duration
+    );
+    assert_eq!(
+        state.config.bluetooth.scan_interval,
+        default_config.bluetooth.scan_interval
+    );
+    assert_eq!(
+        state.config.bluetooth.auto_scan_on_startup,
+        default_config.bluetooth.auto_scan_on_startup
+    );
 }
 
 /// Create a mock paired device for testing
@@ -118,11 +127,20 @@ fn test_app_state_defaults() {
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
     let state = AppState::new(tx);
     assert!(state.visible); // Default is visible (true)
-    // Note: devices may not be empty due to CLI scanner integration
+                            // Note: devices may not be empty due to CLI scanner integration
     let default_config = AppConfig::default();
-    assert_eq!(state.config.bluetooth.scan_duration, default_config.bluetooth.scan_duration);
-    assert_eq!(state.config.bluetooth.scan_interval, default_config.bluetooth.scan_interval);
-    assert_eq!(state.config.bluetooth.auto_scan_on_startup, default_config.bluetooth.auto_scan_on_startup);
+    assert_eq!(
+        state.config.bluetooth.scan_duration,
+        default_config.bluetooth.scan_duration
+    );
+    assert_eq!(
+        state.config.bluetooth.scan_interval,
+        default_config.bluetooth.scan_interval
+    );
+    assert_eq!(
+        state.config.bluetooth.auto_scan_on_startup,
+        default_config.bluetooth.auto_scan_on_startup
+    );
 }
 
 #[test]
@@ -150,14 +168,14 @@ fn test_app_state_status_and_toast() {
     let mut state = AppState::new(tx);
     state.status_message = Some("Status!".to_string());
     state.toast_message = Some("Toast!".to_string());
-    
+
     // Test that view works with messages
     {
         let _element = state.view();
     } // Drop the element before mutating state
-    
+
     state.clear_status_message();
     assert!(state.status_message.is_none());
     state.clear_toast_message();
     assert!(state.toast_message.is_none());
-} 
+}

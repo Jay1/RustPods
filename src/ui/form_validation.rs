@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::fmt;
 use thiserror::Error;
 
-use crate::error::{RustPodsError, ErrorContext};
+use crate::error::{ErrorContext, RustPodsError};
 
 /// Form validation error
 #[derive(Debug, Error)]
@@ -14,19 +14,19 @@ pub enum ValidationError {
     /// Field is required
     #[error("Field '{0}' is required")]
     Required(String),
-    
+
     /// Field is too short
     #[error("Field '{0}' must be at least {1} characters")]
     TooShort(String, usize),
-    
+
     /// Field is too long
     #[error("Field '{0}' must be at most {1} characters")]
     TooLong(String, usize),
-    
+
     /// Field doesn't match pattern
     #[error("Field '{0}' has invalid format: {1}")]
     InvalidFormat(String, String),
-    
+
     /// Custom validation error
     #[error("{0}")]
     Custom(String),
@@ -70,31 +70,31 @@ impl ValidationRule {
             validator: None,
         }
     }
-    
+
     /// Mark the field as required
     pub fn required(mut self) -> Self {
         self.required = true;
         self
     }
-    
+
     /// Set a minimum length requirement
     pub fn min_length(mut self, length: usize) -> Self {
         self.min_length = Some(length);
         self
     }
-    
+
     /// Set a maximum length requirement
     pub fn max_length(mut self, length: usize) -> Self {
         self.max_length = Some(length);
         self
     }
-    
+
     /// Set a regular expression pattern for validation
     pub fn pattern<S: Into<String>>(mut self, pattern: S) -> Self {
         self.pattern = Some(pattern.into());
         self
     }
-    
+
     /// Add a custom validation function
     pub fn validator<F>(mut self, validator: F) -> Self
     where
@@ -103,45 +103,61 @@ impl ValidationRule {
         self.validator = Some(Box::new(validator));
         self
     }
-    
+
     /// Validate a field value against this rule
     pub fn validate(&self, value: &str) -> Result<()> {
         // Create error context for logging
         let _ctx = ErrorContext::new("FormValidation", "validate")
             .with_metadata("field", self.field.clone())
             .with_metadata("value_length", value.len().to_string());
-        
+
         // Check if the field is required
         if self.required && value.trim().is_empty() {
             log::debug!("Required field '{}' is empty", self.field);
             return Err(ValidationError::Required(self.field.clone()));
         }
-        
+
         // Check minimum length
         if let Some(min_length) = self.min_length {
             if value.len() < min_length {
-                log::debug!("Field '{}' is too short ({}), minimum {}", self.field, value.len(), min_length);
+                log::debug!(
+                    "Field '{}' is too short ({}), minimum {}",
+                    self.field,
+                    value.len(),
+                    min_length
+                );
                 return Err(ValidationError::TooShort(self.field.clone(), min_length));
             }
         }
-        
+
         // Check maximum length
         if let Some(max_length) = self.max_length {
             if value.len() > max_length {
-                log::debug!("Field '{}' is too long ({}), maximum {}", self.field, value.len(), max_length);
+                log::debug!(
+                    "Field '{}' is too long ({}), maximum {}",
+                    self.field,
+                    value.len(),
+                    max_length
+                );
                 return Err(ValidationError::TooLong(self.field.clone(), max_length));
             }
         }
-        
+
         // Check pattern
         if let Some(pattern) = &self.pattern {
             let valid = match pattern.as_str() {
                 "email" => value.contains('@') && value.contains('.'),
-                "number" => value.chars().all(|c| c.is_ascii_digit() || c == '-' || c == '.'),
+                "number" => value
+                    .chars()
+                    .all(|c| c.is_ascii_digit() || c == '-' || c == '.'),
                 "integer" => value.chars().all(|c| c.is_ascii_digit() || c == '-'),
-                "alphanumeric" => value.chars().all(|c| c.is_alphanumeric() || c.is_whitespace()),
+                "alphanumeric" => value
+                    .chars()
+                    .all(|c| c.is_alphanumeric() || c.is_whitespace()),
                 "url" => value.starts_with("http://") || value.starts_with("https://"),
-                "phone" => value.chars().all(|c| c.is_ascii_digit() || c == '+' || c == '-' || c == '(' || c == ')' || c == ' '),
+                "phone" => value.chars().all(|c| {
+                    c.is_ascii_digit() || c == '+' || c == '-' || c == '(' || c == ')' || c == ' '
+                }),
                 _ => {
                     if let Ok(regex) = regex::Regex::new(pattern) {
                         regex.is_match(value)
@@ -151,21 +167,25 @@ impl ValidationRule {
                     }
                 }
             };
-            
+
             if !valid {
-                log::debug!("Field '{}' has invalid format, should match {}", self.field, pattern);
+                log::debug!(
+                    "Field '{}' has invalid format, should match {}",
+                    self.field,
+                    pattern
+                );
                 return Err(ValidationError::InvalidFormat(
-                    self.field.clone(), 
-                    format!("Must match format: {}", pattern)
+                    self.field.clone(),
+                    format!("Must match format: {}", pattern),
                 ));
             }
         }
-        
+
         // Apply custom validator
         if let Some(validator) = &self.validator {
             return validator(value);
         }
-        
+
         Ok(())
     }
 }
@@ -224,72 +244,77 @@ impl FormValidator {
             errors: HashMap::new(),
         }
     }
-    
+
     /// Add a validation rule
     pub fn add_rule(&mut self, rule: ValidationRule) {
         self.rules.push(rule);
     }
-    
+
     /// Set a field value
     pub fn set_field<S: Into<String> + Clone, T: Into<String>>(&mut self, field: S, value: T) {
         let field_name = field.clone().into();
         self.values.insert(field_name.clone(), value.into());
         self.validate_field(&field_name);
     }
-    
+
     /// Get a field value
     pub fn get_field(&self, field: &str) -> Option<&String> {
         self.values.get(field)
     }
-    
+
     /// Get a validation error for a field
     pub fn get_error(&self, field: &str) -> Option<&String> {
         self.errors.get(field)
     }
-    
+
     /// Check if a field has an error
     pub fn has_error(&self, field: &str) -> bool {
         self.errors.contains_key(field)
     }
-    
+
     /// Check if the form has any errors
     pub fn has_errors(&self) -> bool {
         !self.errors.is_empty()
     }
-    
+
     /// Get all validation errors
     pub fn get_errors(&self) -> &HashMap<String, String> {
         &self.errors
     }
-    
+
     /// Validate a specific field
     pub fn validate_field(&mut self, field: &str) -> bool {
         // Find all rules for this field
-        let rules = self.rules.iter().filter(|r| r.field == field).collect::<Vec<_>>();
-        
+        let rules = self
+            .rules
+            .iter()
+            .filter(|r| r.field == field)
+            .collect::<Vec<_>>();
+
         // If no rules, field is valid
         if rules.is_empty() {
             self.errors.remove(field);
             return true;
         }
-        
+
         // Get the field value
         let value = match self.values.get(field) {
             Some(v) => v,
             None => {
                 // Field is not set, check if it's required
                 if rules.iter().any(|r| r.required) {
-                    self.errors.insert(field.to_string(), format!("Field {} is required", field));
+                    self.errors
+                        .insert(field.to_string(), format!("Field {} is required", field));
                     return false;
                 }
                 return true;
             }
         };
-        
+
         // Apply rules
         for rule in rules {
             match rule.validate(value) {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(err) => {
                     self.errors.insert(field.to_string(), err.to_string());
                     log::debug!("Validation failed for field {}: {}", field, err);
@@ -297,31 +322,33 @@ impl FormValidator {
                 }
             }
         }
-        
+
         // Field is valid
         self.errors.remove(field);
         true
     }
-    
+
     /// Validate all fields
     pub fn validate_all(&mut self) -> bool {
         let mut valid = true;
-        
+
         // Get all unique fields from rules
-        let fields = self.rules.iter()
+        let fields = self
+            .rules
+            .iter()
             .map(|r| r.field.clone())
             .collect::<std::collections::HashSet<_>>();
-        
+
         // Validate each field
         for field in fields {
             if !self.validate_field(&field) {
                 valid = false;
             }
         }
-        
+
         valid
     }
-    
+
     /// Get a map of all fields and their validation status
     pub fn get_validation_status(&self) -> HashMap<String, ValidationResult> {
         self.values
@@ -378,12 +405,13 @@ impl FieldValidator {
         let error_message = error_message.to_string(); // Clone the string to avoid lifetime issues
         Self {
             error_message: error_message.clone(),
-            validator: Some(Box::new(move |value: &str| {
-                match value.parse::<i32>() {
-                    Ok(num) if num >= min && num <= max => Ok(()),
-                    Ok(_) => Err(ValidationError::Custom(error_message.clone())),
-                    Err(_) => Err(ValidationError::Custom(format!("Invalid number format: {}", value))),
-                }
+            validator: Some(Box::new(move |value: &str| match value.parse::<i32>() {
+                Ok(num) if num >= min && num <= max => Ok(()),
+                Ok(_) => Err(ValidationError::Custom(error_message.clone())),
+                Err(_) => Err(ValidationError::Custom(format!(
+                    "Invalid number format: {}",
+                    value
+                ))),
             })),
         }
     }
@@ -398,7 +426,7 @@ impl FieldValidator {
         }
 
         let first_error_message = validators[0].error_message.clone();
-        
+
         Self {
             error_message: first_error_message,
             validator: Some(Box::new(move |value: &str| {
@@ -463,4 +491,4 @@ impl Clone for FieldValidator {
             validator: None, // Cannot clone the function, so we set it to None in the clone
         }
     }
-} 
+}

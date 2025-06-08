@@ -58,7 +58,7 @@ impl ScanConfig {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     /// Create a configuration for continuous scanning with minimal delays
     pub fn continuous() -> Self {
         Self {
@@ -77,7 +77,7 @@ impl ScanConfig {
             retry_delay: Duration::from_secs(1),
         }
     }
-    
+
     /// Create a configuration for power-efficient scanning
     pub fn power_efficient() -> Self {
         Self {
@@ -96,7 +96,7 @@ impl ScanConfig {
             retry_delay: Duration::from_secs(1),
         }
     }
-    
+
     /// Create a configuration optimized for finding AirPods quickly
     pub fn airpods_optimized() -> Self {
         Self {
@@ -115,7 +115,7 @@ impl ScanConfig {
             retry_delay: Duration::from_secs(1),
         }
     }
-    
+
     /// Create a configuration for a one-time scan
     pub fn one_time_scan(duration: Duration) -> Self {
         Self {
@@ -134,79 +134,79 @@ impl ScanConfig {
             retry_delay: Duration::from_secs(1),
         }
     }
-    
+
     /// Set the scan duration
     pub fn with_scan_duration(mut self, duration: Duration) -> Self {
         self.scan_duration = duration;
         self
     }
-    
+
     /// Set the interval between scans
     pub fn with_interval(mut self, interval: Duration) -> Self {
         self.interval_between_scans = interval;
         self
     }
-    
+
     /// Set whether to automatically stop scanning
     pub fn with_auto_stop(mut self, auto_stop: bool) -> Self {
         self.auto_stop_scan = auto_stop;
         self
     }
-    
+
     /// Set the maximum number of scan cycles
     pub fn with_max_cycles(mut self, max_cycles: Option<usize>) -> Self {
         self.max_scan_cycles = max_cycles;
         self
     }
-    
+
     /// Set the device inactive timeout
     pub fn with_device_inactive_timeout(mut self, timeout: Option<Duration>) -> Self {
         self.device_inactive_timeout = timeout;
         self
     }
-    
+
     /// Set whether to continue scanning in a loop
     pub fn with_continuous(mut self, continuous: bool) -> Self {
         self.continuous = continuous;
         self
     }
-    
+
     /// Set the minimum signal strength
     pub fn with_min_rssi(mut self, min_rssi: Option<i16>) -> Self {
         self.min_rssi = min_rssi;
         self
     }
-    
+
     /// Set whether to filter out known devices
     pub fn with_filter_known_devices(mut self, filter_known_devices: bool) -> Self {
         self.filter_known_devices = filter_known_devices;
         self
     }
-    
+
     /// Set whether to only update RSSI for known devices
     pub fn with_update_rssi_only(mut self, update_rssi_only: bool) -> Self {
         self.update_rssi_only = update_rssi_only;
         self
     }
-    
+
     /// Set the interval for updating device data
     pub fn with_update_interval(mut self, update_interval: Duration) -> Self {
         self.update_interval = update_interval;
         self
     }
-    
+
     /// Set the scan timeout
     pub fn with_scan_timeout(mut self, scan_timeout: Option<Duration>) -> Self {
         self.scan_timeout = scan_timeout;
         self
     }
-    
+
     /// Set the maximum number of retries for operations
     pub fn with_max_retries(mut self, max_retries: u8) -> Self {
         self.max_retries = max_retries;
         self
     }
-    
+
     /// Set the delay between retries
     pub fn with_retry_delay(mut self, retry_delay: Duration) -> Self {
         self.retry_delay = retry_delay;
@@ -221,7 +221,7 @@ mod tests {
     #[test]
     fn test_default_config() {
         let config = ScanConfig::default();
-        
+
         assert_eq!(config.scan_duration, Duration::from_secs(10));
         assert_eq!(config.interval_between_scans, Duration::from_secs(20));
         assert!(config.auto_stop_scan);
@@ -242,15 +242,24 @@ mod tests {
         let config = ScanConfig::new();
         // new() should return default values
         let default_config = ScanConfig::default();
-        
+
         assert_eq!(config.scan_duration, default_config.scan_duration);
-        assert_eq!(config.interval_between_scans, default_config.interval_between_scans);
+        assert_eq!(
+            config.interval_between_scans,
+            default_config.interval_between_scans
+        );
         assert_eq!(config.auto_stop_scan, default_config.auto_stop_scan);
         assert_eq!(config.max_scan_cycles, default_config.max_scan_cycles);
-        assert_eq!(config.device_inactive_timeout, default_config.device_inactive_timeout);
+        assert_eq!(
+            config.device_inactive_timeout,
+            default_config.device_inactive_timeout
+        );
         assert_eq!(config.continuous, default_config.continuous);
         assert_eq!(config.min_rssi, default_config.min_rssi);
-        assert_eq!(config.filter_known_devices, default_config.filter_known_devices);
+        assert_eq!(
+            config.filter_known_devices,
+            default_config.filter_known_devices
+        );
         assert_eq!(config.update_rssi_only, default_config.update_rssi_only);
         assert_eq!(config.update_interval, default_config.update_interval);
         assert_eq!(config.scan_timeout, default_config.scan_timeout);
@@ -261,7 +270,7 @@ mod tests {
     #[test]
     fn test_continuous_config() {
         let config = ScanConfig::continuous();
-        
+
         assert_eq!(config.scan_duration, Duration::from_secs(5));
         assert_eq!(config.interval_between_scans, Duration::from_secs(2));
         assert!(config.auto_stop_scan);
@@ -280,7 +289,7 @@ mod tests {
     #[test]
     fn test_power_efficient_config() {
         let config = ScanConfig::power_efficient();
-        
+
         assert_eq!(config.scan_duration, Duration::from_secs(3));
         assert_eq!(config.interval_between_scans, Duration::from_secs(60));
         assert!(config.auto_stop_scan);
@@ -299,7 +308,7 @@ mod tests {
     #[test]
     fn test_airpods_optimized_config() {
         let config = ScanConfig::airpods_optimized();
-        
+
         assert_eq!(config.scan_duration, Duration::from_secs(5));
         assert_eq!(config.interval_between_scans, Duration::from_secs(10));
         assert!(config.auto_stop_scan);
@@ -319,7 +328,7 @@ mod tests {
     fn test_one_time_scan_config() {
         let duration = Duration::from_secs(15);
         let config = ScanConfig::one_time_scan(duration);
-        
+
         assert_eq!(config.scan_duration, duration);
         assert_eq!(config.interval_between_scans, Duration::from_secs(0));
         assert!(config.auto_stop_scan);
@@ -339,7 +348,7 @@ mod tests {
     fn test_with_scan_duration() {
         let duration = Duration::from_secs(30);
         let config = ScanConfig::default().with_scan_duration(duration);
-        
+
         assert_eq!(config.scan_duration, duration);
     }
 
@@ -347,14 +356,14 @@ mod tests {
     fn test_with_interval() {
         let interval = Duration::from_secs(45);
         let config = ScanConfig::default().with_interval(interval);
-        
+
         assert_eq!(config.interval_between_scans, interval);
     }
 
     #[test]
     fn test_with_auto_stop() {
         let config = ScanConfig::default().with_auto_stop(false);
-        
+
         assert!(!config.auto_stop_scan);
     }
 
@@ -362,7 +371,7 @@ mod tests {
     fn test_with_max_cycles() {
         let max_cycles = Some(5);
         let config = ScanConfig::default().with_max_cycles(max_cycles);
-        
+
         assert_eq!(config.max_scan_cycles, max_cycles);
     }
 
@@ -370,14 +379,14 @@ mod tests {
     fn test_with_device_inactive_timeout() {
         let timeout = Some(Duration::from_secs(60));
         let config = ScanConfig::default().with_device_inactive_timeout(timeout);
-        
+
         assert_eq!(config.device_inactive_timeout, timeout);
     }
 
     #[test]
     fn test_with_continuous() {
         let config = ScanConfig::default().with_continuous(true);
-        
+
         assert!(config.continuous);
     }
 
@@ -385,21 +394,21 @@ mod tests {
     fn test_with_min_rssi() {
         let min_rssi = Some(-65);
         let config = ScanConfig::default().with_min_rssi(min_rssi);
-        
+
         assert_eq!(config.min_rssi, min_rssi);
     }
 
     #[test]
     fn test_with_filter_known_devices() {
         let config = ScanConfig::default().with_filter_known_devices(true);
-        
+
         assert!(config.filter_known_devices);
     }
 
     #[test]
     fn test_with_update_rssi_only() {
         let config = ScanConfig::default().with_update_rssi_only(true);
-        
+
         assert!(config.update_rssi_only);
     }
 
@@ -407,7 +416,7 @@ mod tests {
     fn test_with_update_interval() {
         let interval = Duration::from_secs(10);
         let config = ScanConfig::default().with_update_interval(interval);
-        
+
         assert_eq!(config.update_interval, interval);
     }
 
@@ -415,7 +424,7 @@ mod tests {
     fn test_with_scan_timeout() {
         let timeout = Some(Duration::from_secs(15));
         let config = ScanConfig::default().with_scan_timeout(timeout);
-        
+
         assert_eq!(config.scan_timeout, timeout);
     }
 
@@ -423,7 +432,7 @@ mod tests {
     fn test_with_max_retries() {
         let max_retries = 5;
         let config = ScanConfig::default().with_max_retries(max_retries);
-        
+
         assert_eq!(config.max_retries, max_retries);
     }
 
@@ -431,7 +440,7 @@ mod tests {
     fn test_with_retry_delay() {
         let delay = Duration::from_secs(2);
         let config = ScanConfig::default().with_retry_delay(delay);
-        
+
         assert_eq!(config.retry_delay, delay);
     }
 
@@ -451,12 +460,15 @@ mod tests {
             .with_scan_timeout(Some(Duration::from_secs(15)))
             .with_max_retries(5)
             .with_retry_delay(Duration::from_secs(2));
-        
+
         assert_eq!(config.scan_duration, Duration::from_secs(15));
         assert_eq!(config.interval_between_scans, Duration::from_secs(30));
         assert!(!config.auto_stop_scan);
         assert_eq!(config.max_scan_cycles, Some(3));
-        assert_eq!(config.device_inactive_timeout, Some(Duration::from_secs(60)));
+        assert_eq!(
+            config.device_inactive_timeout,
+            Some(Duration::from_secs(60))
+        );
         assert!(config.continuous);
         assert_eq!(config.min_rssi, Some(-75));
         assert!(config.filter_known_devices);
@@ -466,4 +478,4 @@ mod tests {
         assert_eq!(config.max_retries, 5);
         assert_eq!(config.retry_delay, Duration::from_secs(2));
     }
-} 
+}

@@ -5,11 +5,11 @@
 //! It uses thiserror for defining error types and provides utilities for
 //! tracking, reporting, and recovering from errors.
 
-use std::collections::HashMap;
 use chrono::{DateTime, Utc};
-use thiserror::Error;
+use std::collections::HashMap;
 use std::fmt;
 use std::time::Duration;
+use thiserror::Error;
 
 /// Maximum number of errors to keep in history
 const MAX_ERROR_HISTORY: usize = 100;
@@ -19,19 +19,19 @@ const MAX_ERROR_HISTORY: usize = 100;
 pub enum ErrorSeverity {
     /// Critical error that requires immediate attention
     Critical,
-    
+
     /// Major error that significantly impacts functionality
     Major,
-    
+
     /// Standard error
     Error,
-    
+
     /// Minor error that doesn't significantly impact functionality
     Minor,
-    
+
     /// Warning
     Warning,
-    
+
     /// Informational message
     Info,
 }
@@ -55,99 +55,99 @@ pub enum RustPodsError {
     /// Bluetooth related errors
     #[error("Bluetooth error: {0}")]
     Bluetooth(String),
-    
+
     /// Configuration related errors
     #[error("Configuration error: {0}")]
     Config(String),
-    
+
     /// UI related errors
     #[error("UI error: {0}")]
     Ui(String),
-    
+
     /// System/OS related errors
     #[error("System error: {0}")]
     System(String),
-    
+
     /// State/data related errors
     #[error("State error: {0}")]
     State(String),
-    
+
     /// Device related errors
     #[error("Device error: {0}")]
     Device(String),
-    
+
     /// General application errors
     #[error("Application error: {0}")]
     General(String),
-    
+
     /// Configuration error with debug info
     #[error("Configuration error: {0}")]
     ConfigError(String),
-    
+
     /// UI error with no message
     #[error("UI error")]
     UiError,
-    
+
     /// Device not found error
     #[error("Device not found")]
     DeviceNotFound,
-    
+
     /// Application error
     #[error("Application error: {0}")]
     Application(String),
-    
+
     /// AirPods related errors
     #[error("AirPods error: {0}")]
     AirPods(#[from] AirPodsError),
-    
+
     /// Battery monitoring errors
     #[error("Battery monitoring error: {0}")]
     BatteryMonitor(String),
-    
+
     /// Battery monitoring error
     #[error("Battery monitoring error: {0}")]
     BatteryMonitorError(String),
-    
+
     /// State persistence error
     #[error("State persistence error: {0}")]
     StatePersistence(String),
-    
+
     /// Lifecycle error
     #[error("Lifecycle error: {0}")]
     Lifecycle(String),
-    
+
     /// JSON serialization/deserialization error
     #[error("JSON error: {0}")]
     ParseError(String),
-    
+
     /// File I/O error
     #[error("File I/O error: {0}")]
     IoError(String),
-    
+
     /// Path error
     #[error("Path error: {0}")]
     Path(String),
-    
+
     /// File not found error
     #[error("File not found: {0}")]
     FileNotFound(std::path::PathBuf),
-    
+
     /// Permission denied error
     #[error("Permission denied: {0}")]
     PermissionDenied(String),
-    
+
     /// Validation error
     #[error("Validation error: {0}")]
     Validation(String),
-    
+
     /// Parse error
     #[error("Parse error: {0}")]
     Parse(String),
-    
+
     /// Timeout error
     #[error("Timeout error: {0}")]
     Timeout(String),
-    
+
     /// Context error
     #[error("{context}: {source}")]
     Context {
@@ -155,11 +155,11 @@ pub enum RustPodsError {
         #[source]
         source: Box<dyn std::error::Error + Send + Sync>,
     },
-    
+
     /// Invalid data error
     #[error("Invalid data: {0}")]
     InvalidData(String),
-    
+
     /// Bluetooth error
     #[error("Bluetooth error: {0}")]
     BluetoothError(#[from] BluetoothError),
@@ -304,13 +304,13 @@ impl ErrorContext {
             user_message: None,
         }
     }
-    
+
     /// Add metadata to the context
     pub fn with_metadata(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.metadata.insert(key.into(), value.into());
         self
     }
-    
+
     /// Add a user-friendly message
     pub fn with_user_message(mut self, message: impl Into<String>) -> Self {
         self.user_message = Some(message.into());
@@ -392,15 +392,15 @@ impl ErrorManager {
             detailed_history: Vec::new(),
         }
     }
-    
+
     /// Add an error to the history
     pub fn add_to_history(&mut self, error: &RustPodsError) {
         // Get the current time
         let now = chrono::Utc::now();
-        
+
         // Update the statistics
         self.stats.total += 1;
-        
+
         // Get the error type as a string
         let error_type = match error {
             RustPodsError::Bluetooth(_) => "bluetooth",
@@ -431,20 +431,24 @@ impl ErrorManager {
             RustPodsError::InvalidData(_) => "invalid_data",
             RustPodsError::BluetoothError(_) => "bluetooth_error",
         };
-        
+
         // Update type counts
-        *self.stats.by_type.entry(error_type.to_string()).or_insert(0) += 1;
-        
+        *self
+            .stats
+            .by_type
+            .entry(error_type.to_string())
+            .or_insert(0) += 1;
+
         // Update severity counts
         let severity = error.severity();
         *self.stats.by_severity.entry(severity).or_insert(0) += 1;
-        
+
         // Update first and last error timestamps
         if self.stats.first_error.is_none() {
             self.stats.first_error = Some(now);
         }
         self.stats.last_error = Some(now);
-        
+
         // Create error entry
         let entry = ErrorEntry {
             error_type: error_type.to_string(),
@@ -453,22 +457,27 @@ impl ErrorManager {
             context: None,
             recovery: Some(error.recovery_action()),
         };
-        
+
         // Add to history, keeping the max size
         self.history.push(entry);
         if self.history.len() > MAX_ERROR_HISTORY {
             self.history.remove(0);
         }
     }
-    
+
     /// Record an error with context
-    pub fn record_error_with_context(&mut self, error: RustPodsError, context: ErrorContext, recovery_action: RecoveryAction) {
+    pub fn record_error_with_context(
+        &mut self,
+        error: RustPodsError,
+        context: ErrorContext,
+        recovery_action: RecoveryAction,
+    ) {
         // Get the current time
         let now = chrono::Utc::now();
-        
+
         // Update the statistics
         self.stats.total += 1;
-        
+
         // Get the error type as a string
         let error_type = match &error {
             RustPodsError::Bluetooth(_) => "bluetooth",
@@ -499,20 +508,24 @@ impl ErrorManager {
             RustPodsError::InvalidData(_) => "invalid_data",
             RustPodsError::BluetoothError(_) => "bluetooth_error",
         };
-        
+
         // Update type counts
-        *self.stats.by_type.entry(error_type.to_string()).or_insert(0) += 1;
-        
+        *self
+            .stats
+            .by_type
+            .entry(error_type.to_string())
+            .or_insert(0) += 1;
+
         // Update severity counts
         let severity = error.severity();
         *self.stats.by_severity.entry(severity).or_insert(0) += 1;
-        
+
         // Update first and last error timestamps
         if self.stats.first_error.is_none() {
             self.stats.first_error = Some(now);
         }
         self.stats.last_error = Some(now);
-        
+
         // Create error entry
         let entry = ErrorEntry {
             error_type: error_type.to_string(),
@@ -521,7 +534,7 @@ impl ErrorManager {
             context: Some(context.clone()),
             recovery: Some(recovery_action.clone()),
         };
-        
+
         // Create detailed record
         let record = ErrorRecord {
             error_type: error_type.to_string(),
@@ -532,59 +545,59 @@ impl ErrorManager {
             recovery_action,
             context: Some(context),
         };
-        
+
         // Add to history, keeping the max size
         self.history.push(entry);
         if self.history.len() > MAX_ERROR_HISTORY {
             self.history.remove(0);
         }
-        
+
         // Add to detailed history
         self.detailed_history.push(record);
         if self.detailed_history.len() > MAX_ERROR_HISTORY {
             self.detailed_history.remove(0);
         }
-        
+
         // Log the error
         log::error!("{}", error);
     }
-    
+
     /// Record an error
     pub fn record_error(&mut self, error: &RustPodsError) {
         self.add_to_history(error);
     }
-    
+
     /// Get error history
     pub fn get_error_history(&self) -> &Vec<ErrorEntry> {
         &self.history
     }
-    
+
     /// Get error statistics
     pub fn get_stats(&self) -> ErrorStats {
         self.stats.clone()
     }
-    
+
     /// Clear error history
     pub fn clear_history(&mut self) {
         self.history.clear();
         self.detailed_history.clear();
     }
-    
+
     /// Reset error statistics
     pub fn reset_stats(&mut self) {
         self.stats = ErrorStats::default();
     }
-    
+
     /// Get detailed error history
     pub fn get_detailed_history(&self) -> &Vec<ErrorRecord> {
         &self.detailed_history
     }
-    
+
     /// Get the most recent error
     pub fn get_latest_error(&self) -> Option<String> {
         self.history.last().map(|entry| entry.error_message.clone())
     }
-    
+
     /// Get the most recent detailed error record
     pub fn get_latest_detailed_error(&self) -> Option<&ErrorRecord> {
         self.detailed_history.last()
@@ -666,7 +679,7 @@ impl RustPodsError {
             RustPodsError::BluetoothError(_) => true,
         }
     }
-    
+
     /// Get the recommended recovery action for this error
     pub fn recovery_action(&self) -> RecoveryAction {
         match self {
@@ -765,7 +778,7 @@ impl RustPodsError {
             RustPodsError::BluetoothError(_) => "bluetooth_error",
         }
     }
-    
+
     /// Get the specific type of the error
     pub fn get_type(&self) -> &'static str {
         match self {
@@ -798,24 +811,27 @@ impl RustPodsError {
             RustPodsError::BluetoothError(_) => "bluetooth_error",
         }
     }
-    
+
     /// Create a UI error with a message and severity
     pub fn ui(message: impl Into<String>, _severity: ErrorSeverity) -> Self {
         Self::Ui(message.into())
     }
-    
+
     /// Create a system error with a message and severity
     pub fn system(message: impl Into<String>, _severity: ErrorSeverity) -> Self {
         Self::System(message.into())
     }
-    
+
     /// Create an application error with a message
     pub fn application(message: impl Into<String>) -> Self {
         Self::Application(message.into())
     }
-    
+
     /// Add context to an error
-    pub fn with_context(error: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>, context: impl Into<String>) -> Self {
+    pub fn with_context(
+        error: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>,
+        context: impl Into<String>,
+    ) -> Self {
         Self::Context {
             context: context.into(),
             source: error.into(),
@@ -828,31 +844,31 @@ impl RustPodsError {
 pub enum BluetoothError {
     /// Connection to device failed
     ConnectionFailed(String),
-    
+
     /// Device not found
     DeviceNotFound(String),
-    
+
     /// Scan operation failed
     ScanFailed(String),
-    
+
     /// Device disconnected unexpectedly
     DeviceDisconnected(String),
-    
+
     /// No suitable adapter found
     NoAdapter,
-    
+
     /// Permission error
     PermissionDenied(String),
-    
+
     /// Invalid data received from device
     InvalidData(String),
-    
+
     /// Operation timed out
     Timeout(Duration),
-    
+
     /// Raw btleplug API error
     ApiError(String),
-    
+
     /// Failed to refresh the Bluetooth adapter
     AdapterRefreshFailed {
         /// The error that occurred
@@ -862,7 +878,7 @@ pub enum BluetoothError {
         /// Number of retries attempted
         retries: u32,
     },
-    
+
     /// Bluetooth adapter not available
     AdapterNotAvailable {
         /// Reason adapter is not available
@@ -870,15 +886,15 @@ pub enum BluetoothError {
         /// Recommended recovery action
         recovery: RecoveryAction,
     },
-    
+
     /// Adapter failed to scan
     AdapterScanFailed {
         /// The error that occurred
         error: String,
         /// Recommended recovery action
-        recovery: RecoveryAction, 
+        recovery: RecoveryAction,
     },
-    
+
     /// Other error
     Other(String),
 }
@@ -895,9 +911,25 @@ impl std::fmt::Display for BluetoothError {
             BluetoothError::InvalidData(s) => write!(f, "Invalid data received: {}", s),
             BluetoothError::ApiError(e) => write!(f, "Bluetooth API error: {}", e),
             BluetoothError::Timeout(d) => write!(f, "Operation timed out after {:?}", d),
-            BluetoothError::AdapterRefreshFailed { error, recovery: _, retries } => write!(f, "Failed to refresh adapter: {} ({} retries)", error, retries),
-            BluetoothError::AdapterNotAvailable { reason, recovery } => write!(f, "Adapter not available: {} (recommended recovery: {})", reason, recovery),
-            BluetoothError::AdapterScanFailed { error, recovery } => write!(f, "Adapter scan failed: {} (recommended recovery: {})", error, recovery),
+            BluetoothError::AdapterRefreshFailed {
+                error,
+                recovery: _,
+                retries,
+            } => write!(
+                f,
+                "Failed to refresh adapter: {} ({} retries)",
+                error, retries
+            ),
+            BluetoothError::AdapterNotAvailable { reason, recovery } => write!(
+                f,
+                "Adapter not available: {} (recommended recovery: {})",
+                reason, recovery
+            ),
+            BluetoothError::AdapterScanFailed { error, recovery } => write!(
+                f,
+                "Adapter scan failed: {} (recommended recovery: {})",
+                error, recovery
+            ),
             BluetoothError::Other(s) => write!(f, "Bluetooth error: {}", s),
         }
     }
@@ -922,27 +954,27 @@ pub enum UiError {
     /// Rendering error
     #[error("Rendering error: {0}")]
     RenderingError(String),
-    
+
     /// Invalid input
     #[error("Invalid input: {0}")]
     InvalidInput(String),
-    
+
     /// Layout error
     #[error("Layout error: {0}")]
     LayoutError(String),
-    
+
     /// Resource loading error
     #[error("Failed to load resource: {0}")]
     ResourceLoadingError(String),
-    
+
     /// Update error
     #[error("UI update error: {0}")]
     UpdateError(String),
-    
+
     /// Thread error
     #[error("UI thread error: {0}")]
     ThreadError(String),
-    
+
     /// Other error
     #[error("{0}")]
     Other(String),
@@ -954,31 +986,31 @@ pub enum ConfigError {
     /// Failed to read config file
     #[error("Failed to read config file: {0}")]
     ReadError(String),
-    
+
     /// Failed to write config file
     #[error("Failed to write config file: {0}")]
     WriteError(String),
-    
+
     /// Failed to parse config
     #[error("Failed to parse config: {0}")]
     ParseError(String),
-    
+
     /// IO error
     #[error("IO error: {0}")]
     IoError(String),
-    
+
     /// Validation error
     #[error("Validation error: {0}")]
     ValidationError(String),
-    
+
     /// Missing required field
     #[error("Missing required field: {0}")]
     MissingField(String),
-    
+
     /// Invalid value for field
     #[error("Invalid value for {0}: {1}")]
     InvalidValue(String, String),
-    
+
     /// Other error
     #[error("{0}")]
     Other(String),
@@ -1002,35 +1034,35 @@ pub enum AirPodsError {
     /// Failed to parse AirPods data
     #[error("Failed to parse AirPods data: {0}")]
     ParseError(String),
-    
+
     /// Invalid data format
     #[error("Invalid data format: {0}")]
     InvalidFormat(String),
-    
+
     /// Invalid data
     #[error("Invalid data: {0}")]
     InvalidData(String),
-    
+
     /// Missing required data
     #[error("Missing required data: {0}")]
     MissingData(String),
-    
+
     /// Device compatibility error
     #[error("Device compatibility error: {0}")]
     DeviceCompatibility(String),
-    
+
     /// Connection error
     #[error("Connection error: {0}")]
     ConnectionError(String),
-    
+
     /// Manufacturer data is missing
     #[error("Manufacturer data is missing")]
     ManufacturerDataMissing,
-    
+
     /// Detection failed
     #[error("AirPods detection failed: {0}")]
     DetectionFailed(String),
-    
+
     /// Other error
     #[error("{0}")]
     Other(String),
@@ -1064,19 +1096,27 @@ impl Clone for BluetoothError {
             BluetoothError::InvalidData(s) => BluetoothError::InvalidData(s.clone()),
             BluetoothError::Timeout(d) => BluetoothError::Timeout(*d),
             BluetoothError::ApiError(s) => BluetoothError::ApiError(s.clone()),
-            BluetoothError::AdapterRefreshFailed { error, recovery, retries } => BluetoothError::AdapterRefreshFailed {
+            BluetoothError::AdapterRefreshFailed {
+                error,
+                recovery,
+                retries,
+            } => BluetoothError::AdapterRefreshFailed {
                 error: error.clone(),
                 recovery: recovery.clone(),
                 retries: *retries,
             },
-            BluetoothError::AdapterNotAvailable { reason, recovery } => BluetoothError::AdapterNotAvailable {
-                reason: reason.clone(),
-                recovery: recovery.clone(),
-            },
-            BluetoothError::AdapterScanFailed { error, recovery } => BluetoothError::AdapterScanFailed {
-                error: error.clone(),
-                recovery: recovery.clone(),
-            },
+            BluetoothError::AdapterNotAvailable { reason, recovery } => {
+                BluetoothError::AdapterNotAvailable {
+                    reason: reason.clone(),
+                    recovery: recovery.clone(),
+                }
+            }
+            BluetoothError::AdapterScanFailed { error, recovery } => {
+                BluetoothError::AdapterScanFailed {
+                    error: error.clone(),
+                    recovery: recovery.clone(),
+                }
+            }
             BluetoothError::Other(s) => BluetoothError::Other(s.clone()),
         }
     }
@@ -1127,4 +1167,4 @@ impl From<std::io::Error> for RustPodsError {
     fn from(err: std::io::Error) -> Self {
         RustPodsError::IoError(err.to_string())
     }
-} 
+}

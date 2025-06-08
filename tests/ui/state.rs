@@ -6,8 +6,8 @@ use std::time::Instant;
 
 use btleplug::api::BDAddr;
 
-use rustpods::ui::state::AppState;
 use rustpods::bluetooth::DiscoveredDevice;
+use rustpods::ui::state::AppState;
 
 /// Helper to create a test device (paired)
 fn create_test_device(address: [u8; 6], name: &str, rssi: i16) -> DiscoveredDevice {
@@ -79,4 +79,4 @@ fn test_app_state_select_device() {
     let selected_device = app_state.get_selected_device();
     assert!(selected_device.is_some());
     assert_eq!(selected_device.unwrap().address, device.address);
-} 
+}

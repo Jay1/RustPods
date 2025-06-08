@@ -1,15 +1,13 @@
 //! Settings window implementation for RustPods
 
 use crate::config::AppConfig;
-use crate::ui::Message;
-use crate::ui::theme::{self, Theme};
-use crate::ui::UiComponent;
 use crate::ui::components::UiSetting;
+use crate::ui::theme::{self, Theme};
+use crate::ui::Message;
+use crate::ui::UiComponent;
 use iced::{
-    widget::{
-        button, column, container, row, text, Space, Checkbox
-    },
-    Element, Length, Alignment
+    widget::{button, column, container, row, text, Checkbox, Space},
+    Alignment, Element, Length,
 };
 
 /// Represents the settings window of the application
@@ -29,28 +27,28 @@ impl SettingsWindow {
             has_changes: false,
         }
     }
-    
+
     /// Get the current configuration
     pub fn config(&self) -> &AppConfig {
         &self.config
     }
-    
+
     /// Update the configuration
     pub fn update_config(&mut self, config: AppConfig) {
         self.config = config;
         self.has_changes = false;
     }
-    
+
     /// Mark that changes have been made
     pub fn mark_changed(&mut self) {
         self.has_changes = true;
     }
-    
+
     /// Check if there are unsaved changes
     pub fn has_changes(&self) -> bool {
         self.has_changes
     }
-    
+
     /// Set a validation error (for compatibility)
     pub fn set_validation_error(&mut self, _error: Option<String>) {
         // No-op for simplified settings window
@@ -66,52 +64,38 @@ impl UiComponent for SettingsWindow {
                 .style(iced::theme::Button::Secondary)
                 .padding([5, 10]),
             Space::with_width(Length::Fixed(10.0)),
-            text("Settings")
-                .size(24)
-                .style(theme::TEXT),
+            text("Settings").size(24).style(theme::TEXT),
             Space::with_width(Length::Fill),
         ]
         .align_items(Alignment::Center);
-        
+
         // Minimize to tray checkbox
         let minimize_checkbox = Checkbox::new(
             "Minimize to tray on close",
             self.config.ui.minimize_to_tray_on_close,
-            |value| Message::UpdateUiSetting(UiSetting::MinimizeToTrayOnClose(value))
+            |value| Message::UpdateUiSetting(UiSetting::MinimizeToTrayOnClose(value)),
         );
-        
+
         // Settings info text
         let info_text = text("Settings are saved automatically when changed")
             .size(12)
             .style(theme::SUBTEXT1);
-        
+
         // Action buttons - Save applies changes and closes, Cancel discards changes
-        let save_button = button(
-            text("Save & Close")
-                .style(theme::TEXT)
-                .size(14)
-        )
+        let save_button = button(text("Save & Close").style(theme::TEXT).size(14))
             .on_press(Message::SaveSettings)
             .style(iced::theme::Button::Primary)
             .padding(10);
-            
-        let cancel_button = button(
-            text("Cancel")
-                .style(theme::TEXT) 
-                .size(14)
-        )
+
+        let cancel_button = button(text("Cancel").style(theme::TEXT).size(14))
             .on_press(Message::CloseSettings)
             .style(iced::theme::Button::Secondary)
             .padding(10);
-        
-        let actions = row![
-            Space::with_width(Length::Fill),
-            cancel_button,
-            save_button
-        ]
-        .spacing(10)
-        .align_items(Alignment::Center);
-        
+
+        let actions = row![Space::with_width(Length::Fill), cancel_button, save_button]
+            .spacing(10)
+            .align_items(Alignment::Center);
+
         let content = column![
             header,
             Space::with_height(Length::Fixed(20.0)),
@@ -124,7 +108,7 @@ impl UiComponent for SettingsWindow {
         .spacing(15)
         .padding(25)
         .align_items(Alignment::Start);
-        
+
         // Use the same fixed dimensions as the main popup (420×320)
         container(content)
             .width(Length::Fixed(420.0))
@@ -132,4 +116,4 @@ impl UiComponent for SettingsWindow {
             .style(iced::theme::Container::Box)
             .into()
     }
-} 
+}

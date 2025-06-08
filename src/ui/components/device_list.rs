@@ -1,4 +1,4 @@
-use iced::widget::{button, column, row, scrollable, text, container};
+use iced::widget::{button, column, container, row, scrollable, text};
 use iced::Length;
 
 use crate::bluetooth::DiscoveredDevice;
@@ -23,10 +23,7 @@ impl DeviceList {
 impl UiComponent for DeviceList {
     fn view(&self) -> iced::Element<'static, Message, iced::Renderer<crate::ui::theme::Theme>> {
         // Create a column of devices
-        let mut device_list = column![]
-            .spacing(10)
-            .padding(20)
-            .width(Length::Fill);
+        let mut device_list = column![].spacing(10).padding(20).width(Length::Fill);
 
         // Add header
         device_list = device_list.push(
@@ -50,12 +47,9 @@ impl UiComponent for DeviceList {
         // Add each device to the list
         for device in &sorted_devices {
             let address = device.address.to_string();
-                        // We removed the unused is_selected variable
+            // We removed the unused is_selected variable
 
-            let device_name = device
-                .name
-                .clone()
-                .unwrap_or_else(|| address.clone());
+            let device_name = device.name.clone().unwrap_or_else(|| address.clone());
 
             let device_type = if device.is_potential_airpods {
                 "AirPods"
@@ -63,7 +57,9 @@ impl UiComponent for DeviceList {
                 "Bluetooth"
             };
 
-            let rssi = device.rssi.map_or("-".to_string(), |r| format!("{} dBm", r));
+            let rssi = device
+                .rssi
+                .map_or("-".to_string(), |r| format!("{} dBm", r));
 
             let btn = button(
                 row![
@@ -93,4 +89,4 @@ impl UiComponent for DeviceList {
         // Wrap in a scrollable container
         scrollable(container(device_list).width(Length::Fill)).into()
     }
-} 
+}

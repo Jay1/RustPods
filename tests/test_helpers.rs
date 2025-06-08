@@ -5,8 +5,8 @@
 //! and improve test maintainability.
 
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 // === PERFORMANCE TRACKING UTILITIES ===
 
@@ -28,7 +28,7 @@ impl TestPerformanceTracker {
             checkpoints: Vec::new(),
         }
     }
-    
+
     /// Add a checkpoint with a label
     pub fn checkpoint(&mut self, label: impl Into<String>) {
         let elapsed = self.start_time.elapsed();
@@ -36,18 +36,27 @@ impl TestPerformanceTracker {
         println!("  ⏱️  {} - {}ms", label, elapsed.as_millis());
         self.checkpoints.push((label, elapsed));
     }
-    
+
     /// Finish tracking and print final results
     pub fn finish(self) {
         let total_time = self.start_time.elapsed();
-        println!("✅ {} completed in {}ms", self.test_name, total_time.as_millis());
-        
+        println!(
+            "✅ {} completed in {}ms",
+            self.test_name,
+            total_time.as_millis()
+        );
+
         // Show breakdown if there were checkpoints
         if !self.checkpoints.is_empty() {
             println!("   📊 Breakdown:");
             for (label, time) in &self.checkpoints {
                 let percentage = (time.as_millis() as f64 / total_time.as_millis() as f64) * 100.0;
-                println!("      - {}: {}ms ({:.1}%)", label, time.as_millis(), percentage);
+                println!(
+                    "      - {}: {}ms ({:.1}%)",
+                    label,
+                    time.as_millis(),
+                    percentage
+                );
             }
         }
         println!();
@@ -100,18 +109,18 @@ pub fn print_performance_summary() {
         if !map.is_empty() {
             println!("\n📈 TEST PERFORMANCE SUMMARY:");
             println!("================================");
-            
+
             let mut tests: Vec<_> = map.iter().collect();
             tests.sort_by_key(|(_, duration)| *duration);
             tests.reverse(); // Slowest first
-            
+
             for (test_name, duration) in tests {
                 let ms = duration.as_millis();
                 let status = match ms {
                     0..=50 => "🟢 FAST",
-                    51..=200 => "🟡 MODERATE", 
+                    51..=200 => "🟡 MODERATE",
                     201..=1000 => "🟠 SLOW",
-                    _ => "🔴 VERY SLOW"
+                    _ => "🔴 VERY SLOW",
                 };
                 println!("  {} {}: {}ms", status, test_name, ms);
             }
@@ -120,4 +129,4 @@ pub fn print_performance_summary() {
     }
 }
 
-// === EXISTING TEST HELPERS BELOW === 
+// === EXISTING TEST HELPERS BELOW ===

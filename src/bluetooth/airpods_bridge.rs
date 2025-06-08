@@ -1,10 +1,10 @@
 //! Bridge to call the Python Bleak fallback for AirPods battery on Windows
 
-use std::process::Stdio;
-use std::path::Path;
 use serde::Deserialize;
+use std::path::Path;
+use std::process::Stdio;
 use tokio::process::Command;
-use tracing::{info, error};
+use tracing::{error, info};
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct AirPodsBatteryInfo {
@@ -50,7 +50,9 @@ pub async fn get_airpods_battery_via_python() -> Result<Vec<AirPodsBatteryInfo>,
 pub async fn get_paired_devices_via_python() -> Result<Vec<PairedBluetoothDevice>, String> {
     let exe_path = Path::new("scripts/bt_paired_devices.exe");
     if !exe_path.exists() {
-        return Err("Bundled paired device scanner not found: scripts/bt_paired_devices.exe".to_string());
+        return Err(
+            "Bundled paired device scanner not found: scripts/bt_paired_devices.exe".to_string(),
+        );
     }
     let output = Command::new(exe_path)
         .stdout(Stdio::piped())
@@ -68,4 +70,4 @@ pub async fn get_paired_devices_via_python() -> Result<Vec<PairedBluetoothDevice
     let devices: Vec<PairedBluetoothDevice> = serde_json::from_str(&stdout)
         .map_err(|e| format!("Failed to parse JSON output: {e}\nOutput: {stdout}"))?;
     Ok(devices)
-} 
+}

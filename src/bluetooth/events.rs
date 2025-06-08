@@ -3,14 +3,14 @@
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use tokio::sync::mpsc::{channel, Sender, Receiver};
+use futures::Stream;
+use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
-use futures::Stream;
 
-use btleplug::api::BDAddr;
 use crate::airpods::DetectedAirPods;
 use crate::bluetooth::DiscoveredDevice;
+use btleplug::api::BDAddr;
 
 /// Type of BLE event
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,7 +72,7 @@ impl BleEvent {
             Self::AirPodsDetected(_) => EventType::AirPodsDetected,
         }
     }
-    
+
     /// Get the device address from this event, if available
     pub fn get_device_address(&self) -> Option<BDAddr> {
         match self {
@@ -124,30 +124,30 @@ impl EventFilter {
     pub fn all() -> Self {
         Self::All
     }
-    
+
     /// Create a filter for specific event types
     pub fn event_types(types: Vec<EventType>) -> Self {
         Self::EventTypes(types)
     }
-    
+
     /// Create a filter for specific devices
     pub fn devices(addresses: Vec<BDAddr>) -> Self {
         Self::Devices(addresses)
     }
-    
+
     /// Create a custom filter with a closure
-    pub fn custom<F>(filter_fn: F) -> Self 
+    pub fn custom<F>(filter_fn: F) -> Self
     where
-        F: Fn(&BleEvent) -> bool + Send + Sync + 'static
+        F: Fn(&BleEvent) -> bool + Send + Sync + 'static,
     {
         Self::Custom(Box::new(filter_fn))
     }
-    
+
     /// Create a filter that only accepts AirPods-related events
     pub fn airpods_only() -> Self {
         Self::event_types(vec![EventType::AirPodsDetected])
     }
-    
+
     /// Check if an event matches this filter
     pub fn matches(&self, event: &BleEvent) -> bool {
         match self {
@@ -155,14 +155,14 @@ impl EventFilter {
             Self::EventTypes(types) => {
                 let event_type = event.get_type();
                 types.contains(&event_type)
-            },
+            }
             Self::Devices(addresses) => {
                 if let Some(address) = event.get_device_address() {
                     addresses.contains(&address)
                 } else {
                     false
                 }
-            },
+            }
             Self::Custom(filter_fn) => filter_fn(event),
         }
     }
@@ -219,18 +219,18 @@ impl EventBroker {
             event_receiver: Arc::new(Mutex::new(Some(rx))),
         }
     }
-    
+
     /// Get the sender for this broker
     pub fn get_sender(&self) -> Sender<BleEvent> {
         self.event_sender.clone()
     }
-    
+
     /// Start the event broker
     pub fn start(&mut self) -> JoinHandle<()> {
         // Take the receiver
         let rx = self.take_receiver();
         let subscribers = self.subscribers.clone();
-        
+
         // Use tokio::spawn and return the JoinHandle
         let task = tokio::spawn(async move {
             let mut rx = rx;
@@ -238,11 +238,11 @@ impl EventBroker {
                 // Distribute the event to all subscribers
                 let mut subscribers_guard = subscribers.lock().unwrap();
                 let now = Instant::now();
-                
+
                 for subscriber in subscribers_guard.iter_mut() {
                     // Update last active timestamp
                     subscriber.last_active = now;
-                    
+
                     // Check if the subscriber's filter accepts this event
                     if subscriber.filter.matches(&event) {
                         // Try to send the event, ignoring errors if the channel is closed
@@ -251,54 +251,53 @@ impl EventBroker {
                 }
             }
         });
-        
+
         // Start the cleanup task if a timeout is set
         if let Some(timeout) = self.inactive_timeout {
             let subscribers = self.subscribers.clone();
-            
+
             self.cleanup_task = Some(tokio::spawn(async move {
                 loop {
                     // Sleep for a while
                     tokio::time::sleep(timeout / 2).await;
-                    
+
                     // Check for inactive subscribers
                     let mut subscribers_guard = subscribers.lock().unwrap();
                     let now = Instant::now();
-                    
-                    subscribers_guard.retain(|subscriber| {
-                        now.duration_since(subscriber.last_active) < timeout
-                    });
+
+                    subscribers_guard
+                        .retain(|subscriber| now.duration_since(subscriber.last_active) < timeout);
                 }
             }));
         }
-        
+
         task
     }
-    
+
     /// Subscribe to events with a custom filter
     pub fn subscribe(&mut self, filter: EventFilter) -> (SubscriberId, Receiver<BleEvent>) {
         let (tx, rx) = channel(100);
         let id = self.next_subscriber_id;
         self.next_subscriber_id += 1;
-        
+
         let new_subscriber = Subscriber {
             id,
             sender: tx,
             filter,
             last_active: Instant::now(),
         };
-        
+
         // Add to shared subscribers list
         self.subscribers.lock().unwrap().push(new_subscriber);
-        
+
         (id, rx)
     }
-    
+
     /// Unsubscribe from events
     pub fn unsubscribe(&mut self, id: SubscriberId) {
         self.subscribers.lock().unwrap().retain(|s| s.id != id);
     }
-    
+
     /// Modify a subscriber's filter
     pub fn modify_filter(&mut self, id: SubscriberId, filter: EventFilter) -> bool {
         let mut subscribers_guard = self.subscribers.lock().unwrap();
@@ -309,36 +308,40 @@ impl EventBroker {
             false
         }
     }
-    
+
     /// Set timeout for inactive subscribers (None to disable)
     pub fn set_inactive_timeout(&mut self, timeout: Option<Duration>) {
         self.inactive_timeout = timeout;
     }
-    
+
     /// Shutdown the event broker, closing all channels and stopping tasks
     pub async fn shutdown(&mut self) {
         // Stop the cleanup task if it's running
         if let Some(task) = self.cleanup_task.take() {
             task.abort();
         }
-        
+
         // Clear the subscribers list
         self.subscribers.lock().unwrap().clear();
-        
+
         // Create a new channel so the old one gets dropped
         let (tx, _) = channel(1);
         self.event_sender = tx;
-        
+
         // Create a new receiver for potential restart
         let (_, rx) = channel(1);
         *self.event_receiver.lock().unwrap() = Some(rx);
     }
-    
+
     /// Take ownership of the receiver
     fn take_receiver(&self) -> Receiver<BleEvent> {
-        self.event_receiver.lock().unwrap().take().expect("Receiver already taken")
+        self.event_receiver
+            .lock()
+            .unwrap()
+            .take()
+            .expect("Receiver already taken")
     }
-    
+
     /// Publish an event to all subscribers
     pub fn publish_event(&mut self, event: BleEvent) {
         let _ = self.event_sender.try_send(event);
@@ -379,36 +382,40 @@ pub fn receiver_to_stream(mut rx: Receiver<BleEvent>) -> impl Stream<Item = BleE
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_event_filter_all() {
         let filter = EventFilter::all();
-        
+
         assert!(filter.matches(&BleEvent::DeviceDiscovered(DiscoveredDevice::default())));
         assert!(filter.matches(&BleEvent::DeviceLost(BDAddr::default())));
         assert!(filter.matches(&BleEvent::Error("test".to_string())));
-        assert!(filter.matches(&BleEvent::AdapterChanged(crate::bluetooth::AdapterInfo::default())));
+        assert!(filter.matches(&BleEvent::AdapterChanged(
+            crate::bluetooth::AdapterInfo::default()
+        )));
         assert!(filter.matches(&BleEvent::ScanCycleCompleted { devices_found: 0 }));
         assert!(filter.matches(&BleEvent::ScanningCompleted));
         assert!(filter.matches(&BleEvent::AirPodsDetected(DetectedAirPods::default())));
     }
-    
+
     #[test]
     fn test_event_filter_airpods_only() {
         // Create a filter for AirPods events only
         let filter = EventFilter::airpods_only();
-        
+
         // This should test that the filter only matches AirPodsDetected events
         // and not any other event types
         assert!(!filter.matches(&BleEvent::DeviceDiscovered(DiscoveredDevice::default())));
         assert!(!filter.matches(&BleEvent::DeviceLost(BDAddr::default())));
         assert!(!filter.matches(&BleEvent::Error("test".to_string())));
-        assert!(!filter.matches(&BleEvent::AdapterChanged(crate::bluetooth::AdapterInfo::default())));
+        assert!(!filter.matches(&BleEvent::AdapterChanged(
+            crate::bluetooth::AdapterInfo::default()
+        )));
         assert!(!filter.matches(&BleEvent::ScanCycleCompleted { devices_found: 0 }));
         assert!(!filter.matches(&BleEvent::ScanningCompleted));
         assert!(filter.matches(&BleEvent::AirPodsDetected(DetectedAirPods::default())));
     }
-    
+
     #[test]
     fn test_filter_with_min_rssi() {
         // Create a custom filter that only accepts events with RSSI >= -75
@@ -418,38 +425,45 @@ mod tests {
             }
             false
         });
-        
+
         // Should match device with good signal
-        assert!(filter.matches(&BleEvent::DeviceDiscovered(DiscoveredDevice {
-            address: BDAddr::default(),
-            rssi: Some(-70),
-            ..DiscoveredDevice::default()
-        })));
-        
+        assert!(
+            filter.matches(&BleEvent::DeviceDiscovered(DiscoveredDevice {
+                address: BDAddr::default(),
+                rssi: Some(-70),
+                ..DiscoveredDevice::default()
+            }))
+        );
+
         // Should not match device with weak signal
-        assert!(!filter.matches(&BleEvent::DeviceDiscovered(DiscoveredDevice {
-            address: BDAddr::default(),
-            rssi: Some(-80),
-            ..DiscoveredDevice::default()
-        })));
-        
+        assert!(
+            !filter.matches(&BleEvent::DeviceDiscovered(DiscoveredDevice {
+                address: BDAddr::default(),
+                rssi: Some(-80),
+                ..DiscoveredDevice::default()
+            }))
+        );
+
         // Should not match other event types
         assert!(!filter.matches(&BleEvent::DeviceLost(BDAddr::default())));
     }
-    
+
     #[tokio::test]
     async fn test_event_broker_shutdown() {
         let mut broker = EventBroker::new();
         broker.start();
-        
+
         // Add some subscribers
         let (_, _rx1) = broker.subscribe(EventFilter::all());
         let (_, _rx2) = broker.subscribe(EventFilter::all());
-        
-        // Test shutdown 
+
+        // Test shutdown
         broker.shutdown().await;
-        
+
         // Only check that subscribers are cleared
-        assert!(broker.subscribers.lock().unwrap().is_empty(), "Subscribers should be cleared after shutdown");
+        assert!(
+            broker.subscribers.lock().unwrap().is_empty(),
+            "Subscribers should be cleared after shutdown"
+        );
     }
-} 
+}

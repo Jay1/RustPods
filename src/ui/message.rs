@@ -1,152 +1,152 @@
 use std::fmt::Debug;
 
-use crate::bluetooth::DiscoveredDevice;
+use crate::airpods::{battery::AirPodsBatteryInfo, DetectedAirPods};
 use crate::bluetooth::AirPodsBatteryStatus;
-use crate::airpods::{DetectedAirPods, battery::AirPodsBatteryInfo};
+use crate::bluetooth::DiscoveredDevice;
 use crate::config::AppConfig;
-use crate::ui::components::{BluetoothSetting, UiSetting, SystemSetting};
+use crate::ui::components::{BluetoothSetting, SystemSetting, UiSetting};
+use crate::ui::state::MergedBluetoothDevice;
 use crate::ui::state_manager::ConnectionState;
 use iced::Point;
-use crate::ui::state::MergedBluetoothDevice;
 
 /// Messages that can be sent to update the UI state
 #[derive(Debug, Clone)]
 pub enum Message {
     /// Toggle the application window visibility
     ToggleVisibility,
-    
+
     /// Exit the application
     Exit,
-    
+
     /// Force quit the application (ignores minimize to tray setting)
     ForceQuit,
-    
+
     /// No operation - used internally for subscription management
     NoOp,
-    
+
     /// New Bluetooth device discovered
     DeviceDiscovered(DiscoveredDevice),
-    
+
     /// Existing device was updated
     DeviceUpdated(DiscoveredDevice),
-    
+
     /// Select a device to connect to
     SelectDevice(String),
-    
+
     /// Tick event for periodic updates
     Tick,
-    
+
     /// Raw animation tick event
     AnimationTick,
-    
+
     /// Animation progress update (0.0-1.0)
     AnimationProgress(f32),
-    
+
     /// AirPods device connected
     AirPodsConnected(DetectedAirPods),
-    
+
     /// Device disconnected
     DeviceDisconnected,
-    
+
     /// Device reconnected after temporary disconnect
     DeviceReconnected(DetectedAirPods),
-    
+
     /// Connection state changed
     ConnectionStateChanged(ConnectionState),
-    
+
     /// Connection error occurred
     ConnectionError(String),
-    
+
     /// Bluetooth related error
     BluetoothError(String),
-    
+
     /// Battery status updated
     BatteryStatusUpdated(AirPodsBatteryStatus),
-    
+
     /// Show a toast/notification message
     ShowToast(String),
-    
+
     /// Merged scan result (paired + BLE)
     MergedScanResult(Vec<MergedBluetoothDevice>),
-    
+
     /// Settings changed
     SettingsChanged(AppConfig),
-    
+
     /// Update a Bluetooth setting
     UpdateBluetoothSetting(BluetoothSetting),
-    
+
     /// Update a UI setting
     UpdateUiSetting(UiSetting),
-    
+
     /// Update a system setting
     UpdateSystemSetting(SystemSetting),
-    
+
     /// Open the settings window
     OpenSettings,
-    
+
     /// Close the settings window
     CloseSettings,
-    
+
     /// Save settings
     SaveSettings,
-    
+
     /// Window drag started
     WindowDragStart(Point),
-    
+
     /// Window drag ended
     WindowDragEnd,
-    
+
     /// Window drag moved
     WindowDragMove(Point),
-    
+
     /// Window position changed
     WindowPositionChanged(Point),
-    
+
     /// Window bounds changed
     WindowBoundsChanged(iced::Rectangle),
-    
+
     /// Window close requested
     WindowCloseRequested,
-    
+
     /// Window minimized
     WindowMinimized,
-    
+
     /// Window restored
     WindowRestored,
-    
+
     /// Window maximized
     WindowMaximized,
-    
+
     /// Window unmaximized
     WindowUnmaximized,
-    
+
     /// Window focused
     WindowFocused,
-    
+
     /// Window unfocused
     WindowUnfocused,
-    
+
     /// Show the application window
     ShowWindow,
-    
+
     /// Hide the application window
     HideWindow,
-    
+
     /// Start scanning for devices
     StartScan,
-    
+
     /// Stop scanning for devices
     StopScan,
-    
+
     /// Battery update failed with error message
     BatteryUpdateFailed(String),
-    
+
     /// Toggle auto scan setting
     ToggleAutoScan(bool),
-    
+
     /// Unpair the current device
     UnpairDevice,
-    
+
     /// AirPods data loaded from CLI scanner (async)
     AirPodsDataLoaded(Vec<AirPodsBatteryInfo>),
 }
@@ -203,4 +203,4 @@ impl PartialEq for Message {
             _ => false,
         }
     }
-} 
+}

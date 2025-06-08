@@ -1,9 +1,9 @@
-use iced::widget::{text, container, row, progress_bar, Column, Row};
-use iced::{Element, Length, Color, alignment};
+use iced::widget::{container, progress_bar, row, text, Column, Row};
+use iced::{alignment, Color, Element, Length};
 
-use crate::ui::{Message, UiComponent};
 use crate::airpods::AirPodsBattery;
 use crate::ui::theme::Theme;
+use crate::ui::{Message, UiComponent};
 
 /// Component for displaying enhanced battery levels with charging indicators
 #[derive(Debug, Clone)]
@@ -17,35 +17,58 @@ impl EnhancedBatteryDisplay {
     pub fn new(battery: Option<AirPodsBattery>) -> Self {
         Self { battery }
     }
-    
+
     /// Create an empty enhanced battery display
     pub fn empty() -> Self {
         Self { battery: None }
     }
-    
+
     /// Create a static view with the given battery information
-    pub fn create_static_view(battery: AirPodsBattery) -> Element<'static, Message, iced::Renderer<Theme>> {
+    pub fn create_static_view(
+        battery: AirPodsBattery,
+    ) -> Element<'static, Message, iced::Renderer<Theme>> {
         // Clone the battery before moving it to display
         let battery_clone = battery.clone();
         let display = Self::new(Some(battery));
-        
+
         // Create a title for the section
         let title = text("Battery Status")
             .size(22)
             .width(Length::Fill)
             .horizontal_alignment(alignment::Horizontal::Center);
-            
+
         // Create rows for each component
-        let left_row = display.create_battery_row("Left", battery_clone.left, battery_clone.charging.as_ref().is_some_and(|c| c.is_left_charging()));
-        let right_row = display.create_battery_row("Right", battery_clone.right, battery_clone.charging.as_ref().is_some_and(|c| c.is_right_charging()));
-        let case_row = display.create_battery_row("Case", battery_clone.case, battery_clone.charging.as_ref().is_some_and(|c| c.is_case_charging()));
-        
+        let left_row = display.create_battery_row(
+            "Left",
+            battery_clone.left,
+            battery_clone
+                .charging
+                .as_ref()
+                .is_some_and(|c| c.is_left_charging()),
+        );
+        let right_row = display.create_battery_row(
+            "Right",
+            battery_clone.right,
+            battery_clone
+                .charging
+                .as_ref()
+                .is_some_and(|c| c.is_right_charging()),
+        );
+        let case_row = display.create_battery_row(
+            "Case",
+            battery_clone.case,
+            battery_clone
+                .charging
+                .as_ref()
+                .is_some_and(|c| c.is_case_charging()),
+        );
+
         // Create a status row
         let status = text(display.get_battery_status())
             .size(16)
             .width(Length::Fill)
             .horizontal_alignment(alignment::Horizontal::Center);
-            
+
         // Combine rows into a column
         let content = Column::new()
             .push(title)
@@ -56,10 +79,8 @@ impl EnhancedBatteryDisplay {
             .spacing(10)
             .padding(10)
             .width(Length::Fill);
-            
-        container(content)
-            .width(Length::Fill)
-            .into()
+
+        container(content).width(Length::Fill).into()
     }
 }
 
@@ -71,18 +92,39 @@ impl UiComponent for EnhancedBatteryDisplay {
                 .size(22)
                 .width(Length::Fill)
                 .horizontal_alignment(alignment::Horizontal::Center);
-                
+
             // Create rows for each component
-            let left_row = self.create_battery_row("Left", battery.left, battery.charging.as_ref().is_some_and(|c| c.is_left_charging()));
-            let right_row = self.create_battery_row("Right", battery.right, battery.charging.as_ref().is_some_and(|c| c.is_right_charging()));
-            let case_row = self.create_battery_row("Case", battery.case, battery.charging.as_ref().is_some_and(|c| c.is_case_charging()));
-            
+            let left_row = self.create_battery_row(
+                "Left",
+                battery.left,
+                battery
+                    .charging
+                    .as_ref()
+                    .is_some_and(|c| c.is_left_charging()),
+            );
+            let right_row = self.create_battery_row(
+                "Right",
+                battery.right,
+                battery
+                    .charging
+                    .as_ref()
+                    .is_some_and(|c| c.is_right_charging()),
+            );
+            let case_row = self.create_battery_row(
+                "Case",
+                battery.case,
+                battery
+                    .charging
+                    .as_ref()
+                    .is_some_and(|c| c.is_case_charging()),
+            );
+
             // Create a status row
             let status = text(self.get_battery_status())
                 .size(16)
                 .width(Length::Fill)
                 .horizontal_alignment(alignment::Horizontal::Center);
-                
+
             // Combine rows into a column
             let content = Column::new()
                 .push(title)
@@ -93,17 +135,15 @@ impl UiComponent for EnhancedBatteryDisplay {
                 .spacing(10)
                 .padding(10)
                 .width(Length::Fill);
-                
-            container(content)
-                .width(Length::Fill)
-                .into()
+
+            container(content).width(Length::Fill).into()
         } else {
             // No battery information available
             container(
                 text("Battery information not available")
                     .size(16)
                     .width(Length::Fill)
-                    .horizontal_alignment(alignment::Horizontal::Center)
+                    .horizontal_alignment(alignment::Horizontal::Center),
             )
             .width(Length::Fill)
             .into()
@@ -120,83 +160,77 @@ impl EnhancedBatteryDisplay {
         is_charging: bool,
     ) -> Row<'static, Message, iced::Renderer<Theme>> {
         // Create label
-        let label_text = text(label)
-            .size(16)
-            .width(Length::Fixed(50.0));
-            
+        let label_text = text(label).size(16).width(Length::Fixed(50.0));
+
         // Create progress bar or status
-        let battery_display: Element<'static, Message, iced::Renderer<Theme>> = if let Some(level) = level {
-            // Create progress bar with appropriate color
-            let pb: iced::widget::ProgressBar<iced::Renderer<Theme>> = progress_bar(0.0..=100.0, level as f32)
-                .height(20.0)
-                .width(Length::Fill);
-                
-            // Convert progress bar to element
-            pb.into()
-        } else {
-            // No battery level available
-            text("N/A")
-                .size(16)
-                .horizontal_alignment(alignment::Horizontal::Center)
-                .width(Length::Fill)
-                .into()
-        };
-        
+        let battery_display: Element<'static, Message, iced::Renderer<Theme>> =
+            if let Some(level) = level {
+                // Create progress bar with appropriate color
+                let pb: iced::widget::ProgressBar<iced::Renderer<Theme>> =
+                    progress_bar(0.0..=100.0, level as f32)
+                        .height(20.0)
+                        .width(Length::Fill);
+
+                // Convert progress bar to element
+                pb.into()
+            } else {
+                // No battery level available
+                text("N/A")
+                    .size(16)
+                    .horizontal_alignment(alignment::Horizontal::Center)
+                    .width(Length::Fill)
+                    .into()
+            };
+
         // Create percentage text
         let percentage_text = if let Some(level) = level {
             format!("{}%", level)
         } else {
             "".to_string()
         };
-        
+
         let percentage = text(percentage_text)
             .size(16)
             .width(Length::Fixed(50.0))
             .horizontal_alignment(alignment::Horizontal::Right);
-            
+
         // Create charging indicator
         let charging_icon = if is_charging {
-            text("⚡")
-                .size(16)
-                .width(Length::Fixed(20.0))
+            text("⚡").size(16).width(Length::Fixed(20.0))
         } else {
-            text("")
-                .size(16)
-                .width(Length::Fixed(20.0))
+            text("").size(16).width(Length::Fixed(20.0))
         };
-        
+
         // Combine elements into a row
-        row![
-            label_text,
-            battery_display,
-            percentage,
-            charging_icon,
-        ]
-        .spacing(10)
-        .align_items(alignment::Alignment::Center)
-        .width(Length::Fill)
+        row![label_text, battery_display, percentage, charging_icon,]
+            .spacing(10)
+            .align_items(alignment::Alignment::Center)
+            .width(Length::Fill)
     }
-    
+
     /// Get the battery status (charging, low battery, etc.)
     fn get_battery_status(&self) -> &'static str {
         if let Some(battery) = &self.battery {
             // Check if any component is charging
-            let is_charging = battery.charging.as_ref().is_some_and(|c| c.is_any_charging());
-            
+            let is_charging = battery
+                .charging
+                .as_ref()
+                .is_some_and(|c| c.is_any_charging());
+
             if is_charging {
                 return "Charging";
             }
-            
+
             // Check if any component has low battery
-            let has_low_battery = battery.case.is_some_and(|level| level < 20) ||
-                                 battery.left.is_some_and(|level| level < 20) ||
-                                 battery.right.is_some_and(|level| level < 20);
-            
+            let has_low_battery = battery.case.is_some_and(|level| level < 20)
+                || battery.left.is_some_and(|level| level < 20)
+                || battery.right.is_some_and(|level| level < 20);
+
             if has_low_battery {
                 return "Low Battery";
             }
         }
-        
+
         // Default status
         ""
     }
@@ -218,6 +252,6 @@ fn battery_level_low(battery: &AirPodsBattery) -> bool {
     let is_left_low = battery.left.is_some_and(|level| level <= 20);
     let is_right_low = battery.right.is_some_and(|level| level <= 20);
     let is_case_low = battery.case.is_some_and(|level| level <= 20);
-    
+
     is_left_low || is_right_low || is_case_low
-} 
+}

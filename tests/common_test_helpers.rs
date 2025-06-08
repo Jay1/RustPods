@@ -1,20 +1,20 @@
 // Common test utilities shared across all test modules
-use std::time::Duration;
 use futures::Stream;
+use futures::StreamExt;
+use std::collections::HashMap;
+use std::pin::Pin;
+use std::str::FromStr;
+use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
 use tokio::time::{self, timeout};
-use futures::{StreamExt};
-use std::pin::Pin;
 use tokio_stream::wrappers::ReceiverStream;
-use std::collections::HashMap;
-use std::str::FromStr;
 
 // Add imports for RustPods types
-use rustpods::airpods::{DetectedAirPods, AirPodsType, AirPodsBattery, AirPodsChargingState};
-use rustpods::bluetooth::{DiscoveredDevice, BleEvent};
+use btleplug::api::BDAddr;
+use rustpods::airpods::{AirPodsBattery, AirPodsChargingState, AirPodsType, DetectedAirPods};
+use rustpods::bluetooth::{BleEvent, DiscoveredDevice};
 use rustpods::config::{AppConfig, LogLevel, Theme};
 use rustpods::ui::state::AppState;
-use btleplug::api::BDAddr;
 
 /// Helper to convert tokio receiver to stream for testing
 pub fn receiver_to_stream<T>(rx: Receiver<T>) -> impl Stream<Item = T> {
@@ -50,7 +50,10 @@ where
 }
 
 /// Execute an async operation with a timeout
-pub async fn with_timeout<T>(duration: Duration, operation: impl std::future::Future<Output = T>) -> T {
+pub async fn with_timeout<T>(
+    duration: Duration,
+    operation: impl std::future::Future<Output = T>,
+) -> T {
     match time::timeout(duration, operation).await {
         Ok(result) => result,
         Err(_) => panic!("Operation timed out after {:?}", duration),
@@ -58,7 +61,7 @@ pub async fn with_timeout<T>(duration: Duration, operation: impl std::future::Fu
 }
 
 /// Create a helper to wait for events with a default timeout
-pub async fn wait_for_event<S, T>(stream: &mut S) -> Option<T> 
+pub async fn wait_for_event<S, T>(stream: &mut S) -> Option<T>
 where
     S: StreamExt<Item = T> + Unpin,
 {
@@ -66,7 +69,7 @@ where
 }
 
 /// Create a helper to assert that no more events are received
-pub async fn assert_no_more_events<S, T>(stream: &mut S, timeout_ms: u64) 
+pub async fn assert_no_more_events<S, T>(stream: &mut S, timeout_ms: u64)
 where
     S: StreamExt<Item = T> + Unpin,
 {
@@ -97,14 +100,16 @@ pub async fn very_long_delay() {
 /// Helper to create temporary test directory
 pub fn create_temp_dir() -> tempfile::TempDir {
     let result = tempfile::tempdir().expect("Failed to create temporary directory");
-    
+
     // Temp directory will be automatically cleaned up when it goes out of scope
     result
 }
 
 /// Convert a tokio mpsc Receiver into a Stream
 /// This makes it easier to work with receivers in async code using Stream combinators
-pub fn receiver_to_stream_boxed<T: Send + 'static>(receiver: Receiver<T>) -> Pin<Box<dyn Stream<Item = T> + Send>> {
+pub fn receiver_to_stream_boxed<T: Send + 'static>(
+    receiver: Receiver<T>,
+) -> Pin<Box<dyn Stream<Item = T> + Send>> {
     Box::pin(ReceiverStream::new(receiver))
 }
 
@@ -144,9 +149,8 @@ pub fn create_test_app_state() -> AppState {
 /// Create a test AirPods device
 pub fn create_test_airpods(device_type: AirPodsType, address: Option<&str>) -> DetectedAirPods {
     let addr = match address {
-        Some(addr_str) => BDAddr::from_str(addr_str).unwrap_or_else(|_| {
-            BDAddr::from([0x11, 0x22, 0x33, 0x44, 0x55, 0x66])
-        }),
+        Some(addr_str) => BDAddr::from_str(addr_str)
+            .unwrap_or_else(|_| BDAddr::from([0x11, 0x22, 0x33, 0x44, 0x55, 0x66])),
         None => BDAddr::from([0x11, 0x22, 0x33, 0x44, 0x55, 0x66]),
     };
 
@@ -187,9 +191,8 @@ pub fn create_test_device_with_data(
     manufacturer_data.insert(manufacturer_id, data);
 
     DiscoveredDevice {
-        address: BDAddr::from_str(address).unwrap_or_else(|_| {
-            BDAddr::from([0x11, 0x22, 0x33, 0x44, 0x55, 0x66])
-        }),
+        address: BDAddr::from_str(address)
+            .unwrap_or_else(|_| BDAddr::from([0x11, 0x22, 0x33, 0x44, 0x55, 0x66])),
         name: name.map(String::from),
         rssi: Some(-60),
         manufacturer_data,
@@ -212,7 +215,10 @@ pub fn create_test_apple_device(
 }
 
 /// Create a simple channel for BLE events
-pub fn create_ble_event_channel() -> (tokio::sync::mpsc::Sender<BleEvent>, tokio::sync::mpsc::Receiver<BleEvent>) {
+pub fn create_ble_event_channel() -> (
+    tokio::sync::mpsc::Sender<BleEvent>,
+    tokio::sync::mpsc::Receiver<BleEvent>,
+) {
     tokio::sync::mpsc::channel(100)
 }
 
@@ -220,33 +226,47 @@ pub fn create_ble_event_channel() -> (tokio::sync::mpsc::Sender<BleEvent>, tokio
 pub fn get_sample_airpods_data(model: AirPodsType) -> Vec<u8> {
     match model {
         AirPodsType::AirPods1 => {
-            vec![0x01, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb0]
-        },
+            vec![
+                0x01, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0xb0,
+            ]
+        }
         AirPodsType::AirPods2 => {
-            vec![0x02, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb0]
-        },
+            vec![
+                0x02, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0xb0,
+            ]
+        }
         AirPodsType::AirPods3 => {
-            vec![0x05, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb0]
-        },
+            vec![
+                0x05, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0xb0,
+            ]
+        }
         AirPodsType::AirPodsPro => {
-            vec![0x03, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb0]
-        },
+            vec![
+                0x03, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0xb0,
+            ]
+        }
         AirPodsType::AirPodsPro2 => {
-            vec![0x06, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb0]
-        },
+            vec![
+                0x06, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0xb0,
+            ]
+        }
         AirPodsType::AirPodsMax => {
-            vec![0x04, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb0]
-        },
+            vec![
+                0x04, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0xb0,
+            ]
+        }
         AirPodsType::Unknown => {
-            vec![0xFF, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb0]
-        },
+            vec![
+                0xFF, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0xb0,
+            ]
+        }
     }
 }
 
@@ -254,14 +274,14 @@ pub fn get_sample_airpods_data(model: AirPodsType) -> Vec<u8> {
 pub fn create_ui_test_with_theme(theme: Theme) -> AppState {
     let mut state = AppState::default();
     state.visible = true;
-    
+
     // Create a test config
     let mut config = create_test_config();
     config.ui.theme = theme;
-    
+
     // Apply the config
     state.config = config;
-    
+
     state
 }
 
@@ -269,49 +289,50 @@ pub fn create_ui_test_with_theme(theme: Theme) -> AppState {
 mod tests {
     use super::*;
     use tokio::sync::mpsc::channel;
-    
+
     #[tokio::test]
     async fn test_receiver_to_stream() {
         let (tx, rx) = channel::<i32>(10);
         let stream = receiver_to_stream(rx);
         tokio::pin!(stream);
-        
+
         tx.send(42).await.unwrap();
-        
+
         let result = wait_for_event(&mut stream).await;
         assert_eq!(result, Some(42));
     }
-    
+
     #[tokio::test]
     async fn test_with_timeout_success() {
         let result = with_timeout(Duration::from_millis(100), async { 42 }).await;
         assert_eq!(result, 42);
     }
-    
+
     #[tokio::test]
     #[should_panic(expected = "Operation timed out")]
     async fn test_with_timeout_failure() {
-        let _ = with_timeout(Duration::from_millis(10), async { 
+        let _ = with_timeout(Duration::from_millis(10), async {
             time::sleep(Duration::from_millis(100)).await;
             42
-        }).await;
+        })
+        .await;
     }
-    
+
     #[tokio::test]
     async fn test_create_test_config() {
         let config = create_test_config();
-        
+
         // Verify basic properties
         assert_eq!(config.bluetooth.scan_duration, Duration::from_secs(5));
         assert_eq!(config.ui.low_battery_threshold, 20);
         assert_eq!(config.system.log_level, LogLevel::Info);
     }
-    
+
     #[tokio::test]
     async fn test_create_test_airpods() {
         let airpods = create_test_airpods(AirPodsType::AirPodsPro, None);
-        
+
         assert_eq!(airpods.device_type, AirPodsType::AirPodsPro);
         assert_eq!(airpods.name, Some("AirPods Pro".to_string()));
     }
-} 
+}

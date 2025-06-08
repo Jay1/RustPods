@@ -1,5 +1,5 @@
-use std::process::Command;
 use serde::Deserialize;
+use std::process::Command;
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct AirPodsBatteryInfo {
@@ -40,7 +40,10 @@ pub fn get_airpods_battery_info(helper_path: &str) -> Vec<AirPodsBatteryInfo> {
         }
         match serde_json::from_str::<AirPodsBatteryInfo>(trimmed) {
             Ok(info) => infos.push(info),
-            Err(e) => eprintln!("[airpods_battery] Failed to parse line as AirPodsBatteryInfo: {}\nLine: {}", e, trimmed),
+            Err(e) => eprintln!(
+                "[airpods_battery] Failed to parse line as AirPodsBatteryInfo: {}\nLine: {}",
+                e, trimmed
+            ),
         }
     }
     infos
@@ -73,7 +76,9 @@ mod tests {
         let mut infos = Vec::new();
         for line in sample.lines() {
             let trimmed = line.trim();
-            if trimmed.is_empty() { continue; }
+            if trimmed.is_empty() {
+                continue;
+            }
             let info: AirPodsBatteryInfo = serde_json::from_str(trimmed).unwrap();
             infos.push(info);
         }
@@ -85,4 +90,4 @@ mod tests {
         assert_eq!(infos[1].address, 456);
         assert_eq!(infos[1].model_id, 0x2013);
     }
-} 
+}

@@ -5,15 +5,15 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 use btleplug::api::BDAddr;
-use iced::Element;
 use iced::Application;
+use iced::Element;
 
+use rustpods::airpods::{AirPodsBattery, AirPodsType, DetectedAirPods};
 use rustpods::bluetooth::DiscoveredDevice;
 use rustpods::ui::components::{BatteryDisplay, DeviceList, Header};
-use rustpods::ui::{Message, UiComponent};
-use rustpods::ui::theme::Theme;
 use rustpods::ui::state::AppState;
-use rustpods::airpods::{DetectedAirPods, AirPodsType, AirPodsBattery};
+use rustpods::ui::theme::Theme;
+use rustpods::ui::{Message, UiComponent};
 
 /// Test that the battery display renders correctly with different levels
 #[test]
@@ -67,7 +67,13 @@ fn test_header_component() {
 }
 
 /// Create test AirPods device with battery info
-fn create_test_airpods(address: [u8; 6], name: Option<&str>, left: Option<u8>, right: Option<u8>, case: Option<u8>) -> DetectedAirPods {
+fn create_test_airpods(
+    address: [u8; 6],
+    name: Option<&str>,
+    left: Option<u8>,
+    right: Option<u8>,
+    case: Option<u8>,
+) -> DetectedAirPods {
     DetectedAirPods {
         address: BDAddr::from(address),
         name: name.map(|s| s.to_string()),
@@ -87,8 +93,18 @@ fn create_test_airpods(address: [u8; 6], name: Option<&str>, left: Option<u8>, r
 /// Test AirPods battery info display in the UI
 #[test]
 fn test_airpods_battery_display() {
-    let airpods = create_test_airpods([1, 2, 3, 4, 5, 6], Some("My AirPods Pro 2"), Some(88), Some(92), Some(75));
-    let display = BatteryDisplay::new(airpods.battery.as_ref().and_then(|b| b.left), airpods.battery.as_ref().and_then(|b| b.right), airpods.battery.as_ref().and_then(|b| b.case));
+    let airpods = create_test_airpods(
+        [1, 2, 3, 4, 5, 6],
+        Some("My AirPods Pro 2"),
+        Some(88),
+        Some(92),
+        Some(75),
+    );
+    let display = BatteryDisplay::new(
+        airpods.battery.as_ref().and_then(|b| b.left),
+        airpods.battery.as_ref().and_then(|b| b.right),
+        airpods.battery.as_ref().and_then(|b| b.case),
+    );
     let _element: Element<'_, Message, iced::Renderer<Theme>> = display.view();
 }
 
@@ -99,12 +115,12 @@ fn test_app_state_status_and_toast() {
     let mut state = AppState::new(tx);
     state.status_message = Some("Status!".to_string());
     state.toast_message = Some("Toast!".to_string());
-    
+
     // Test that view works with messages
     {
         let _element = state.view();
     } // Drop the element before mutating state
-    
+
     state.clear_status_message();
     assert!(state.status_message.is_none());
     state.clear_toast_message();
@@ -146,4 +162,4 @@ fn test_app_state_device_update_and_select() {
     assert!(state.devices.len() >= initial_device_count + 1);
     state.select_device(device.address.to_string());
     assert_eq!(state.selected_device, Some(device.address.to_string()));
-} 
+}

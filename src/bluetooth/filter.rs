@@ -1,9 +1,9 @@
 //! Bluetooth device filtering functionality
-//! 
+//!
 //! Provides filters for Bluetooth scanning to identify specific devices
 
-use std::collections::HashSet;
 use btleplug::api::BDAddr;
+use std::collections::HashSet;
 
 use crate::bluetooth::DiscoveredDevice;
 
@@ -11,7 +11,7 @@ use crate::bluetooth::DiscoveredDevice;
 pub trait DeviceFilter: Send + Sync {
     /// Apply the filter to a list of devices
     fn apply_filter(&self, devices: &[DiscoveredDevice]) -> Vec<DiscoveredDevice>;
-    
+
     /// Check if a device passes the filter
     fn matches(&self, device: &DiscoveredDevice) -> bool;
 }
@@ -33,12 +33,13 @@ impl NameFilter {
 
 impl DeviceFilter for NameFilter {
     fn apply_filter(&self, devices: &[DiscoveredDevice]) -> Vec<DiscoveredDevice> {
-        devices.iter()
+        devices
+            .iter()
             .filter(|d| self.matches(d))
             .cloned()
             .collect()
     }
-    
+
     fn matches(&self, device: &DiscoveredDevice) -> bool {
         if let Some(name) = &device.name {
             self.names.contains(&name.to_lowercase())
@@ -65,12 +66,13 @@ impl AddressFilter {
 
 impl DeviceFilter for AddressFilter {
     fn apply_filter(&self, devices: &[DiscoveredDevice]) -> Vec<DiscoveredDevice> {
-        devices.iter()
+        devices
+            .iter()
             .filter(|d| self.matches(d))
             .cloned()
             .collect()
     }
-    
+
     fn matches(&self, device: &DiscoveredDevice) -> bool {
         self.addresses.contains(&device.address)
     }
@@ -91,12 +93,13 @@ impl RssiFilter {
 
 impl DeviceFilter for RssiFilter {
     fn apply_filter(&self, devices: &[DiscoveredDevice]) -> Vec<DiscoveredDevice> {
-        devices.iter()
+        devices
+            .iter()
             .filter(|d| self.matches(d))
             .cloned()
             .collect()
     }
-    
+
     fn matches(&self, device: &DiscoveredDevice) -> bool {
         if let Some(rssi) = device.rssi {
             rssi >= self.min_rssi
@@ -121,12 +124,13 @@ impl CompositeFilter {
 
 impl DeviceFilter for CompositeFilter {
     fn apply_filter(&self, devices: &[DiscoveredDevice]) -> Vec<DiscoveredDevice> {
-        devices.iter()
+        devices
+            .iter()
             .filter(|d| self.matches(d))
             .cloned()
             .collect()
     }
-    
+
     fn matches(&self, device: &DiscoveredDevice) -> bool {
         self.filters.iter().all(|f| f.matches(device))
     }
@@ -140,9 +144,9 @@ pub struct FunctionFilter {
 
 impl FunctionFilter {
     /// Create a new function filter
-    pub fn new<F>(filter_fn: F) -> Self 
-    where 
-        F: Fn(&DiscoveredDevice) -> bool + Send + Sync + 'static
+    pub fn new<F>(filter_fn: F) -> Self
+    where
+        F: Fn(&DiscoveredDevice) -> bool + Send + Sync + 'static,
     {
         Self {
             filter_fn: Box::new(filter_fn),
@@ -152,12 +156,13 @@ impl FunctionFilter {
 
 impl DeviceFilter for FunctionFilter {
     fn apply_filter(&self, devices: &[DiscoveredDevice]) -> Vec<DiscoveredDevice> {
-        devices.iter()
+        devices
+            .iter()
             .filter(|d| self.matches(d))
             .cloned()
             .collect()
     }
-    
+
     fn matches(&self, device: &DiscoveredDevice) -> bool {
         (self.filter_fn)(device)
     }
@@ -170,7 +175,7 @@ mod tests {
     use std::time::Instant;
 
     use crate::bluetooth::scanner::parse_bdaddr;
-    
+
     fn create_test_device(name: Option<&str>, addr: &str, rssi: Option<i16>) -> DiscoveredDevice {
         DiscoveredDevice {
             address: match parse_bdaddr(addr) {
@@ -188,32 +193,32 @@ mod tests {
             tx_power_level: None,
         }
     }
-    
+
     #[test]
     fn test_name_filter() {
         let filter = NameFilter::new(vec!["AirPods Pro".to_string()]);
-        
+
         let devices = vec![
             create_test_device(Some("AirPods Pro"), "00:11:22:33:44:55", Some(-60)),
             create_test_device(Some("Random Device"), "AA:BB:CC:DD:EE:FF", Some(-70)),
         ];
-        
+
         let filtered = filter.apply_filter(&devices);
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].name, Some("AirPods Pro".to_string()));
     }
-    
+
     #[test]
     fn test_rssi_filter() {
         let filter = RssiFilter::new(-65);
-        
+
         let devices = vec![
             create_test_device(Some("Strong Signal"), "00:11:22:33:44:55", Some(-60)),
             create_test_device(Some("Weak Signal"), "AA:BB:CC:DD:EE:FF", Some(-70)),
         ];
-        
+
         let filtered = filter.apply_filter(&devices);
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].name, Some("Strong Signal".to_string()));
     }
-} 
+}
