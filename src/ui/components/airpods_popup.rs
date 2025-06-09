@@ -3,7 +3,7 @@
 //! Provides a macOS-style popup interface for displaying AirPods information
 
 use iced::{
-    widget::{button, column, container, row, text, Space, image, Svg},
+    widget::{button, column, container, row, text, Space, image},
     Element, Length, Alignment, Color
 };
 use iced::alignment::Horizontal;
@@ -12,7 +12,7 @@ use crate::ui::Message;
 use crate::ui::theme::{self, Theme};
 use crate::ui::UiComponent;
 use crate::ui::state::MergedBluetoothDevice;
-use crate::ui::components::battery_indicator;
+use crate::ui::components::view_circular_battery_widget;
 
 /// Determine the correct image paths based on the AirPods model
 fn get_airpods_image_paths(device_name: &str) -> (String, String) {
@@ -70,30 +70,49 @@ pub fn view_device_popup(device: &MergedBluetoothDevice) -> Element<'static, Mes
     .align_items(Alignment::Center)
     .spacing(40);
 
-    // Battery indicators row
+    // Battery indicators row with circular widgets
     let battery_indicators_row = row![
-        // Earbuds group: Left and Right together
-        row![
-            battery_indicator::view(
-                "Left", 
-                device.left_battery, 
+        // Left earbud circular widget
+        column![
+            view_circular_battery_widget(
+                device.left_battery.unwrap_or(0),
                 false // For now, charging state is not available in MergedBluetoothDevice
             ),
-            battery_indicator::view(
-                "Right", 
-                device.right_battery, 
-                false // For now, charging state is not available in MergedBluetoothDevice
-            )
+            text("Left")
+                .size(14)
+                .style(theme::TEXT)
+                .horizontal_alignment(Horizontal::Center)
         ]
-        .spacing(20)
-        .align_items(Alignment::Center),
+        .align_items(Alignment::Center)
+        .spacing(5),
         
-        // Case indicator
-        battery_indicator::view(
-            "Case", 
-            device.case_battery, 
-            false // For now, charging state is not available in MergedBluetoothDevice
-        )
+        // Right earbud circular widget
+        column![
+            view_circular_battery_widget(
+                device.right_battery.unwrap_or(0),
+                false // For now, charging state is not available in MergedBluetoothDevice
+            ),
+            text("Right")
+                .size(14)
+                .style(theme::TEXT)
+                .horizontal_alignment(Horizontal::Center)
+        ]
+        .align_items(Alignment::Center)
+        .spacing(5),
+        
+        // Case circular widget
+        column![
+            view_circular_battery_widget(
+                device.case_battery.unwrap_or(0),
+                false // For now, charging state is not available in MergedBluetoothDevice
+            ),
+            text("Case")
+                .size(14)
+                .style(theme::TEXT)
+                .horizontal_alignment(Horizontal::Center)
+        ]
+        .align_items(Alignment::Center)
+        .spacing(5)
     ]
     .spacing(40)
     .align_items(Alignment::Center);
@@ -124,83 +143,7 @@ impl AirPodsPopup {
         Self { device }
     }
 
-    /// Create battery display with visual bar
-    fn create_battery_display(&self, battery_level: Option<u8>, label: &str) -> Element<'_, Message, iced::Renderer<Theme>> {
-        let battery_text = match battery_level {
-            Some(level) => format!("{}%", level),
-            None => "0%".to_string(),
-        };
 
-        // Create visual battery bar using repeated characters
-        let battery_bar = match battery_level {
-            Some(level) if level > 0 => {
-                let filled_bars = (level as f32 / 100.0 * 10.0).ceil() as usize;
-                let empty_bars = 10 - filled_bars;
-                format!("{}{}", "█".repeat(filled_bars), "░".repeat(empty_bars))
-            }
-            _ => "░░░░░░░░░░".to_string(),
-        };
-
-        column![
-            text(label)
-                .size(14)
-                .horizontal_alignment(Horizontal::Center)
-                .style(theme::TEXT),
-            iced::widget::Space::with_height(Length::Fixed(8.0)),
-            text(battery_bar)
-                .size(12)
-                .horizontal_alignment(Horizontal::Center)
-                .style(theme::BLUE),
-            iced::widget::Space::with_height(Length::Fixed(4.0)),
-            text(battery_text)
-                .size(16)
-                .horizontal_alignment(Horizontal::Center)
-                .style(theme::TEXT),
-        ]
-        .spacing(2)
-        .align_items(Alignment::Center)
-        .width(Length::FillPortion(1))
-        .into()
-    }
-
-    /// Create case battery display
-    fn create_case_display(&self) -> Element<'_, Message, iced::Renderer<Theme>> {
-        let battery_text = match self.device.case_battery {
-            Some(level) => format!("{}%", level),
-            None => "0%".to_string(),
-        };
-
-        // Create visual battery bar for case
-        let battery_bar = match self.device.case_battery {
-            Some(level) if level > 0 => {
-                let filled_bars = (level as f32 / 100.0 * 10.0).ceil() as usize;
-                let empty_bars = 10 - filled_bars;
-                format!("{}{}", "█".repeat(filled_bars), "░".repeat(empty_bars))
-            }
-            _ => "░░░░░░░░░░".to_string(),
-        };
-
-        column![
-            text("Case")
-                .size(14)
-                .horizontal_alignment(Horizontal::Center)
-                .style(theme::TEXT),
-            iced::widget::Space::with_height(Length::Fixed(8.0)),
-            text(battery_bar)
-                .size(12)
-                .horizontal_alignment(Horizontal::Center)
-                .style(theme::BLUE),
-            iced::widget::Space::with_height(Length::Fixed(4.0)),
-            text(battery_text)
-                .size(16)
-                .horizontal_alignment(Horizontal::Center)
-                .style(theme::TEXT),
-        ]
-        .spacing(2)
-        .align_items(Alignment::Center)
-        .width(Length::FillPortion(1))
-        .into()
-    }
 }
 
 impl UiComponent for AirPodsPopup {
@@ -219,11 +162,49 @@ impl UiComponent for AirPodsPopup {
         .align_items(Alignment::Center)
         .padding([20, 20, 10, 20]);
 
-        // Battery displays in a row
+        // Battery displays in a row with circular widgets
         let battery_row = row![
-            self.create_battery_display(self.device.left_battery, "Left"),
-            self.create_battery_display(self.device.right_battery, "Right"),
-            self.create_case_display(),
+            // Left earbud circular widget
+            column![
+                view_circular_battery_widget(
+                    self.device.left_battery.unwrap_or(0),
+                    false // For now, charging state is not available in MergedBluetoothDevice
+                ),
+                text("Left")
+                    .size(14)
+                    .style(theme::TEXT)
+                    .horizontal_alignment(Horizontal::Center)
+            ]
+            .align_items(Alignment::Center)
+            .spacing(5),
+            
+            // Right earbud circular widget
+            column![
+                view_circular_battery_widget(
+                    self.device.right_battery.unwrap_or(0),
+                    false // For now, charging state is not available in MergedBluetoothDevice
+                ),
+                text("Right")
+                    .size(14)
+                    .style(theme::TEXT)
+                    .horizontal_alignment(Horizontal::Center)
+            ]
+            .align_items(Alignment::Center)
+            .spacing(5),
+            
+            // Case circular widget
+            column![
+                view_circular_battery_widget(
+                    self.device.case_battery.unwrap_or(0),
+                    false // For now, charging state is not available in MergedBluetoothDevice
+                ),
+                text("Case")
+                    .size(14)
+                    .style(theme::TEXT)
+                    .horizontal_alignment(Horizontal::Center)
+            ]
+            .align_items(Alignment::Center)
+            .spacing(5)
         ]
         .spacing(24)
         .align_items(Alignment::Start)

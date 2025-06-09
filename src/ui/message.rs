@@ -149,6 +149,15 @@ pub enum Message {
 
     /// AirPods data loaded from CLI scanner (async)
     AirPodsDataLoaded(Vec<AirPodsBatteryInfo>),
+
+    /// Close popup window
+    ClosePopup,
+
+    /// Connect to a device
+    ConnectDevice,
+
+    /// Disconnect from a device
+    DisconnectDevice,
 }
 
 impl PartialEq for Message {
@@ -200,6 +209,9 @@ impl PartialEq for Message {
             (Self::ToggleAutoScan(a), Self::ToggleAutoScan(b)) => a == b,
             (Self::UnpairDevice, Self::UnpairDevice) => true,
             (Self::AirPodsDataLoaded(a), Self::AirPodsDataLoaded(b)) => a.len() == b.len(),
+            (Self::ClosePopup, Self::ClosePopup) => true,
+            (Self::ConnectDevice, Self::ConnectDevice) => true,
+            (Self::DisconnectDevice, Self::DisconnectDevice) => true,
             _ => false,
         }
     }

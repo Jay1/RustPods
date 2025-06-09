@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::bluetooth::ScanConfig;
+use crate::airpods::battery_estimator::DischargeHistory;
 
 /// Application configuration
 ///
@@ -12,7 +13,7 @@ use crate::bluetooth::ScanConfig;
 /// - Linux: ~/.config/rustpods/settings.json
 ///
 /// The `settings_path` field is used internally at runtime and is not persisted or user-configurable.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AppConfig {
     /// Bluetooth scanning configuration
     #[serde(default)]
@@ -172,7 +173,7 @@ pub struct SystemConfig {
 }
 
 /// Battery monitoring configuration
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct BatteryConfig {
     /// Low battery threshold percentage
     #[serde(default = "default_low_battery_threshold")]
@@ -193,6 +194,22 @@ pub struct BatteryConfig {
     /// Send notifications for charging completed
     #[serde(default = "default_true")]
     pub notify_charged: bool,
+
+    /// Enable intelligent battery estimation between 10% increments
+    #[serde(default = "default_true")]
+    pub enable_estimation: bool,
+
+    /// Historical discharge data for left AirPod
+    #[serde(default)]
+    pub left_history: DischargeHistory,
+
+    /// Historical discharge data for right AirPod
+    #[serde(default)]
+    pub right_history: DischargeHistory,
+
+    /// Historical discharge data for case
+    #[serde(default)]
+    pub case_history: DischargeHistory,
 }
 
 /// UI theme
@@ -369,6 +386,10 @@ impl Default for BatteryConfig {
             change_threshold: default_change_threshold(),
             notify_low: default_true(),
             notify_charged: default_true(),
+            enable_estimation: default_true(),
+            left_history: DischargeHistory::default(),
+            right_history: DischargeHistory::default(),
+            case_history: DischargeHistory::default(),
         }
     }
 }

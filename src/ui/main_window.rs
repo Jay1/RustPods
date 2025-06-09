@@ -5,7 +5,7 @@
 use iced::widget::svg::Handle;
 use iced::{
     alignment::Horizontal,
-    widget::{button, column, container, image, row, text, Space, Svg},
+    widget::{button, column, container, row, text, Space, Svg},
     Alignment, Command, Element, Length,
 };
 
@@ -147,15 +147,24 @@ impl MainWindow {
             self.merged_devices.len()
         );
 
-        // Check if we have AirPods devices and show compact popup
-        if let Some(device) = self.merged_devices.first() {
+        // Always show the battery UI - get device data or use defaults (Left and Right only)
+        let (left_battery, right_battery) = if let Some(device) = self.merged_devices.first() {
             crate::debug_log!("ui", "Showing popup for device: {}", device.name);
-            // Show our new graphical AirPods popup - inline implementation to avoid theme issues
-            let header_row = row![
-                text(device.name.clone())
+            (device.left_battery.unwrap_or(0), device.right_battery.unwrap_or(0))
+        } else {
+            crate::debug_log!("ui", "No devices found, showing default battery UI with 0% values");
+            (0, 0)
+        };
+
+        // Custom title bar header (Discord-style)
+        let header_row = container(
+            row![
+                // App title/brand
+                text("RustPods")
                     .size(20.0)
                     .style(crate::ui::theme::TEXT),
                 Space::with_width(Length::Fill),
+                // Window controls
                 button(
                     Svg::new(Handle::from_memory(crate::assets::ui::SETTINGS_ICON))
                         .width(Length::Fixed(21.0))
@@ -174,136 +183,72 @@ impl MainWindow {
                 .padding(5)
             ]
             .spacing(6)
-            .align_items(Alignment::Center);
+            .align_items(Alignment::Center)
+        )
+        .width(Length::Fill)
+        .padding([8, 12, 8, 12]) // Custom title bar padding
+        .style(iced::theme::Container::Box);
 
-            // Centered AirPods column only (case column removed for testing)
-            let content_row = column![
-                image("assets/icons/hw/airpodspro.png")
-                    .width(Length::Fixed(270.0))
-                    .height(Length::Fixed(230.0)),
-                Space::with_height(Length::Fixed(5.0)), // Gap between image and batteries
-                // Left and right batteries horizontally stacked
-                row![
-                    column![
-                        crate::ui::components::battery_icon::battery_icon_display(
-                            device.left_battery,
-                            false, // TODO: Add charging status when available
-                            80.0,
-                            self.animation_progress
-                        ),
-                        Space::with_height(Length::Fixed(8.0)), // Gap between battery and percentage
-                        text(format!("{}%", device.left_battery.unwrap_or(0)))
-                            .size(24)
-                            .style(crate::ui::theme::TEXT)
-                            .horizontal_alignment(Horizontal::Center)
-                    ]
-                    .align_items(Alignment::Center),
-                    Space::with_width(Length::Fixed(15.0)), // Padding between left and right
-                    column![
-                        crate::ui::components::battery_icon::battery_icon_display(
-                            device.right_battery,
-                            false, // TODO: Add charging status when available
-                            80.0,
-                            self.animation_progress
-                        ),
-                        Space::with_height(Length::Fixed(8.0)), // Gap between battery and percentage
-                        text(format!("{}%", device.right_battery.unwrap_or(0)))
-                            .size(24)
-                            .style(crate::ui::theme::TEXT)
-                            .horizontal_alignment(Horizontal::Center)
-                    ]
-                    .align_items(Alignment::Center)
+        // Two-column layout: each battery centered in its half of the window
+        let content_row = row![
+            // Left column - Left earbud centered in left half
+            container(
+                column![
+                    crate::ui::components::view_circular_battery_widget(
+                        left_battery,
+                        false // TODO: Add charging status when available
+                    ),
+                    text("Left")
+                        .size(14)
+                        .style(theme::TEXT)
+                        .horizontal_alignment(Horizontal::Center)
                 ]
                 .align_items(Alignment::Center)
-            ]
-            .align_items(Alignment::Center)
-            .width(Length::Fill); // Take full width for automatic centering
-
-            // TODO: Case battery logic commented out for testing
-            // Case battery data: device.case_battery is available but not displayed
-
-            // Wrap the popup in a polished container with modern styling
-            container(
-                column![header_row, content_row,]
-                    .spacing(20) // Increased spacing between major sections
-                    .align_items(Alignment::Center)
-                    .padding([15, 25, 25, 25]), // Slightly more padding: top, right, bottom, left
+                .spacing(5)
             )
+            .width(Length::FillPortion(1))
+            .center_x(),
+            
+            // Right column - Right earbud centered in right half
+            container(
+                column![
+                    crate::ui::components::view_circular_battery_widget(
+                        right_battery,
+                        false // TODO: Add charging status when available
+                    ),
+                    text("Right")
+                        .size(14)
+                        .style(theme::TEXT)
+                        .horizontal_alignment(Horizontal::Center)
+                ]
+                .align_items(Alignment::Center)
+                .spacing(5)
+            )
+            .width(Length::FillPortion(1))
+            .center_x()
+        ]
+        .width(Length::Fill);
+
+        // Main layout: title bar at top, battery widgets centered in remaining space
+        container(
+            column![
+                // Title bar stays at the top with proper background
+                header_row,
+                
+                // Battery widgets centered in the remaining space
+                container(content_row)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .center_x()
+                    .center_y()
+            ]
             .width(Length::Fill)
             .height(Length::Fill)
-            .style(iced::theme::Container::Box)
-            .into()
-        } else {
-            crate::debug_log!("ui", "No AirPods found, showing search message");
-            // Show a styled message in the new popup format
-            let header_row = row![
-                text("RustPods").size(20.0).style(crate::ui::theme::TEXT),
-                Space::with_width(Length::Fill),
-                button(
-                    Svg::new(Handle::from_memory(crate::assets::ui::SETTINGS_ICON))
-                        .width(Length::Fixed(21.0))
-                        .height(Length::Fixed(21.0))
-                )
-                .on_press(Message::OpenSettings)
-                .style(crate::ui::theme::settings_button_style())
-                .padding(5),
-                button(
-                    Svg::new(Handle::from_memory(crate::assets::ui::CLOSE_ICON))
-                        .width(Length::Fixed(21.0))
-                        .height(Length::Fixed(21.0))
-                )
-                .on_press(Message::Exit)
-                .style(crate::ui::theme::close_button_style())
-                .padding(5)
-            ]
-            .spacing(6)
-            .align_items(Alignment::Center);
-
-            let search_message = column![
-                text("🔍")
-                    .size(48.0)
-                    .horizontal_alignment(Horizontal::Center),
-                text("Searching for AirPods...")
-                    .size(24.0)
-                    .style(crate::ui::theme::SUBTEXT1)
-                    .horizontal_alignment(Horizontal::Center),
-                text("Make sure your AirPods are:")
-                    .size(18.0)
-                    .style(crate::ui::theme::OVERLAY1)
-                    .horizontal_alignment(Horizontal::Center),
-                text("• Out of the case OR being used")
-                    .size(16.0)
-                    .style(crate::ui::theme::OVERLAY1)
-                    .horizontal_alignment(Horizontal::Center),
-                text("• Connected to this device")
-                    .size(16.0)
-                    .style(crate::ui::theme::OVERLAY1)
-                    .horizontal_alignment(Horizontal::Center),
-                text("• Broadcasting (not in deep sleep)")
-                    .size(16.0)
-                    .style(crate::ui::theme::OVERLAY1)
-                    .horizontal_alignment(Horizontal::Center),
-                text("").size(4.0),
-                text("Scanning automatically every 15 seconds...")
-                    .size(14.0)
-                    .style(crate::ui::theme::YELLOW)
-                    .horizontal_alignment(Horizontal::Center)
-            ]
-            .spacing(4)
-            .align_items(Alignment::Center);
-
-            // Wrap in the same styled container as the popup
-            container(
-                column![header_row, search_message,]
-                    .spacing(15)
-                    .align_items(Alignment::Center)
-                    .padding([15, 20, 20, 20]), // top, right, bottom, left - reduced padding
-            )
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .style(iced::theme::Container::Box)
-            .into()
-        }
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(iced::theme::Container::Box)
+        .into()
     }
 
     /// Create a simple battery bar indicator
@@ -331,15 +276,7 @@ impl MainWindow {
 
 impl UiComponent for MainWindow {
     fn view(&self) -> Element<'_, Message, iced::Renderer<Theme>> {
-        // Always show the new UI - no old fallback
-        let content = self.view_content();
-
-        container(content)
-            .width(Length::Fixed(414.0)) // 15% bigger than 360
-            .height(Length::Fixed(455.0)) // 15% bigger than 380 + 15px
-            .style(crate::ui::theme::device_row_style())
-            .center_x()
-            .center_y()
-            .into()
+        // Return content directly without any wrapper - use full window space
+        self.view_content()
     }
 }

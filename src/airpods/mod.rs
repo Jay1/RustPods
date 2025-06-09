@@ -1,6 +1,7 @@
 //! AirPods-specific functionality
 
 pub mod battery;
+pub mod battery_estimator;
 pub mod detector;
 mod filter;
 

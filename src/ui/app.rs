@@ -21,6 +21,9 @@ pub fn run_ui() -> iced::Result {
             size: (DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT),
             icon,
             min_size: Some((400, 300)),
+            decorations: false, // Remove default Windows title bar
+            transparent: false,
+            resizable: true,
             ..Default::default()
         },
         flags: (controller_sender, controller_receiver),

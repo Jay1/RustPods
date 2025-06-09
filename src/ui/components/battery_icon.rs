@@ -5,8 +5,8 @@
 
 use iced::{
     alignment,
-    widget::{container, progress_bar, row, text, Svg},
-    Color, Element, Length,
+    widget::{column, container, progress_bar, row, text, Svg},
+    Alignment, Color, Element, Length,
 };
 
 use crate::ui::theme;
@@ -306,5 +306,148 @@ fn pulse_color(pulse: f32) -> iced::Color {
         g: base_color.g,
         b: base_color.b,
         a: factor,
+    }
+}
+
+/// Create a circular progress SVG for battery display
+fn create_circular_battery_svg(level: u8, is_charging: bool) -> String {
+    // Clamp level between 0 and 100
+    let level = level.min(100);
+    
+    // SVG circle parameters
+    let radius = 32.0;
+    let stroke_width = 8.0;
+    let center = 40.0; // SVG center point
+    let circumference = 2.0 * std::f32::consts::PI * radius;
+    
+    // Calculate progress arc length (starting from top, clockwise)
+    let progress = (level as f32 / 100.0) * circumference;
+    let dash_offset = circumference - progress;
+    
+    // Catppuccin Mocha theme colors
+    let bg_color = "#45475a"; // SURFACE1 - dark, subtle color
+    let progress_color = "#cdd6f4"; // TEXT - bright, contrasting color  
+    let charging_color = "#f9e2af"; // YELLOW - bright color for lightning bolt
+    
+    let mut svg = String::new();
+    use std::fmt::Write;
+    
+    // Start SVG
+    write!(&mut svg, r#"<svg width="80" height="80" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">"#).unwrap();
+    
+    // Background circle
+    write!(&mut svg, 
+        r#"<circle cx="{}" cy="{}" r="{}" fill="none" stroke="{}" stroke-width="{}"/>"#,
+        center, center, radius, bg_color, stroke_width
+    ).unwrap();
+    
+    // Progress arc (only if level > 0)
+    if level > 0 {
+        write!(&mut svg,
+            r#"<circle cx="{}" cy="{}" r="{}" fill="none" stroke="{}" stroke-width="{}" stroke-dasharray="{}" stroke-dashoffset="{}" stroke-linecap="round" transform="rotate(-90 {} {})"/>"#,
+            center, center, radius, progress_color, stroke_width, circumference, dash_offset, center, center
+        ).unwrap();
+    }
+    
+    // Charging lightning bolt icon
+    if is_charging {
+        write!(&mut svg,
+            r#"<path d="M45 30L35 42H42L38 50L50 38H43L47 30Z" fill="{}" stroke="none"/>"#,
+            charging_color
+        ).unwrap();
+    }
+    
+    write!(&mut svg, r#"</svg>"#).unwrap();
+    svg
+}
+
+/// Create a minimalist circular battery widget inspired by modern UI design
+pub fn view_circular_battery_widget<'a>(
+    level: u8,
+    is_charging: bool,
+) -> Element<'a, Message, iced::Renderer<Theme>> {
+    // Store Catppuccin Mocha theme colors in owned variables that can be moved into the closure
+    let bg_color = theme::BASE; // Dark background
+    let border_color = theme::SURFACE0; // Subtle border
+    let text_color = theme::TEXT; // Light text
+
+    // Create circular progress SVG
+    let svg_string = create_circular_battery_svg(level, is_charging);
+    let svg_bytes = svg_string.into_bytes();
+    let svg_element = Svg::new(iced::widget::svg::Handle::from_memory(svg_bytes))
+        .width(Length::Fixed(80.0))
+        .height(Length::Fixed(80.0));
+
+    // Create the main container with fixed dimensions
+    let main_container = container(
+        column![
+            // Circular battery progress indicator
+            svg_element,
+            // Battery percentage text
+            text(format!("{}%", level))
+                .size(24)
+                .style(text_color)
+        ]
+        .spacing(10)
+        .align_items(Alignment::Center)
+    )
+    .width(Length::Fixed(160.0))
+    .height(Length::Fixed(160.0))
+    .style(iced::theme::Container::Custom(Box::new(
+        move |_: &iced::Theme| container::Appearance {
+            background: Some(bg_color.into()),
+            border_radius: 24.0.into(),
+            border_width: 1.0,
+            border_color,
+            text_color: None,
+        },
+    )))
+    .center_x()
+    .center_y();
+
+    main_container.into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_create_circular_battery_svg() {
+        // Test SVG generation with different battery levels
+        let svg_25 = create_circular_battery_svg(25, false);
+        assert!(svg_25.contains("svg"));
+        assert!(svg_25.contains("circle"));
+        
+        let svg_75_charging = create_circular_battery_svg(75, true);
+        assert!(svg_75_charging.contains("svg"));
+        assert!(svg_75_charging.contains("circle"));
+        assert!(svg_75_charging.contains("path")); // Lightning bolt
+        
+        // Test edge cases
+        let svg_0 = create_circular_battery_svg(0, false);
+        assert!(svg_0.contains("svg"));
+        
+        let svg_100 = create_circular_battery_svg(100, false);
+        assert!(svg_100.contains("svg"));
+        
+        // Test clamping
+        let svg_over_100 = create_circular_battery_svg(150, true);
+        assert!(svg_over_100.contains("svg"));
+    }
+
+    #[test]
+    fn test_view_circular_battery_widget() {
+        // Test widget creation with various parameters
+        let widget_25 = view_circular_battery_widget(25, false);
+        let widget_75_charging = view_circular_battery_widget(75, true);
+        let widget_0 = view_circular_battery_widget(0, false);
+        let widget_100 = view_circular_battery_widget(100, false);
+        
+        // Widgets should be created without panicking
+        let _ = widget_25;
+        let _ = widget_75_charging;
+        let _ = widget_0;
+        let _ = widget_100;
     }
 }

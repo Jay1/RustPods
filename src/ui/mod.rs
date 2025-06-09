@@ -3,10 +3,8 @@
 // Module exports
 mod app;
 pub mod components;
-mod fixed_state_app;
 mod message;
 pub mod state;
-mod state_app;
 pub mod state_manager;
 mod system_tray;
 // mod system_tray_controller; // Keep controller disabled for now
@@ -22,7 +20,6 @@ pub mod window_visibility;
 
 // Re-exports for easier access
 pub use app::run_ui;
-pub use fixed_state_app::{run_state_ui, StateApp};
 pub use message::Message;
 pub use state::AppState;
 pub use system_tray::SystemTray;

@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ui::components::svg_icons::{refresh_icon_svg_string, battery_icon_svg_string};
+    use rustpods::ui::components::{refresh_icon_svg_string, battery_icon_svg_string};
 
     #[test]
     fn test_refresh_icon_generation() {

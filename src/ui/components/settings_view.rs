@@ -29,15 +29,16 @@ impl SettingsView {
 
     /// Update the config
     pub fn update_config(&mut self, config: AppConfig) {
-        println!("[DEBUG] SettingsView::update_config called");
+        crate::debug_log!("ui", "SettingsView::update_config called");
         self.config = config;
-        println!("[DEBUG] SettingsView::config updated");
+        crate::debug_log!("ui", "SettingsView::config updated");
     }
 
     /// Update bluetooth settings
     pub fn update_bluetooth_setting(&mut self, setting: BluetoothSetting) {
-        println!(
-            "[DEBUG] SettingsView::update_bluetooth_setting called: {:?}",
+        crate::debug_log!(
+            "ui",
+            "SettingsView::update_bluetooth_setting called: {:?}",
             setting
         );
         match setting {

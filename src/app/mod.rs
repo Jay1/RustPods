@@ -118,17 +118,17 @@ impl App {
 
     /// Run the application event loop
     pub async fn run(&mut self) -> Result<(), RustPodsError> {
-        println!("[DEBUG] Entered App::run");
+        crate::debug_log!("system", "Entered App::run");
         tracing::info!(
             "App::run: auto_scan_on_startup = {}",
             self.config.bluetooth.auto_scan_on_startup
         );
 
         // TEMP: Debug WinRT device query
-        println!("[DEBUG] About to call get_connected_bluetooth_devices()");
+                    crate::debug_log!("bluetooth", "About to call get_connected_bluetooth_devices()");
         // WinRT async device enumeration is currently disabled due to interop issues.
         // Use the Win32 SetupAPI fallback or comment out this block for now.
-        println!("[DEBUG] Finished call to get_connected_bluetooth_devices()");
+                    crate::debug_log!("bluetooth", "Finished call to get_connected_bluetooth_devices()");
 
         // TEMP: Query and print connected AirPods using WinRT
         // WinRT async AirPods enumeration is currently disabled due to interop issues.

@@ -113,16 +113,16 @@ fn main() {
     // Store debug flags globally for use by other modules
     logging::set_debug_flags(args.debug_flags.clone());
 
-    // Handle StateUI command directly without tokio runtime since it creates its own
+    // Handle StateUI command (deprecated - redirect to new UI)
     if matches!(args.command, AppCommand::StateUI) {
         if matches!(
             config.system.log_level,
             LogLevel::Info | LogLevel::Debug | LogLevel::Trace
         ) {
-            info!("Launching State UI...");
+            info!("Launching UI (StateUI command is deprecated, redirecting to new UI)...");
         }
-        if let Err(e) = ui::run_state_ui() {
-            error!("Failed to run State UI: {}", e);
+        if let Err(e) = ui::run_ui() {
+            error!("Failed to run UI: {}", e);
             std::process::exit(1);
         }
         return;
@@ -226,7 +226,7 @@ fn parse_enhanced_args() -> Result<AppArgs, String> {
     let mut debug_flags = DebugFlags::default();
     let mut log_level = LogLevel::Warn; // Default to warnings and errors only
     let mut verbose = false;
-    let mut command = AppCommand::StateUI; // Default command
+    let mut command = AppCommand::UI; // Default command - use new UI
 
     let mut i = 1;
     while i < args.len() {

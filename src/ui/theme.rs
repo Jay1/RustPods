@@ -243,19 +243,19 @@ impl button::StyleSheet for Theme {
                 ..Default::default()
             },
             (_, iced::theme::Button::Secondary) => button::Appearance {
-                background: Some(OVERLAY1.into()),
+                background: None, // Transparent background for icon style
                 border_radius: 2.0.into(),
-                border_width: 1.0,
-                border_color: OVERLAY0,
-                text_color: TEXT,
+                border_width: 0.0,
+                border_color: Color::TRANSPARENT,
+                text_color: SUBTEXT1, // Subtle icon color
                 ..Default::default()
             },
             (_, iced::theme::Button::Destructive) => button::Appearance {
-                background: Some(RED.into()),
+                background: Some(SURFACE1.into()), // Subtle background instead of bright red
                 border_radius: 2.0.into(),
                 border_width: 1.0,
                 border_color: OVERLAY0,
-                text_color: CRUST,
+                text_color: RED, // Red icon to indicate destructive action
                 ..Default::default()
             },
             (_, _) => button::Appearance {
@@ -295,6 +295,16 @@ impl button::StyleSheet for Theme {
             },
             (_, iced::theme::Button::Primary) => button::Appearance {
                 background: Some(LAVENDER.into()),
+                ..active
+            },
+            (_, iced::theme::Button::Secondary) => button::Appearance {
+                background: None, // Keep transparent background
+                text_color: TEXT, // Brighter icon color on hover
+                ..active
+            },
+            (_, iced::theme::Button::Destructive) => button::Appearance {
+                background: Some(SURFACE2.into()), // Slightly darker background on hover
+                text_color: RED, // Keep red icon color
                 ..active
             },
             (_, _) => button::Appearance {
