@@ -150,8 +150,7 @@ RustPods/
 ├── tests/                         # Integration tests
 ├── examples/                      # Example code
 ├── assets/                        # Icons and other assets
-├── docs/                          # Documentation
-└── third_party/                   # Git submodules (spdlog)
+└── docs/                          # Documentation
 ```
 
 ### Development Guidelines

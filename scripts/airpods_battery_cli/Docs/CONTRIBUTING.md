@@ -232,7 +232,7 @@ std::optional<DeviceInfo> ParseDevice(const std::vector<uint8_t>& data)
 {
     if (!ValidateData(data)) 
     {
-        spdlog::warn("Invalid device data received");
+        std::cerr << "[WARN] Invalid device data received" << std::endl;
         return std::nullopt;
     }
     return ParseValidData(data);
@@ -240,23 +240,23 @@ std::optional<DeviceInfo> ParseDevice(const std::vector<uint8_t>& data)
 ```
 
 #### Logging Guidelines
-Use structured logging with appropriate levels:
+Use simple stderr logging with appropriate levels:
 
 ```cpp
-#include <spdlog/spdlog.h>
+#include <iostream>
 
 // Error: System failures, exceptions
-spdlog::error("Failed to initialize scanner: {}", error_message);
+std::cerr << "[ERROR] Failed to initialize scanner: " << error_message << std::endl;
 
 // Warning: Recoverable issues, deprecated usage
-spdlog::warn("Device data validation failed for device {}", device_id);
+std::cerr << "[WARN] Device data validation failed for device " << device_id << std::endl;
 
 // Info: Normal operation, important events
-spdlog::info("Scanner started successfully, found {} adapters", adapter_count);
+std::cerr << "[INFO] Scanner started successfully, found " << adapter_count << " adapters" << std::endl;
 
 // Debug: Detailed information for troubleshooting
-spdlog::debug("Parsing battery data: raw={}, left={}%, right={}%", 
-              raw_data, left_battery, right_battery);
+std::cerr << "[DEBUG] Parsing battery data: raw=" << raw_data 
+          << ", left=" << left_battery << "%, right=" << right_battery << "%" << std::endl;
 ```
 
 ## Testing Guidelines

@@ -271,12 +271,11 @@ The scanner outputs structured JSON with the following schema:
 3. Check CMake version is 3.10 or later
 4. Initialize git submodules: `git submodule update --init --recursive`
 
-#### Missing spdlog Dependencies
-**Problem**: Build fails with spdlog-related errors
+#### Missing Dependencies
+**Problem**: Build fails with dependency-related errors
 **Solutions**:
-1. Initialize submodules: `git submodule update --init --recursive`
-2. Verify `third_party/spdlog/` directory exists and contains files
-3. Clean and rebuild: `cmake --build build --target clean && cmake --build build --config Release`
+1. Verify all required dependencies are available via vcpkg or system packages
+2. Clean and rebuild: `cmake --build build --target clean && cmake --build build --config Release`
 
 ### Diagnostic Commands
 
@@ -316,8 +315,6 @@ scripts/airpods_battery_cli/
 │   │   ├── AppleContinuityParser.*  # Apple protocol implementation
 │   │   └── AirPodsData.*       # AirPods data structures
 │   └── test_*.cpp              # Test programs
-├── third_party/                # External dependencies
-│   └── spdlog/                 # Logging library (submodule)
 └── docs/                       # Documentation
     ├── ARCHITECTURE.md         # Detailed architecture guide
     └── CONTRIBUTING.md         # Contributor guidelines

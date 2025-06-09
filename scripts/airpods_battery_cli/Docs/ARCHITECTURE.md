@@ -415,14 +415,14 @@ class WinRtBleScanner {
 
 ### Logging Strategy
 
-The scanner uses structured logging via spdlog:
+The scanner uses simple stderr logging for CLI output:
 
 ```cpp
 // Different log levels for different scenarios
-spdlog::info("Scanner started successfully");
-spdlog::warn("Unknown device model: {:#x}", modelId);
-spdlog::error("Failed to start Bluetooth scanner: {}", error);
-spdlog::debug("Parsed battery data: L:{}% R:{}% C:{}%", left, right, case_);
+std::cerr << "[INFO] Scanner started successfully" << std::endl;
+std::cerr << "[WARN] Unknown device model: " << std::hex << modelId << std::endl;
+std::cerr << "[ERROR] Failed to start Bluetooth scanner: " << error << std::endl;
+std::cerr << "[DEBUG] Parsed battery data: L:" << left << "% R:" << right << "% C:" << case_ << "%" << std::endl;
 ```
 
 ## Build System
@@ -455,8 +455,6 @@ ble_scanner.lib
     ↓
 protocol_parser.lib
     ↓
-spdlog (submodule)
-    ↓
 Windows SDK libraries
 ```
 
@@ -467,7 +465,7 @@ Windows SDK libraries
 set(COMMON_COMPILE_OPTIONS
     "$<$<CXX_COMPILER_ID:MSVC>:/MP>"        # Multi-processor compilation
     "$<$<CXX_COMPILER_ID:MSVC>:/await>"     # WinRT coroutine support
-    "$<$<CXX_COMPILER_ID:MSVC>:/utf-8>"     # UTF-8 support for spdlog
+    "$<$<CXX_COMPILER_ID:MSVC>:/utf-8>"     # UTF-8 support
 )
 
 # Shared definitions

@@ -18,13 +18,18 @@ docs/
 ├── README.md                     - This file
 ├── development/                  - Developer documentation
 │   ├── assets.md                 - Asset management guide
-│   ├── contributing.md           - Redirects to root CONTRIBUTING.md
+│   ├── logging-best-practices.md - Configurable logging system
 │   ├── test-coverage.md          - Test coverage guidelines
 │   ├── manual-testing-guide.md   - Manual testing guide
+│   ├── testing-best-practices.md - Comprehensive testing guide
+│   ├── build-optimization-guide.md - Build performance optimizations
+│   ├── bulletproof-ui-testing.md - UI testing strategies
+│   ├── system-tray-implementation.md - System tray guide
 │   └── ui-components.md          - UI component patterns
 ├── user-guide/                   - User documentation
 │   └── getting-started.md        - Installation and setup
-└── assets/                       - Documentation assets
+├── CONTRIBUTING.md               - Contribution guidelines
+└── SECURITY.md                   - Security vulnerability reporting
 ```
 
 ## Documentation Guidelines
@@ -49,4 +54,4 @@ For local development, we recommend:
 
 ## Contributing to Documentation
 
-Documentation improvements are highly valued contributions! If you find something that could be explained better, is missing, or is incorrect, please submit a pull request following our [contribution guidelines](../CONTRIBUTING.md). 
+Documentation improvements are highly valued contributions! If you find something that could be explained better, is missing, or is incorrect, please submit a pull request following our [contribution guidelines](CONTRIBUTING.md). 

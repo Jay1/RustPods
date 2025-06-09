@@ -27,7 +27,7 @@ println!("cargo:rerun-if-changed=scripts/airpods_battery_cli/");
 // After: Granular dependency tracking + timestamp checking
 println!("cargo:rerun-if-changed=scripts/airpods_battery_cli/CMakeLists.txt");
 println!("cargo:rerun-if-changed=scripts/airpods_battery_cli/Source/");
-println!("cargo:rerun-if-changed=third_party/spdlog/include/");
+// External dependencies no longer needed
 
 // Check if executable exists and is newer than sources
 if exe_path.exists() {

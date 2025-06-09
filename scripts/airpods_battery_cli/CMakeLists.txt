@@ -6,7 +6,6 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Find required packages (optional for standalone build)
-# find_package(spdlog CONFIG REQUIRED)
 # find_package(nlohmann_json CONFIG REQUIRED)
 
 # Common compile options for Windows/MSVC
