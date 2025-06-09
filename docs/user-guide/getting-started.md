@@ -1,49 +1,85 @@
-# Getting Started with RustPods
+# RustPods Deployment and Configuration Guide
 
-This guide will help you get RustPods up and running on your system.
+## System Overview
+
+RustPods provides enterprise-grade AirPods battery monitoring capabilities for Windows environments. This guide establishes the procedures for system deployment, configuration, and operational management.
 
 ## System Requirements
 
-- Windows 10 or later
-- Bluetooth adapter with Bluetooth Low Energy (BLE) support
-- Apple AirPods (any generation) or compatible wireless earbuds
+### Platform Specifications
+- **Operating System**: Windows 10 (Build 1903) or later
+- **Bluetooth Stack**: Bluetooth Low Energy (BLE) 4.0+ compliant adapter
+- **Supported Hardware**: Apple AirPods (all generations), Apple Beats wireless audio devices
 
-## Installation
+### Hardware Prerequisites
+- Active Bluetooth LE capability with Windows-certified drivers
+- Minimum 50MB available disk space for application binaries
+- Network connectivity for initial deployment (if downloading from repository)
 
-1. Download the latest release from the [GitHub Releases page](https://github.com/Jay1/RustPods/releases)
-2. Extract the ZIP file to a location of your choice
-3. Run `RustPods.exe` to start the application
+## Deployment Procedures
 
-*Note: No installation is required. RustPods is a portable application that can run from any location.*
+### Binary Distribution Deployment
+1. Obtain the latest release artifact from the [official repository releases](https://github.com/Jay1/RustPods/releases)
+2. Extract the distribution archive to the designated deployment directory
+3. Execute `RustPods.exe` to initialize the application runtime
 
-## First Run Setup
+**Note**: RustPods operates as a portable application requiring no system-level installation or registry modifications.
 
-When you first launch RustPods:
+## Configuration and Initialization
 
-1. The application will start in the system tray
-2. Click the RustPods icon in the system tray to open the main window
-3. RustPods will automatically detect all paired Bluetooth devices, including AirPods, and display them in the UI
-4. Ensure your AirPods case is open or your AirPods are out of the case to make them discoverable for battery info
+### Initial System Configuration
+Upon first execution, RustPods performs the following initialization sequence:
 
-## Connecting to AirPods
+1. **System Tray Integration**: Application registers with the Windows system tray for persistent operation
+2. **Bluetooth Stack Enumeration**: Automatic discovery and cataloging of paired Bluetooth devices
+3. **Device Registry Population**: Detection and registration of compatible Apple audio devices
+4. **Battery Monitoring Activation**: Initiation of real-time battery status monitoring for detected devices
 
-1. Make sure your AirPods are paired with your Windows device through the Windows Bluetooth settings
-2. Open the main RustPods window by clicking the tray icon
-3. When your AirPods appear in the list, select them to view battery levels and status
-4. RustPods will display the battery levels for your AirPods and case automatically
+### Operational Interface Access
+- Access the primary interface through the system tray icon
+- Device management and configuration options are available through the main application window
+- Real-time battery status updates display automatically for active devices
 
-## Troubleshooting
+## Device Integration Procedures
 
-If your AirPods aren't detected:
+### AirPods Connectivity Configuration
+1. **Prerequisites**: Ensure AirPods are properly paired through Windows Bluetooth configuration
+2. **Device Discovery**: Open the RustPods main interface via system tray icon
+3. **Status Verification**: Confirm device appearance in the monitored devices list
+4. **Battery Monitoring**: Real-time battery levels display automatically for charging case and individual earbuds
 
-1. Ensure your AirPods are paired with Windows
-2. Open the AirPods case or take the AirPods out of the case
-3. Make sure your Bluetooth adapter is working properly
-4. Try restarting the RustPods application
-5. Check the "Settings" section for advanced configuration options
+### Operational Considerations
+- Maintain AirPods case in open position or earbuds in active state for optimal battery data accuracy
+- Device proximity of 10 meters or less recommended for reliable Bluetooth Low Energy communication
+- Battery status updates occur at system-defined intervals to optimize power consumption
 
-## Next Steps
+## Diagnostic and Troubleshooting
 
-- Explore the application settings to customize RustPods to your preferences
-- Check the [main documentation](../README.md) for more information
-- Visit the [GitHub repository](https://github.com/Jay1/RustPods) for issues and updates 
+### Device Detection Issues
+**Symptom**: AirPods not appearing in monitored device list
+
+**Resolution Procedures**:
+1. Verify Windows Bluetooth pairing status through system settings
+2. Confirm AirPods case open state or earbud active status
+3. Validate Bluetooth adapter operational status and driver integrity
+4. Restart RustPods application to reinitialize device discovery
+5. Access Settings interface for advanced configuration parameters
+
+### Performance Optimization
+For optimal system performance:
+- Ensure Bluetooth adapter drivers are current
+- Maintain clear line-of-sight between devices and Bluetooth adapter
+- Monitor system resources if running concurrent Bluetooth applications
+
+## System Administration
+
+### Configuration Management
+Advanced configuration options are accessible through the Settings interface, providing control over:
+- Monitoring interval configuration
+- System integration preferences  
+- Battery threshold alerting parameters
+
+### Support Resources
+- **Technical Documentation**: [Complete documentation suite](../README.md)
+- **Issue Reporting**: [GitHub repository issue tracking](https://github.com/Jay1/RustPods)
+- **Security Considerations**: Review security policies before enterprise deployment 

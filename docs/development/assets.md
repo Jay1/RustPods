@@ -1,105 +1,120 @@
-# Asset Management in RustPods
+# Asset Management System Architecture
 
-This guide explains how assets are organized and used in the RustPods application.
+## System Overview
 
-## Directory Structure
+This document defines the asset management architecture for RustPods, establishing protocols for resource allocation, binary embedding, and runtime asset access within the application framework.
 
+## Asset Organization Architecture
+
+### Resource Directory Structure
 ```
 assets/
 ├── icons/
-│   ├── app/          - Application icons
-│   │   ├── logo_ring.png - Main application logo (ring design)
-│   │   ├── logo_ring.ico - Application icon (ring design)
-│   │   ├── battery_ring_80_percent.svg - Battery ring logo for README
-│   │   ├── icon_256.ico - 256x256 app icon
-│   │   └── icon_128.ico - 128x128 app icon
-│   ├── tray/         - System tray icons
-│   │   ├── rustpods-tray-dark-connected.ico    - Dark theme, connected
-│   │   ├── rustpods-tray-dark-disconnected.ico - Dark theme, disconnected
-│   │   ├── rustpods-tray-light-connected.ico   - Light theme, connected
-│   │   └── rustpods-tray-light-disconnected.ico - Light theme, disconnected
-│   └── ui/           - UI elements (SVG icons)
-└── README.md         - Asset documentation
+│   ├── app/          # Application identity assets
+│   │   ├── logo_ring.png                    # Primary brand identity (ring design)
+│   │   ├── logo_ring.ico                    # Windows application icon (ring design)
+│   │   ├── battery_ring_80_percent.svg      # Repository documentation asset
+│   │   ├── icon_256.ico                     # High-resolution application icon
+│   │   └── icon_128.ico                     # Standard-resolution application icon
+│   ├── tray/         # System tray integration assets
+│   │   ├── rustpods-tray-dark-connected.ico     # Dark UI theme, connected state
+│   │   ├── rustpods-tray-dark-disconnected.ico  # Dark UI theme, disconnected state
+│   │   ├── rustpods-tray-light-connected.ico    # Light UI theme, connected state
+│   │   └── rustpods-tray-light-disconnected.ico # Light UI theme, disconnected state
+│   └── ui/           # User interface component assets (SVG vector graphics)
 ```
 
-## Asset Implementation
+## Binary Embedding Framework
 
-Assets are embedded into the application binary using Rust's `include_bytes!` macro. The `src/assets.rs` module provides access to all assets:
+### Asset Integration Implementation
+RustPods employs Rust's compile-time asset embedding through the `include_bytes!` macro, ensuring zero-dependency resource deployment and eliminating external file dependencies.
 
 ```rust
-// src/assets.rs
+// Asset Management Module: src/assets.rs
 pub mod app {
+    /// Primary application brand identity asset
     pub const LOGO: &[u8] = include_bytes!("../assets/icons/app/logo_ring.png");
+    /// High-resolution Windows application icon
     pub const ICON_256: &[u8] = include_bytes!("../assets/icons/app/logo_ring.ico");
+    /// Standard-resolution Windows application icon  
     pub const ICON_128: &[u8] = include_bytes!("../assets/icons/app/logo_ring.ico");
 }
 
 pub mod tray {
+    /// System tray icon: Dark theme, connected state
     pub const DARK_CONNECTED: &[u8] = include_bytes!("../assets/icons/tray/rustpods-tray-dark-connected.ico");
+    /// System tray icon: Dark theme, disconnected state
     pub const DARK_DISCONNECTED: &[u8] = include_bytes!("../assets/icons/tray/rustpods-tray-dark-disconnected.ico");
+    /// System tray icon: Light theme, connected state
     pub const LIGHT_CONNECTED: &[u8] = include_bytes!("../assets/icons/tray/rustpods-tray-light-connected.ico");
+    /// System tray icon: Light theme, disconnected state
     pub const LIGHT_DISCONNECTED: &[u8] = include_bytes!("../assets/icons/tray/rustpods-tray-light-disconnected.ico");
 }
 
 pub mod ui {
-    // UI-specific assets would go here
+    // Vector graphics and UI component assets are defined here
 }
 ```
 
-## Using Assets in Code
+## Runtime Asset Access Protocols
 
-Assets can be accessed from any part of the application as follows:
+### Asset Consumption Framework
+Application components access embedded assets through standardized import and reference patterns:
 
 ```rust
-// Import the assets module
+// Asset module import
 use crate::assets;
 
-// Access application logo
+// Application identity asset access
 let logo_bytes = assets::app::LOGO;
 
-// Access tray icons
+// System tray asset access for state indication
 let tray_icon = assets::tray::DARK_CONNECTED;
 ```
 
-In the SystemTray implementation, icons are provided to the tray-item crate:
+### System Tray Integration Implementation
+System tray components utilize the asset management framework for dynamic icon state representation:
 
 ```rust
+// System tray icon provisioning
 IconSource::Data {
     data: crate::assets::tray::DARK_CONNECTED.to_vec(),
 }
 ```
 
-## Asset Requirements
+## Asset Specification Standards
 
-### System Tray Icons
-- Format: ICO
-- Size: 16x16 pixels for standard Windows tray icons
-- Variations needed:
-  - Dark theme (for light backgrounds)
-  - Light theme (for dark backgrounds)
-  - Connected state
-  - Disconnected state
+### System Tray Icon Requirements
+- **Format**: ICO (Windows Icon format)
+- **Resolution**: 16×16 pixels (standard Windows system tray specification)
+- **State Variations**: Connected/disconnected operational states
+- **Theme Variations**: Dark/light theme compatibility for Windows UI integration
 
-### Application Icons
-- Main logo: PNG format, high resolution
-- Windows icons: ICO format, multiple sizes (recommended: 16x16, 32x32, 48x48, 256x256)
+### Application Icon Requirements
+- **Primary Logo**: PNG format, vector-scalable resolution
+- **Windows Icons**: ICO format with multi-resolution embedding (16×16, 32×32, 48×48, 256×256)
+- **Brand Consistency**: Maintains visual identity standards across all application touchpoints
 
-## Adding New Assets
+## Asset Development Workflow
 
-1. Place new assets in the appropriate directory
-2. Update `src/assets.rs` to include the new asset
-3. Use the asset in your code by referencing it from the assets module
+### New Asset Integration Procedure
+1. **Asset Placement**: Deploy new assets within the appropriate directory structure
+2. **Module Registration**: Update `src/assets.rs` with new asset constant definitions
+3. **Implementation Integration**: Reference assets through the standardized assets module import pattern
 
-## Updating Existing Assets
+### Asset Update Management
+1. **File Replacement**: Replace existing assets while maintaining filename consistency for compatibility
+2. **Binary Recompilation**: Execute build process to embed updated assets into application binary
+3. **Validation**: Verify asset integration through application testing protocols
 
-1. Replace the existing file with the new version
-2. Keep the same filename to maintain compatibility
-3. Rebuild the application to embed the updated asset
+## Visual Design Standards
 
-## Icon Design Guidelines
+### Icon Design Framework
+- **System Tray Icons**: Optimized for small-scale recognition and clarity at 16×16 pixel resolution
+- **Connection State Indication**: Clear visual differentiation between connected and disconnected operational states
+- **Theme Integration**: Appropriate contrast ratios for both Windows dark and light UI themes
+- **Brand Cohesion**: Consistent design language alignment with overall application visual identity
+- **Accessibility**: Adequate contrast ratios meeting accessibility standards for users with visual impairments
 
-- System tray icons should be simple and recognizable at small sizes
-- Connected icons should clearly indicate a connection status
-- Disconnected icons should use more muted colors
-- All icons should follow the overall application design language
-- For dark/light themes, ensure appropriate contrast 
+### Asset Quality Assurance
+All assets undergo validation for technical compliance, visual consistency, and operational functionality prior to integration into the production build system. 
