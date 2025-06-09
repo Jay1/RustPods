@@ -12,7 +12,7 @@ fn test_real_time_battery_updates() {
     
     for &level in &levels {
         let _widget = view_circular_battery_widget(level, false);
-        let _icon = battery_icon_display(level, false, 80.0, 20.0);
+        let _icon = battery_icon_display(Some(level), false, 80.0, 20.0);
     }
 }
 
@@ -80,8 +80,8 @@ fn test_critical_battery_levels() {
         let _critical_charging = view_circular_battery_widget(level, true);
         
         // Test corresponding icons
-        let _critical_icon = battery_icon_display(level, false, 80.0, 20.0);
-        let _critical_icon_charging = battery_icon_display(level, true, 80.0, 20.0);
+        let _critical_icon = battery_icon_display(Some(level), false, 80.0, 20.0);
+        let _critical_icon_charging = battery_icon_display(Some(level), true, 80.0, 20.0);
     }
 }
 
@@ -159,7 +159,7 @@ fn test_edge_case_values() {
         let _widget_charging = view_circular_battery_widget(level, true);
         
         // Test with different icon sizes
-        let _small_icon = battery_icon_display(level, false, 40.0, 15.0);
-        let _large_icon = battery_icon_display(level, true, 120.0, 45.0);
+        let _small_icon = battery_icon_display(Some(level), false, 40.0, 15.0);
+        let _large_icon = battery_icon_display(Some(level), true, 120.0, 45.0);
     }
 }

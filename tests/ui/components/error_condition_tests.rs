@@ -183,9 +183,9 @@ fn test_invalid_input_handling() {
     let _widget_max = view_circular_battery_widget(255, true); // Should clamp
     
     // Test battery icon with invalid dimensions
-    let _icon_zero_width = battery_icon_display(50, false, 0.0, 10.0);
-    let _icon_zero_height = battery_icon_display(50, false, 10.0, 0.0);
-    let _icon_negative = battery_icon_display(50, false, -10.0, -10.0);
+    let _icon_zero_width = battery_icon_display(Some(50), false, 0.0, 10.0);
+    let _icon_zero_height = battery_icon_display(Some(50), false, 10.0, 0.0);
+    let _icon_negative = battery_icon_display(Some(50), false, -10.0, -10.0);
     
     assert!(true); // Placeholder for input validation testing
 }
@@ -236,7 +236,7 @@ fn test_critical_error_recovery() {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    // Tests are organized in this module
 
     #[test]
     fn test_error_condition_test_suite() {

@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
+    // Tests are organized in this module
     use rustpods::ui::components::{refresh_icon_svg_string, battery_icon_svg_string};
 
     #[test]

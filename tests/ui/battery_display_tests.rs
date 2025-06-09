@@ -73,14 +73,14 @@ fn test_battery_icon_dimensions() {
 #[test]
 fn test_battery_icon_edge_dimensions() {
     // Test zero dimensions
-    let _zero_width = battery_icon_display(50, false, 0.0, 20.0);
-    let _zero_height = battery_icon_display(50, false, 20.0, 0.0);
+    let _zero_width = battery_icon_display(Some(50), false, 0.0, 20.0);
+    let _zero_height = battery_icon_display(Some(50), false, 20.0, 0.0);
     
     // Test small dimensions
-    let _small_icon = battery_icon_display(30, true, 10.0, 5.0);
+    let _small_icon = battery_icon_display(Some(30), true, 10.0, 5.0);
     
     // Test large dimensions
-    let _large_icon = battery_icon_display(80, false, 200.0, 100.0);
+    let _large_icon = battery_icon_display(Some(80), false, 200.0, 100.0);
 }
 
 /// Test battery widget performance with many creations
@@ -104,7 +104,7 @@ fn test_battery_display_consistency() {
         let _widget_charging = view_circular_battery_widget(level, true);
         
         // Test corresponding battery icons
-        let _icon = battery_icon_display(level, false, 80.0, 20.0);
-        let _icon_charging = battery_icon_display(level, true, 80.0, 20.0);
+        let _icon = battery_icon_display(Some(level), false, 80.0, 20.0);
+        let _icon_charging = battery_icon_display(Some(level), true, 80.0, 20.0);
     }
 }

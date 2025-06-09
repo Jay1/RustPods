@@ -11,8 +11,7 @@ use rustpods::airpods::{AirPodsBattery, AirPodsType, DetectedAirPods};
 use rustpods::bluetooth::DiscoveredDevice;
 use rustpods::ui::components::{view_circular_battery_widget, battery_icon_display};
 use rustpods::ui::state::AppState;
-use rustpods::ui::theme::Theme;
-use rustpods::ui::{Message, UiComponent};
+// UI rendering tests
 
 /// Test that the circular battery widget renders correctly with different levels
 #[test]
@@ -26,10 +25,10 @@ fn test_circular_battery_widget_rendering() {
 /// Test that battery icon display renders correctly
 #[test]
 fn test_battery_icon_display_rendering() {
-    let _icon_display = battery_icon_display(75, false, 80.0, 0.0);
-    let _icon_charging = battery_icon_display(50, true, 100.0, 20.0);
-    let _icon_low = battery_icon_display(10, false, 60.0, 0.0);
-    let _icon_full = battery_icon_display(100, false, 80.0, 0.0);
+    let _icon_display = battery_icon_display(Some(75), false, 80.0, 0.0);
+    let _icon_charging = battery_icon_display(Some(50), true, 100.0, 20.0);
+    let _icon_low = battery_icon_display(Some(10), false, 60.0, 0.0);
+    let _icon_full = battery_icon_display(Some(100), false, 80.0, 0.0);
 }
 
 /// Test device filtering for paired devices only
@@ -189,7 +188,7 @@ fn test_battery_icon_dimensions() {
     let dimensions = [(50.0, 20.0), (80.0, 30.0), (100.0, 40.0)];
     
     for &(width, height) in &dimensions {
-        let _icon = battery_icon_display(75, false, width, height);
+        let _icon = battery_icon_display(Some(75), false, width, height);
     }
 }
 
@@ -205,6 +204,6 @@ fn test_widget_edge_cases() {
     let _full_charging = view_circular_battery_widget(100, true);
     
     // Test battery icon with zero dimensions
-    let _zero_width = battery_icon_display(50, false, 0.0, 20.0);
-    let _zero_height = battery_icon_display(50, false, 20.0, 0.0);
+    let _zero_width = battery_icon_display(Some(50), false, 0.0, 20.0);
+    let _zero_height = battery_icon_display(Some(50), false, 20.0, 0.0);
 }

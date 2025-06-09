@@ -223,8 +223,8 @@ fn test_theme_consistency() {
     let _widget_charging = view_circular_battery_widget(50, true);
     
     // Test battery icons
-    let _icon_display = battery_icon_display(60, false, 80.0, 0.0);
-    let _icon_charging = battery_icon_display(60, true, 80.0, 0.0);
+    let _icon_display = battery_icon_display(Some(60), false, 80.0, 0.0);
+    let _icon_charging = battery_icon_display(Some(60), true, 80.0, 0.0);
     
     assert!(true); // Placeholder for theme consistency verification
 }
@@ -260,7 +260,7 @@ fn test_responsive_component_interaction() {
     let sizes = [(100.0, 100.0), (200.0, 150.0), (300.0, 200.0)];
     
     for &(width, height) in &sizes {
-        let _icon = battery_icon_display(75, false, width, height);
+        let _icon = battery_icon_display(Some(75), false, width, height);
     }
     
     let _element = window.view();
@@ -285,7 +285,7 @@ fn test_component_performance() {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    // Tests are organized in this module
 
     #[test]
     fn test_component_interaction_test_suite() {

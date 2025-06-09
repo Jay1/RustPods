@@ -6,7 +6,7 @@
 use rustpods::config::AppConfig;
 use rustpods::ui::state::MergedBluetoothDevice;
 use rustpods::ui::{theme::Theme, MainWindow, UiComponent};
-use iced::Element;
+// Integration tests for UI components
 
 /// Test complete AirPods detection and display workflow
 #[test]

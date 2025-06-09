@@ -105,7 +105,7 @@ fn test_battery_level_announcements() {
     let _charging_widget = view_circular_battery_widget(50, true);
     
     // Test battery icon displays
-    let _icon_display = battery_icon_display(75, false, 80.0, 0.0);
+    let _icon_display = battery_icon_display(Some(75), false, 80.0, 0.0);
     
     assert!(true); // Placeholder for more detailed accessibility testing
 }
@@ -204,7 +204,7 @@ fn test_state_transition_accessibility() {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    // Tests are organized in this module
 
     #[test]
     fn test_accessibility_test_suite() {
