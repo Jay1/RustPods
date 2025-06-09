@@ -10,7 +10,7 @@ This guide will help you get RustPods up and running on your system.
 
 ## Installation
 
-1. Download the latest release from the [GitHub Releases page](https://github.com/yourusername/rustpods/releases)
+1. Download the latest release from the [GitHub Releases page](https://github.com/Jay1/RustPods/releases)
 2. Extract the ZIP file to a location of your choice
 3. Run `RustPods.exe` to start the application
 
@@ -44,6 +44,6 @@ If your AirPods aren't detected:
 
 ## Next Steps
 
-- Explore the [Settings](settings.md) to customize RustPods to your preferences
-- Learn about all the [features](usage.md) to get the most out of RustPods
-- Check the [FAQ](../faq.md) for common questions and answers 
+- Explore the application settings to customize RustPods to your preferences
+- Check the [main documentation](../README.md) for more information
+- Visit the [GitHub repository](https://github.com/Jay1/RustPods) for issues and updates 

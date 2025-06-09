@@ -8,7 +8,9 @@ This guide explains how assets are organized and used in the RustPods applicatio
 assets/
 ├── icons/
 │   ├── app/          - Application icons
-│   │   ├── logo.png  - Main application logo
+│   │   ├── logo_ring.png - Main application logo (ring design)
+│   │   ├── logo_ring.ico - Application icon (ring design)
+│   │   ├── battery_ring_80_percent.svg - Battery ring logo for README
 │   │   ├── icon_256.ico - 256x256 app icon
 │   │   └── icon_128.ico - 128x128 app icon
 │   ├── tray/         - System tray icons
@@ -16,7 +18,7 @@ assets/
 │   │   ├── rustpods-tray-dark-disconnected.ico - Dark theme, disconnected
 │   │   ├── rustpods-tray-light-connected.ico   - Light theme, connected
 │   │   └── rustpods-tray-light-disconnected.ico - Light theme, disconnected
-│   └── ui/           - UI elements
+│   └── ui/           - UI elements (SVG icons)
 └── README.md         - Asset documentation
 ```
 
@@ -27,9 +29,9 @@ Assets are embedded into the application binary using Rust's `include_bytes!` ma
 ```rust
 // src/assets.rs
 pub mod app {
-    pub const LOGO: &[u8] = include_bytes!("../assets/icons/app/logo.png");
-    pub const ICON_256: &[u8] = include_bytes!("../assets/icons/app/icon_256.ico");
-    pub const ICON_128: &[u8] = include_bytes!("../assets/icons/app/icon_128.ico");
+    pub const LOGO: &[u8] = include_bytes!("../assets/icons/app/logo_ring.png");
+    pub const ICON_256: &[u8] = include_bytes!("../assets/icons/app/logo_ring.ico");
+    pub const ICON_128: &[u8] = include_bytes!("../assets/icons/app/logo_ring.ico");
 }
 
 pub mod tray {

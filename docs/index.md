@@ -13,7 +13,6 @@ Welcome to the RustPods documentation. This guide will help you understand how t
 - [Testing Best Practices](development/testing-best-practices.md)
 - [Test Coverage Guidelines](development/test-coverage.md)
 - [Manual Testing Guide](development/manual-testing-guide.md)
-- [UI Testing Strategies](development/bulletproof-ui-testing.md)
 - [System Tray Implementation](development/system-tray-implementation.md)
 - [UI Component Patterns](development/ui-components.md)
 - [Assets and Resources](development/assets.md)
