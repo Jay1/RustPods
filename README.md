@@ -1,7 +1,7 @@
 # RustPods
 
 <p align="center">
-  <img src="battery_ring_80_percent.svg" alt="RustPods Logo" width="400">
+  <img src="assets/icons/app/battery_ring_80_percent.svg" alt="RustPods Logo" width="200">
 </p>
 
 <p align="center">
