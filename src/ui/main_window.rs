@@ -2,10 +2,11 @@
 //!
 //! Implements the main UI window component with device list and battery status display.
 
-use iced::widget::svg::Handle;
+use iced::widget::svg::Handle as SvgHandle;
+use iced::widget::image::Handle as ImageHandle;
 use iced::{
     alignment::Horizontal,
-    widget::{button, column, container, row, text, Space, Svg},
+    widget::{button, column, container, image, row, text, Space, Svg},
     Alignment, Command, Element, Length,
 };
 
@@ -159,14 +160,26 @@ impl MainWindow {
         // Custom title bar header (Discord-style)
         let header_row = container(
             row![
-                // App title/brand
-                text("RustPods")
-                    .size(20.0)
-                    .style(crate::ui::theme::TEXT),
+                // App logo and title
+                row![
+                    // App logo icon
+                    container(
+                        image(ImageHandle::from_memory(crate::assets::app::LOGO))
+                            .width(Length::Fixed(24.0))
+                            .height(Length::Fixed(24.0))
+                    )
+                    .padding([0, 8, 0, 0]), // Right padding to separate from text
+                    // App title/brand
+                    text("RustPods")
+                        .size(20.0)
+                        .style(crate::ui::theme::TEXT)
+                ]
+                .align_items(Alignment::Center)
+                .spacing(0),
                 Space::with_width(Length::Fill),
                 // Window controls
                 button(
-                    Svg::new(Handle::from_memory(crate::assets::ui::SETTINGS_ICON))
+                    Svg::new(SvgHandle::from_memory(crate::assets::ui::SETTINGS_ICON))
                         .width(Length::Fixed(21.0))
                         .height(Length::Fixed(21.0))
                 )
@@ -174,7 +187,7 @@ impl MainWindow {
                 .style(crate::ui::theme::settings_button_style())
                 .padding(5),
                 button(
-                    Svg::new(Handle::from_memory(crate::assets::ui::CLOSE_ICON))
+                    Svg::new(SvgHandle::from_memory(crate::assets::ui::CLOSE_ICON))
                         .width(Length::Fixed(21.0))
                         .height(Length::Fixed(21.0))
                 )

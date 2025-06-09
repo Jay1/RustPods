@@ -1,7 +1,7 @@
 # RustPods
 
 <p align="center">
-  <img src="assets/icons/app/logo.png" alt="RustPods Logo" width="400">
+  <img src="assets/icons/app/logo_ring.png" alt="RustPods Logo" width="400">
 </p>
 
 <p align="center">

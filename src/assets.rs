@@ -3,13 +3,13 @@
 /// App icons and images
 pub mod app {
     /// Main application logo (PNG format)
-    pub const LOGO: &[u8] = include_bytes!("../assets/icons/app/logo.png");
+    pub const LOGO: &[u8] = include_bytes!("../assets/icons/app/logo_ring.png");
 
     /// Application icon 256x256 (ICO format)
-    pub const ICON_256: &[u8] = include_bytes!("../assets/icons/app/icon_256.ico");
+    pub const ICON_256: &[u8] = include_bytes!("../assets/icons/app/logo_ring.ico");
 
     /// Application icon 128x128 (ICO format)
-    pub const ICON_128: &[u8] = include_bytes!("../assets/icons/app/icon_128.ico");
+    pub const ICON_128: &[u8] = include_bytes!("../assets/icons/app/logo_ring.ico");
 }
 
 /// System tray icons
