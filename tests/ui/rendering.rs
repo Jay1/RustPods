@@ -6,29 +6,35 @@ use std::time::Instant;
 
 use btleplug::api::BDAddr;
 use iced::Application;
-use iced::Element;
 
 use rustpods::airpods::{AirPodsBattery, AirPodsType, DetectedAirPods};
 use rustpods::bluetooth::DiscoveredDevice;
-use rustpods::ui::components::{BatteryDisplay, DeviceList, Header};
+use rustpods::ui::components::{view_circular_battery_widget, battery_icon_display};
 use rustpods::ui::state::AppState;
 use rustpods::ui::theme::Theme;
 use rustpods::ui::{Message, UiComponent};
 
-/// Test that the battery display renders correctly with different levels
+/// Test that the circular battery widget renders correctly with different levels
 #[test]
-fn test_battery_display_component() {
-    let display = BatteryDisplay::new(Some(75), Some(80), Some(90));
-    let _element: Element<'_, Message, iced::Renderer<Theme>> = display.view();
-    let display = BatteryDisplay::empty();
-    let _element: Element<'_, Message, iced::Renderer<Theme>> = display.view();
-    let display = BatteryDisplay::new(Some(0), Some(100), None);
-    let _element: Element<'_, Message, iced::Renderer<Theme>> = display.view();
+fn test_circular_battery_widget_rendering() {
+    let _widget_75 = view_circular_battery_widget(75, false);
+    let _widget_empty = view_circular_battery_widget(0, false);
+    let _widget_full = view_circular_battery_widget(100, true);
+    let _widget_charging = view_circular_battery_widget(50, true);
 }
 
-/// Test that the device list renders only paired devices
+/// Test that battery icon display renders correctly
 #[test]
-fn test_device_list_paired_only() {
+fn test_battery_icon_display_rendering() {
+    let _icon_display = battery_icon_display(75, false, 80.0, 0.0);
+    let _icon_charging = battery_icon_display(50, true, 100.0, 20.0);
+    let _icon_low = battery_icon_display(10, false, 60.0, 0.0);
+    let _icon_full = battery_icon_display(100, false, 80.0, 0.0);
+}
+
+/// Test device filtering for paired devices only
+#[test]
+fn test_device_filtering_paired_only() {
     let device1 = DiscoveredDevice {
         address: BDAddr::from([1, 2, 3, 4, 5, 6]),
         name: Some("Paired Device".to_string()),
@@ -53,17 +59,13 @@ fn test_device_list_paired_only() {
         services: Vec::new(),
         tx_power_level: None,
     };
+    
     let devices = vec![device1.clone(), device2];
-    let selected = Some(device1.address.to_string());
-    let device_list = DeviceList::new(devices, selected);
-    let _element: Element<'_, Message, iced::Renderer<Theme>> = device_list.view();
-}
-
-/// Test that the header renders correctly
-#[test]
-fn test_header_component() {
-    let header = Header::new();
-    let _element: Element<'_, Message, iced::Renderer<Theme>> = header.view();
+    let paired_devices: Vec<_> = devices.into_iter().filter(|d| d.is_connected).collect();
+    
+    // Only paired devices should be included
+    assert_eq!(paired_devices.len(), 1);
+    assert_eq!(paired_devices[0].address, device1.address);
 }
 
 /// Create test AirPods device with battery info
@@ -92,7 +94,7 @@ fn create_test_airpods(
 
 /// Test AirPods battery info display in the UI
 #[test]
-fn test_airpods_battery_display() {
+fn test_airpods_battery_widget_display() {
     let airpods = create_test_airpods(
         [1, 2, 3, 4, 5, 6],
         Some("My AirPods Pro 2"),
@@ -100,12 +102,18 @@ fn test_airpods_battery_display() {
         Some(92),
         Some(75),
     );
-    let display = BatteryDisplay::new(
-        airpods.battery.as_ref().and_then(|b| b.left),
-        airpods.battery.as_ref().and_then(|b| b.right),
-        airpods.battery.as_ref().and_then(|b| b.case),
-    );
-    let _element: Element<'_, Message, iced::Renderer<Theme>> = display.view();
+    
+    if let Some(battery) = &airpods.battery {
+        if let Some(left) = battery.left {
+            let _left_widget = view_circular_battery_widget(left, false);
+        }
+        if let Some(right) = battery.right {
+            let _right_widget = view_circular_battery_widget(right, false);
+        }
+        if let Some(case) = battery.case {
+            let _case_widget = view_circular_battery_widget(case, true);
+        }
+    }
 }
 
 /// Test AppState overlays: status and toast
@@ -162,4 +170,41 @@ fn test_app_state_device_update_and_select() {
     assert!(state.devices.len() > initial_device_count);
     state.select_device(device.address.to_string());
     assert_eq!(state.selected_device, Some(device.address.to_string()));
+}
+
+/// Test circular widget rendering with various battery levels
+#[test]
+fn test_circular_widget_battery_levels() {
+    let levels = [0, 25, 50, 75, 100];
+    
+    for &level in &levels {
+        let _widget_normal = view_circular_battery_widget(level, false);
+        let _widget_charging = view_circular_battery_widget(level, true);
+    }
+}
+
+/// Test battery icon rendering with various dimensions
+#[test]
+fn test_battery_icon_dimensions() {
+    let dimensions = [(50.0, 20.0), (80.0, 30.0), (100.0, 40.0)];
+    
+    for &(width, height) in &dimensions {
+        let _icon = battery_icon_display(75, false, width, height);
+    }
+}
+
+/// Test widget edge cases
+#[test]
+fn test_widget_edge_cases() {
+    // Test zero battery
+    let _zero_widget = view_circular_battery_widget(0, false);
+    let _zero_charging = view_circular_battery_widget(0, true);
+    
+    // Test full battery
+    let _full_widget = view_circular_battery_widget(100, false);
+    let _full_charging = view_circular_battery_widget(100, true);
+    
+    // Test battery icon with zero dimensions
+    let _zero_width = battery_icon_display(50, false, 0.0, 20.0);
+    let _zero_height = battery_icon_display(50, false, 20.0, 0.0);
 }
