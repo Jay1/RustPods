@@ -29,35 +29,44 @@
 
 RustPods is an open-source application designed for monitoring Apple AirPods and Beats products on Windows platforms. Built with Rust, it provides reliable battery monitoring through implementation of Apple's proprietary Continuity Protocol via Bluetooth Low Energy communication.
 
-## Features
+## Technical Capabilities
 
-- **Real-time battery monitoring** for AirPods and case components
-- **Native user interface** with Catppuccin Mocha theme
-- **Automatic device detection** using Bluetooth LE scanning
-- **System tray integration** for persistent monitoring
-- **Configurable settings** for customization
-- **High-performance architecture** leveraging Rust's memory safety
-- **Apple ecosystem compatibility** - exclusively supports AirPods and Beats products
+- **Battery Status Monitoring**: Real-time telemetry acquisition for individual AirPods and charging case components
+- **Bluetooth LE Integration**: Native Windows Setup API implementation for device enumeration and communication
+- **Apple Continuity Protocol**: Complete parsing implementation for proprietary battery data extraction
+- **System Integration**: Windows system tray interface for persistent background operation
+- **Configuration Management**: Persistent settings storage and user preference handling
+- **Cross-Architecture Support**: Hybrid C++/Rust implementation optimizing performance and maintainability
+- **Device Compatibility**: Exclusive support for Apple AirPods and Beats product lines
 
-## Installation
+
+
+## Deployment
 
 ### Binary Distribution
 
-> **Note:** Official releases are currently in preparation. The repository is in active development.
+> **Note:** Release artifacts are under preparation. Repository contains active development branch.
 
-1. Download the latest release from the [Releases](https://github.com/Jay1/RustPods/releases) page
-2. Extract the archive to desired location
-3. Execute `RustPods.exe` - no installation required
+1. Obtain release archive from [repository releases](https://github.com/Jay1/RustPods/releases)
+2. Extract to designated deployment directory
+3. Execute `RustPods.exe` (portable application requiring no system installation)
 
-### Source Build
+### Source Compilation
 
-Refer to the [Building from Source](#building-from-source) section for compilation instructions.
+Reference [Building from Source](#building-from-source) for complete compilation procedures.
 
-For comprehensive usage documentation, consult the [Getting Started Guide](docs/user-guide/getting-started.md).
+Technical documentation available in [Getting Started Guide](docs/user-guide/getting-started.md).
 
 ## System Requirements
 
-RustPods requires paired AirPods connected to Windows. The application automatically detects discoverable devices when the AirPods case is opened or earbuds are removed.
+**Platform Prerequisites:**
+- Windows 10 (Build 1903) or later
+- Bluetooth Low Energy 4.0+ compatible adapter
+- Apple AirPods paired through Windows Bluetooth configuration
+
+**Operational Requirements:**
+- Active Bluetooth LE capability with Windows-certified drivers
+- AirPods case proximity (open state) or active earbud status for battery telemetry acquisition
 
 ## Architecture
 
@@ -241,21 +250,21 @@ Contributions are accepted following established protocols. Review [CONTRIBUTING
 - Both Rust application and C++ CLI scanner maintain open-source licensing
 - Development guidelines and project architecture documented in contributing guide
 
-## Development Status
+## Implementation Status
 
-**Implemented Features:**
-- Complete Apple Continuity Protocol parsing in native CLI scanner v3.1
-- AirPods battery monitoring with charging state detection
-- Comprehensive AirPods and Beats model support (Pro, Pro 2, Max, Studio Buds, etc.)
-- Modern Rust UI implementation with Iced framework and dark theme
-- System tray integration with configuration persistence
-- JSON data interface between CLI scanner and Rust application
-- Comprehensive build automation for open-source development
+**Completed Components:**
+- Apple Continuity Protocol parsing implementation (CLI scanner v3.1)
+- Battery telemetry acquisition with charging state detection
+- Device compatibility matrix for AirPods and Beats product lines
+- Rust UI framework implementation with Iced architecture
+- Windows system tray integration with persistent configuration
+- JSON data exchange protocol between CLI scanner and Rust application
+- Automated build system for cross-platform development
 
-**Current Development Focus:**
-- Real-time BLE advertisement scanning integration
-- Performance optimization for battery polling protocols
-- Enhanced error handling and user feedback systems
+**Active Development:**
+- BLE advertisement scanning optimization
+- Battery polling protocol performance tuning
+- Error handling and system feedback mechanisms
 
 ## License
 
@@ -263,6 +272,6 @@ Contributions are accepted following established protocols. Review [CONTRIBUTING
 
 Licensed under the MIT License - refer to [LICENSE](LICENSE) file for complete terms.
 
-## Acknowledgements
+## Technical References
 
-This project incorporates foundational work from the [AirPodsDesktop project](https://github.com/SpriteOvO/AirPodsDesktop) by SpriteOvO. The AirPods battery CLI scanner builds upon their open-source implementation of Apple Continuity Protocol parsing. 
+Implementation incorporates architectural foundations from the [AirPodsDesktop project](https://github.com/SpriteOvO/AirPodsDesktop) by SpriteOvO. The CLI scanner component extends their Apple Continuity Protocol parsing implementation. 
