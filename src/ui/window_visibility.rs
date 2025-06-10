@@ -257,23 +257,10 @@ pub fn handle_window_events(
                 }
                 None
             }
-            window::Event::Resized { width, height } => {
-                if visibility_manager.is_visible() {
-                    let mut position =
-                        visibility_manager
-                            .last_position()
-                            .unwrap_or(WindowPosition {
-                                x: bounds.x,
-                                y: bounds.y,
-                                width: *width as f32,
-                                height: *height as f32,
-                            });
-
-                    position.width = *width as f32;
-                    position.height = *height as f32;
-
-                    visibility_manager.last_position = Some(position);
-                }
+            window::Event::Resized { width: _, height: _ } => {
+                // Ignore resize events to prevent unwanted size changes when moving between monitors
+                // with different DPI settings. Our window has fixed dimensions and shouldn't resize.
+                log::debug!("Window resize event ignored to prevent DPI-related sizing issues");
                 None
             }
             _ => None,

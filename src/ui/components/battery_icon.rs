@@ -314,10 +314,10 @@ fn create_circular_battery_svg(level: u8, is_charging: bool) -> String {
     // Clamp level between 0 and 100
     let level = level.min(100);
     
-    // SVG circle parameters
-    let radius = 32.0;
-    let stroke_width = 8.0;
-    let center = 40.0; // SVG center point
+    // SVG circle parameters - increased by 50%
+    let radius = 48.0;  // Was 32.0
+    let stroke_width = 12.0;  // Was 8.0, increased proportionally
+    let center = 60.0; // Was 40.0, SVG center point
     let circumference = 2.0 * std::f32::consts::PI * radius;
     
     // Calculate progress arc length (starting from top, clockwise)
@@ -332,8 +332,8 @@ fn create_circular_battery_svg(level: u8, is_charging: bool) -> String {
     let mut svg = String::new();
     use std::fmt::Write;
     
-    // Start SVG
-    write!(&mut svg, r#"<svg width="80" height="80" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">"#).unwrap();
+    // Start SVG - increased size from 80x80 to 120x120
+    write!(&mut svg, r#"<svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">"#).unwrap();
     
     // Background circle
     write!(&mut svg, 
@@ -349,10 +349,10 @@ fn create_circular_battery_svg(level: u8, is_charging: bool) -> String {
         ).unwrap();
     }
     
-    // Charging lightning bolt icon
+    // Charging lightning bolt icon - scaled and repositioned for larger circle
     if is_charging {
         write!(&mut svg,
-            r#"<path d="M45 30L35 42H42L38 50L50 38H43L47 30Z" fill="{}" stroke="none"/>"#,
+            r#"<path d="M67.5 45L52.5 63H63L56.25 75L75 57H64.5L70.5 45Z" fill="{}" stroke="none"/>"#,
             charging_color
         ).unwrap();
     }
@@ -375,15 +375,15 @@ pub fn view_circular_battery_widget<'a>(
     let svg_string = create_circular_battery_svg(level, is_charging);
     let svg_bytes = svg_string.into_bytes();
     let svg_element = Svg::new(iced::widget::svg::Handle::from_memory(svg_bytes))
-        .width(Length::Fixed(80.0))
-        .height(Length::Fixed(80.0));
+        .width(Length::Fixed(120.0))  // Increased from 80.0 to 120.0
+        .height(Length::Fixed(120.0)); // Increased from 80.0 to 120.0
 
     // Create the main container with fixed dimensions
     let main_container = container(
         column![
             // Circular battery progress indicator
             svg_element,
-            // Battery percentage text
+            // Battery percentage text (keeping same size as requested)
             text(format!("{}%", level))
                 .size(24)
                 .style(text_color)
@@ -391,8 +391,8 @@ pub fn view_circular_battery_widget<'a>(
         .spacing(10)
         .align_items(Alignment::Center)
     )
-    .width(Length::Fixed(160.0))
-    .height(Length::Fixed(160.0))
+    .width(Length::Fixed(200.0))     // Increased from 160.0 to accommodate larger ring
+    .height(Length::Fixed(200.0))    // Increased from 160.0 to accommodate larger ring
     .style(iced::theme::Container::Custom(Box::new(
         move |_: &iced::Theme| container::Appearance {
             background: Some(bg_color.into()),

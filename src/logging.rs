@@ -24,7 +24,6 @@ static INIT_LOGGER: Once = Once::new();
 
 /// Debug flag categories for selective logging
 #[derive(Debug, Clone)]
-#[derive(Default)]
 pub struct DebugFlags {
     pub ui: bool,        // UI events, window management, system tray
     pub bluetooth: bool, // Bluetooth scanning, device discovery, CLI scanner
@@ -34,6 +33,25 @@ pub struct DebugFlags {
     pub all: bool,       // Enable all debug output
 }
 
+impl DebugFlags {
+    /// Check if any debug flags are enabled
+    pub fn any_enabled(&self) -> bool {
+        self.ui || self.bluetooth || self.airpods || self.config || self.system || self.all
+    }
+}
+
+impl Default for DebugFlags {
+    fn default() -> Self {
+        Self {
+            ui: false,
+            bluetooth: false,
+            airpods: false,
+            config: false,
+            system: false,
+            all: false,
+        }
+    }
+}
 
 /// Global debug flags storage
 static DEBUG_FLAGS: RwLock<DebugFlags> = RwLock::new(DebugFlags {
@@ -226,25 +244,41 @@ pub fn should_log_debug(module_path: &str) -> bool {
             return true;
         }
 
-        // Check module path against debug categories
-        if module_path.contains("::ui")
+        // Check module path against debug categories - improved matching
+        // UI category: ui module, system_tray, window management
+        if module_path.contains("ui") 
             || module_path.contains("system_tray")
             || module_path.contains("window")
+            || module_path.contains("main_window")
+            || module_path.contains("state")  // state.rs is in ui module
         {
             return flags.ui;
         }
-        if module_path.contains("::bluetooth")
+        
+        // Bluetooth category: bluetooth module, CLI scanner, adapters
+        if module_path.contains("bluetooth")
             || module_path.contains("cli_scanner")
             || module_path.contains("adapter")
+            || module_path.contains("peripheral")
         {
             return flags.bluetooth;
         }
-        if module_path.contains("::airpods") || module_path.contains("battery") {
+        
+        // AirPods category: airpods module, battery info
+        if module_path.contains("airpods") 
+            || module_path.contains("battery")
+        {
             return flags.airpods;
         }
-        if module_path.contains("::config") || module_path.contains("validation") {
+        
+        // Config category: config module, validation
+        if module_path.contains("config") 
+            || module_path.contains("validation")
+        {
             return flags.config;
         }
+        
+        // System category: lifecycle, persistence, telemetry, diagnostics
         if module_path.contains("lifecycle")
             || module_path.contains("persistence")
             || module_path.contains("telemetry")

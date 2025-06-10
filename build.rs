@@ -8,14 +8,33 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+use std::path::Path;
+
+#[cfg(target_os = "windows")]
+extern crate winres;
 
 fn main() {
+    // Compile Windows resource file to embed icon and version info
+    #[cfg(target_os = "windows")]
+    {
+        let mut res = winres::WindowsResource::new();
+        res.set_icon("assets/icons/app/logo_ring.ico")
+           .set_version_info(winres::VersionInfo::PRODUCTVERSION, 0x0001000000000000)
+           .set_manifest_file("app.rc");
+        if let Err(e) = res.compile() {
+            println!("cargo:warning=Failed to compile Windows resources: {}", e);
+        }
+    }
+
     // Only build CLI scanner on Windows (target functionality)
     if cfg!(target_os = "windows") {
         build_cli_scanner();
     } else {
         println!("cargo:warning=CLI scanner only available on Windows - skipping build");
     }
+
+    // Setup automatic CLI scanner copying
+    setup_cli_scanner_distribution();
 }
 
 fn build_cli_scanner() {
@@ -274,5 +293,65 @@ fn is_path_newer_than(
         Ok(false)
     } else {
         Ok(false) // Path doesn't exist
+    }
+}
+
+fn setup_cli_scanner_distribution() {
+    let out_dir = env::var("OUT_DIR").unwrap();
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+    
+    // Source CLI scanner path
+    let cli_scanner_path = Path::new(&manifest_dir)
+        .join("scripts")
+        .join("airpods_battery_cli")
+        .join("build")
+        .join("Release")
+        .join("airpods_battery_cli.exe");
+    
+    println!("cargo:rerun-if-changed=scripts/airpods_battery_cli/build/Release/airpods_battery_cli.exe");
+    
+    if cli_scanner_path.exists() {
+        // Create bin directory in project root
+        let bin_dir = Path::new(&manifest_dir).join("bin");
+        if !bin_dir.exists() {
+            std::fs::create_dir_all(&bin_dir).unwrap_or_else(|e| {
+                println!("cargo:warning=Failed to create bin directory: {}", e);
+            });
+        }
+        
+        // Copy CLI scanner to bin/
+        let bin_target = bin_dir.join("airpods_battery_cli.exe");
+        if let Err(e) = std::fs::copy(&cli_scanner_path, &bin_target) {
+            println!("cargo:warning=Failed to copy CLI scanner to bin/: {}", e);
+        } else {
+            println!("cargo:warning=CLI scanner copied to bin/airpods_battery_cli.exe");
+        }
+        
+        // Also copy to target/release for direct distribution
+        if let Ok(target_dir) = env::var("CARGO_TARGET_DIR") {
+            let release_dir = Path::new(&target_dir).join("release");
+            if release_dir.exists() {
+                let release_target = release_dir.join("airpods_battery_cli.exe");
+                if let Err(e) = std::fs::copy(&cli_scanner_path, &release_target) {
+                    println!("cargo:warning=Failed to copy CLI scanner to target/release: {}", e);
+                } else {
+                    println!("cargo:warning=CLI scanner copied to target/release/airpods_battery_cli.exe");
+                }
+            }
+        } else {
+            // Fallback to default target directory
+            let default_target = Path::new(&manifest_dir).join("target").join("release");
+            if default_target.exists() {
+                let release_target = default_target.join("airpods_battery_cli.exe");
+                if let Err(e) = std::fs::copy(&cli_scanner_path, &release_target) {
+                    println!("cargo:warning=Failed to copy CLI scanner to target/release: {}", e);
+                } else {
+                    println!("cargo:warning=CLI scanner copied to target/release/airpods_battery_cli.exe");
+                }
+            }
+        }
+    } else {
+        println!("cargo:warning=CLI scanner not found at expected path: {}", cli_scanner_path.display());
+        println!("cargo:warning=Make sure to build the CLI scanner first with: cmake --build scripts/airpods_battery_cli/build --config Release");
     }
 }

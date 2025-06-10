@@ -233,6 +233,77 @@ rustpods airpods
 rustpods help
 ```
 
+## Debug and Logging System
+
+RustPods implements a sophisticated configurable logging system that provides clean output by default while offering powerful selective debugging capabilities for developers and troubleshooting.
+
+### Log Levels
+
+**Standard log levels control overall verbosity:**
+```sh
+rustpods --quiet        # Errors only
+rustpods               # Warnings and errors (default)
+rustpods --info        # Info, warnings, and errors
+rustpods --debug       # Debug, info, warnings, and errors
+rustpods --trace       # All log messages
+```
+
+### Debug Categories
+
+**Category-specific debug flags enable targeted debugging without noise from other components:**
+
+```sh
+# Component-specific debugging
+rustpods --debug-ui              # UI events, window management, system tray
+rustpods --debug-bluetooth       # Bluetooth scanning, device discovery, CLI scanner
+rustpods --debug-airpods         # AirPods detection, battery parsing
+rustpods --debug-config          # Configuration loading, saving, validation
+rustpods --debug-system          # System operations, lifecycle, persistence
+
+# Combined debugging
+rustpods --debug-ui --debug-bluetooth    # Multiple categories
+rustpods --debug-all                     # All debug categories
+rustpods -v                              # Same as --debug-all
+
+# Debug with commands
+rustpods --debug-bluetooth scan          # Debug bluetooth during scan
+rustpods --debug-airpods airpods         # Debug AirPods detection
+rustpods --debug-ui                      # Debug UI in normal mode
+```
+
+### Debug Categories Reference
+
+| Category | Purpose | Modules |
+|----------|---------|---------|
+| `--debug-ui` | Window management, system tray operations, UI events | `ui/state.rs`, `ui/system_tray.rs`, `ui/main_window.rs` |
+| `--debug-bluetooth` | Bluetooth adapter discovery, device scanning, CLI scanner | `bluetooth/scanner.rs`, CLI scanner integration |
+| `--debug-airpods` | AirPods device detection, battery parsing | `airpods/detector.rs`, battery parsing logic |
+| `--debug-config` | Configuration loading, validation, settings | `config/mod.rs`, settings management |
+| `--debug-system` | Application lifecycle, persistence, telemetry | Lifecycle, state persistence, diagnostics |
+
+### Practical Debug Examples
+
+```sh
+# Troubleshoot UI issues
+rustpods --debug-ui
+
+# Troubleshoot AirPods not being detected
+rustpods --debug-bluetooth --debug-airpods
+
+# Troubleshoot configuration problems
+rustpods --debug-config
+
+# Full debugging for complex issues
+rustpods --debug-all
+
+# Clean production experience (default)
+rustpods
+```
+
+**Technical Implementation:** The debug logging system uses conditional compilation and atomic flag checking to ensure minimal performance impact when debug categories are disabled. Only warnings and errors are shown by default, providing a professional user experience while maintaining powerful debugging capabilities for development.
+
+For detailed logging implementation guidance, see [Development Documentation](docs/development/logging-best-practices.md).
+
 ## Documentation
 
 Comprehensive documentation available in the [docs](docs/index.md) directory:

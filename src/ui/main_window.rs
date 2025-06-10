@@ -6,7 +6,7 @@ use iced::widget::svg::Handle as SvgHandle;
 use iced::widget::image::Handle as ImageHandle;
 use iced::{
     alignment::Horizontal,
-    widget::{button, column, container, image, row, text, Space, Svg},
+    widget::{button, column, container, image, row, text, Space, Svg, mouse_area},
     Alignment, Command, Element, Length,
 };
 
@@ -142,65 +142,76 @@ impl MainWindow {
 
     // Update the view method to use the helper methods
     fn view_content(&self) -> Element<'_, Message, iced::Renderer<Theme>> {
-        crate::debug_log!(
-            "ui",
-            "MainWindow::view_content: merged_devices.len() = {}",
-            self.merged_devices.len()
-        );
+        crate::debug_log!("ui", "MainWindow::view_content - merged_devices.len() = {}", self.merged_devices.len());
 
         // Always show the battery UI - get device data or use defaults (Left and Right only)
         let (left_battery, right_battery) = if let Some(device) = self.merged_devices.first() {
-            crate::debug_log!("ui", "Showing popup for device: {}", device.name);
+            crate::debug_log!("ui", "Showing UI for device: {} - L:{}% R:{}%", 
+                device.name, 
+                device.left_battery.unwrap_or(0), 
+                device.right_battery.unwrap_or(0)
+            );
             (device.left_battery.unwrap_or(0), device.right_battery.unwrap_or(0))
         } else {
             crate::debug_log!("ui", "No devices found, showing default battery UI with 0% values");
             (0, 0)
         };
 
-        // Custom title bar header (Discord-style)
-        let header_row = container(
-            row![
-                // App logo and title
+        crate::debug_log!(
+            "ui",
+            "MainWindow::view_content: merged_devices.len() = {}",
+            self.merged_devices.len()
+        );
+
+        // Custom title bar header (Discord-style) - make it draggable
+        let header_row = mouse_area(
+            container(
                 row![
-                    // App logo icon
-                    container(
-                        image(ImageHandle::from_memory(crate::assets::app::LOGO))
-                            .width(Length::Fixed(24.0))
-                            .height(Length::Fixed(24.0))
+                    // App logo and title - this area should be draggable
+                    mouse_area(
+                        row![
+                            // App logo icon
+                            container(
+                                image(ImageHandle::from_memory(crate::assets::app::LOGO))
+                                    .width(Length::Fixed(24.0))
+                                    .height(Length::Fixed(24.0))
+                            )
+                            .padding([0, 8, 0, 0]), // Right padding to separate from text
+                            // App title/brand
+                            text("RustPods")
+                                .size(20.0)
+                                .style(crate::ui::theme::TEXT)
+                        ]
+                        .align_items(Alignment::Center)
+                        .spacing(0)
                     )
-                    .padding([0, 8, 0, 0]), // Right padding to separate from text
-                    // App title/brand
-                    text("RustPods")
-                        .size(20.0)
-                        .style(crate::ui::theme::TEXT)
+                    .on_press(Message::WindowDragStart(iced::Point::new(0.0, 0.0))),
+                    Space::with_width(Length::Fill),
+                    // Window controls
+                    button(
+                        Svg::new(SvgHandle::from_memory(crate::assets::ui::SETTINGS_ICON))
+                            .width(Length::Fixed(21.0))
+                            .height(Length::Fixed(21.0))
+                    )
+                    .on_press(Message::OpenSettings)
+                    .style(crate::ui::theme::settings_button_style())
+                    .padding(5),
+                    button(
+                        Svg::new(SvgHandle::from_memory(crate::assets::ui::CLOSE_ICON))
+                            .width(Length::Fixed(21.0))
+                            .height(Length::Fixed(21.0))
+                    )
+                    .on_press(Message::Exit)
+                    .style(crate::ui::theme::close_button_style())
+                    .padding(5)
                 ]
+                .spacing(6)
                 .align_items(Alignment::Center)
-                .spacing(0),
-                Space::with_width(Length::Fill),
-                // Window controls
-                button(
-                    Svg::new(SvgHandle::from_memory(crate::assets::ui::SETTINGS_ICON))
-                        .width(Length::Fixed(21.0))
-                        .height(Length::Fixed(21.0))
-                )
-                .on_press(Message::OpenSettings)
-                .style(crate::ui::theme::settings_button_style())
-                .padding(5),
-                button(
-                    Svg::new(SvgHandle::from_memory(crate::assets::ui::CLOSE_ICON))
-                        .width(Length::Fixed(21.0))
-                        .height(Length::Fixed(21.0))
-                )
-                .on_press(Message::Exit)
-                .style(crate::ui::theme::close_button_style())
-                .padding(5)
-            ]
-            .spacing(6)
-            .align_items(Alignment::Center)
+            )
+            .width(Length::Fill)
+            .padding([8, 12, 8, 12]) // Custom title bar padding
         )
-        .width(Length::Fill)
-        .padding([8, 12, 8, 12]) // Custom title bar padding
-        .style(iced::theme::Container::Box);
+        .on_press(Message::WindowDragStart(iced::Point::new(0.0, 0.0))); // Make entire title bar draggable
 
         // Two-column layout: each battery centered in its half of the window
         let content_row = row![
@@ -260,7 +271,6 @@ impl MainWindow {
         )
         .width(Length::Fill)
         .height(Length::Fill)
-        .style(iced::theme::Container::Box)
         .into()
     }
 

@@ -2,7 +2,6 @@
 name = "rustpods"
 version = "0.1.0"
 edition = "2021"
-default-run = "ui_app"
 
 [dependencies]
 # Core runtime
@@ -69,6 +68,9 @@ mockall = "0.11"
 pretty_assertions = "1.4"
 tempfile = "3.8"
 async-trait = "0.1"
+
+[build-dependencies]
+winres = "0.1"
 
 [lib]
 name = "rustpods"

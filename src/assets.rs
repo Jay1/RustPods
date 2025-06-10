@@ -42,3 +42,9 @@ pub mod ui {
     /// Settings gear icon SVG for settings buttons
     pub const SETTINGS_ICON: &[u8] = include_bytes!("../assets/icons/settings.svg");
 }
+
+/// Font assets
+pub mod fonts {
+    /// SpaceMono Nerd Font Regular (TTF format)
+    pub const SPACE_MONO_NERD_FONT: &[u8] = include_bytes!("../assets/fonts/SpaceMonoNerdFont-Regular.ttf");
+}

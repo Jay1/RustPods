@@ -15,20 +15,21 @@ pub fn run_ui() -> iced::Result {
     // Load the application icon with error handling
     let icon = load_window_icon();
 
-    // Run the Iced application using AppState
+    // Run the Iced application using AppState with fixed window properties
     AppState::run(iced::Settings {
         window: iced::window::Settings {
             size: (DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT),
-            icon,
-            min_size: Some((400, 300)),
-            decorations: false, // Remove default Windows title bar
+            min_size: Some((DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)),
+            max_size: Some((DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)),
+            resizable: false,
+            decorations: false, // Custom title bar
             transparent: false,
-            resizable: true,
+            icon,
             ..Default::default()
         },
         flags: (controller_sender, controller_receiver),
         id: None,
-        default_font: iced::Font::default(),
+        default_font: iced::Font::with_name("SpaceMono Nerd Font"),
         default_text_size: 16.0,
         antialiasing: false,
         exit_on_close_request: false, // Allow custom handling of close requests for system tray

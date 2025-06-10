@@ -53,8 +53,7 @@ pub struct AppArgs {
 }
 
 fn main() {
-    // Initialize logging with WGPU spam filtering
-    init_logging();
+    // Note: Logging is initialized later with the custom RustPodsLogger system
 
     // Parse command line arguments first
     let args = match parse_enhanced_args() {
@@ -78,7 +77,17 @@ fn main() {
     // Override config log level with command line arguments
     config.system.log_level = args.log_level.clone();
 
-    // Initialize structured logging with config settings
+    // Store debug flags globally for use by other modules
+    logging::set_debug_flags(args.debug_flags.clone());
+
+    // Determine effective log level: upgrade to Debug if any debug flags are enabled
+    let effective_log_level = if args.debug_flags.any_enabled() {
+        LogLevel::Debug
+    } else {
+        config.system.log_level.clone()
+    };
+
+    // Initialize structured logging with the effective log level (only called once)
     let log_dir = dirs::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join("RustPods")
@@ -89,9 +98,7 @@ fn main() {
         chrono::Local::now().format("%Y%m%d_%H%M%S")
     ));
 
-    if let Err(e) =
-        logging::configure_logging(config.system.log_level.clone(), Some(log_file), true)
-    {
+    if let Err(e) = logging::configure_logging(effective_log_level, Some(log_file), true) {
         eprintln!("Failed to setup logging: {}", e);
     }
 
@@ -109,9 +116,6 @@ fn main() {
             env!("CARGO_PKG_VERSION")
         );
     }
-
-    // Store debug flags globally for use by other modules
-    logging::set_debug_flags(args.debug_flags.clone());
 
     // Handle StateUI command (deprecated - redirect to new UI)
     if matches!(args.command, AppCommand::StateUI) {
@@ -557,30 +561,4 @@ fn init_logging_from_config(config: &AppConfig) {
     }
 }
 
-fn init_logging() {
-    use std::io::Write;
 
-    env_logger::Builder::from_default_env()
-        .format(|buf, record| {
-            // Suppress WGPU warnings that spam the output without adding value
-            // These are graphics resource lifecycle messages that don't indicate real problems
-            if record.target().starts_with("wgpu_") {
-                return Ok(());
-            }
-
-            writeln!(
-                buf,
-                "[{}] {} [{}:{}] {}",
-                chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f"),
-                record.level(),
-                record.file().unwrap_or("unknown"),
-                record.line().unwrap_or(0),
-                record.args()
-            )
-        })
-        .filter_level(log::LevelFilter::Info) // Default to Info level
-        .filter_module("wgpu_hal", log::LevelFilter::Off) // Suppress WGPU warnings
-        .filter_module("wgpu_core", log::LevelFilter::Off) // Suppress WGPU core warnings
-        .filter_module("winit", log::LevelFilter::Warn) // Reduce winit noise
-        .init();
-}

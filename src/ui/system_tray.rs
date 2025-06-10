@@ -1,18 +1,13 @@
-use tokio::sync::mpsc::UnboundedSender;
-use tray_icon::menu::MenuItem as TrayMenuItem;
-use tray_icon::Icon;
-use tray_icon::{
-    menu::{Menu, MenuEvent},
-    MouseButton, TrayIcon, TrayIconBuilder, TrayIconEvent,
-};
-
-use std::path::Path;
-
 use crate::config::{AppConfig, Theme as ConfigTheme};
-use crate::ui::Message;
-
-use std::sync::Arc;
-use std::sync::Mutex;
+use crate::ui::message::Message;
+use log;
+use std::sync::{Arc, Mutex};
+use tokio::sync::mpsc::UnboundedSender;
+use tray_icon::{
+    menu::{Menu, MenuItem as TrayMenuItem, MenuEvent},
+    Icon, MouseButton, TrayIcon, TrayIconBuilder, TrayIconEvent,
+};
+use image;
 
 /// Menu item configuration
 #[allow(dead_code)]
@@ -58,7 +53,7 @@ pub enum SystemTrayError {
     Tooltip(String),
 
     #[error("IO error: {0}")]
-    IoError(#[from] std::io::Error),
+    IoError(String),
 
     #[error("Image error: {0}")]
     ImageError(String),
@@ -323,7 +318,7 @@ impl SystemTray {
             .map_err(|e| SystemTrayError::MenuItem(format!("Failed to add quit item: {}", e)))?;
 
         // Load initial icon
-        let icon = self.load_icon(false)?;
+        let icon = self.create_icon(false)?;
 
         // Create the tray icon
         let tray = TrayIconBuilder::new()
@@ -411,67 +406,61 @@ impl SystemTray {
     }
 
     /// Load the appropriate icon based on theme and connection status
-    fn load_icon(&self, connected: bool) -> Result<Icon, SystemTrayError> {
-        let icon_filename = match (self.theme_mode, connected) {
-            (ThemeMode::Light, false) => "rustpods-tray-light-disconnected.ico",
-            (ThemeMode::Light, true) => "rustpods-tray-light-connected.ico",
-            (ThemeMode::Dark, false) => "rustpods-tray-dark-disconnected.ico",
-            (ThemeMode::Dark, true) => "rustpods-tray-dark-connected.ico",
+    fn create_icon(&self, connected: bool) -> Result<Icon, SystemTrayError> {
+        // Use embedded assets instead of hardcoded data
+        let icon_bytes = match (self.theme_mode, connected) {
+            (ThemeMode::Light, false) => crate::assets::tray::LIGHT_DISCONNECTED,
+            (ThemeMode::Light, true) => crate::assets::tray::LIGHT_CONNECTED,
+            (ThemeMode::Dark, false) => crate::assets::tray::DARK_DISCONNECTED,
+            (ThemeMode::Dark, true) => crate::assets::tray::DARK_CONNECTED,
         };
 
-        let icon_path = format!("assets/icons/tray/{}", icon_filename);
-
-        log::debug!("Loading tray icon from: {}", icon_path);
-
-        if !Path::new(&icon_path).exists() {
-            log::warn!("Icon file not found: {}, using fallback", icon_path);
-            return self.create_fallback_icon();
+        // Try to load the ICO and convert to RGBA
+        match image::load_from_memory(icon_bytes) {
+            Ok(img) => {
+                let rgba_img = img.to_rgba8();
+                let (width, height) = rgba_img.dimensions();
+                let rgba_data = rgba_img.into_raw();
+                
+                Icon::from_rgba(rgba_data, width, height)
+                    .map_err(|e| SystemTrayError::IoError(format!("Failed to create icon from RGBA: {}", e)))
+            }
+            Err(e) => {
+                log::warn!("Failed to load ICO icon, using fallback: {}", e);
+                self.create_fallback_icon()
+            }
         }
-
-        // Use the correct method to load icon from path
-        let icon = Icon::from_path(&icon_path, Some((32, 32))).map_err(|e| {
-            SystemTrayError::ImageError(format!("Failed to load icon from path: {}", e))
-        })?;
-
-        Ok(icon)
     }
 
     /// Create a simple fallback icon if files are missing
     fn create_fallback_icon(&self) -> Result<Icon, SystemTrayError> {
-        log::info!("Creating fallback icon");
-
-        // Create a simple 32x32 RGBA icon
-        let size = 32u32;
-        let mut rgba_data = Vec::with_capacity((size * size * 4) as usize);
-
+        // Create a simple 16x16 RGBA icon as fallback
+        let size = 16u32;
+        let mut rgba_data = vec![0u8; (size * size * 4) as usize];
+        
+        // Create a simple circle pattern
         for y in 0..size {
             for x in 0..size {
-                // Create a simple circle pattern
-                let center_x = size as f32 / 2.0;
-                let center_y = size as f32 / 2.0;
-                let distance =
-                    ((x as f32 - center_x).powi(2) + (y as f32 - center_y).powi(2)).sqrt();
-
-                if distance < size as f32 / 3.0 {
-                    // Inner circle - blue for connected, gray for disconnected
-                    if self.is_connected {
-                        rgba_data.extend_from_slice(&[70, 130, 255, 255]); // Blue
-                    } else {
-                        rgba_data.extend_from_slice(&[128, 128, 128, 255]); // Gray
-                    }
-                } else if distance < size as f32 / 2.5 {
-                    // Border
-                    rgba_data.extend_from_slice(&[64, 64, 64, 255]); // Dark gray
+                let dx = x as f32 - (size as f32 / 2.0);
+                let dy = y as f32 - (size as f32 / 2.0);
+                let distance = (dx * dx + dy * dy).sqrt();
+                
+                let idx = ((y * size + x) * 4) as usize;
+                if distance <= (size as f32 / 2.0) - 1.0 {
+                    // Inside circle - blue color
+                    rgba_data[idx] = 100;     // R
+                    rgba_data[idx + 1] = 150; // G  
+                    rgba_data[idx + 2] = 255; // B
+                    rgba_data[idx + 3] = 255; // A
                 } else {
-                    // Transparent background
-                    rgba_data.extend_from_slice(&[0, 0, 0, 0]);
+                    // Outside circle - transparent
+                    rgba_data[idx + 3] = 0; // Transparent
                 }
             }
         }
-
-        Icon::from_rgba(rgba_data, size, size).map_err(|e| {
-            SystemTrayError::ImageError(format!("Failed to create fallback icon: {}", e))
-        })
+        
+        Icon::from_rgba(rgba_data, size, size)
+            .map_err(|e| SystemTrayError::IoError(format!("Failed to create fallback icon: {}", e)))
     }
 
     /// Update the tray icon based on connection status
@@ -490,7 +479,7 @@ impl SystemTray {
 
         log::debug!("Updating tray icon for connection status: {}", connected);
 
-        let icon = self.load_icon(connected)?;
+        let icon = self.create_icon(connected)?;
 
         if let Some(ref tray) = self.tray {
             tray.set_icon(Some(icon))

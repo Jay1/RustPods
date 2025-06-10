@@ -129,7 +129,7 @@ fn controller_subscription() -> Subscription<Message> {
                 
                 match message {
                     Some(msg) => {
-                        log::debug!("Controller subscription received message: {:?}", msg);
+                        crate::debug_log!("ui", "Controller subscription received message: {:?}", msg);
                         (msg, ())
                     }
                     None => {
@@ -214,5 +214,10 @@ Key log messages to monitor:
 - "Using Iced window action to hide window"
 - "Window visibility set to true, restoring window from minimized state"
 - "Controller subscription received message"
+
+Use the `--debug-ui` flag to enable system tray debug logging:
+```bash
+rustpods --debug-ui    # Shows UI and system tray debug messages
+```
 
 This strategy provides a robust, maintainable solution that leverages the UI framework's capabilities while ensuring reliable system tray functionality. 

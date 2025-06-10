@@ -1,6 +1,5 @@
 use iced::{executor, Application, Command, Subscription};
 use std::collections::HashMap;
-use std::process::Command as ProcessCommand;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use tokio::sync::{mpsc, Mutex};
@@ -204,10 +203,14 @@ impl Application for AppState {
 
         let app_state = Self::new(controller_sender);
 
-        // Return a command that triggers initial continuous scanning for immediate AirPods detection
-        // This scans until AirPods are found, providing instant responsiveness
-        log::info!("Scheduling initial continuous scanning for immediate AirPods detection");
-        let initial_command = Self::refresh_device_data_command(); // Use the same unified scanning approach
+        // Return a command that triggers initial AirPods scanning for immediate detection
+        log::info!("Scheduling initial AirPods scan on startup");
+        let initial_command = Command::perform(
+            async {
+                tokio::task::spawn_blocking(get_airpods_from_cli_scanner).await.unwrap_or_else(|_| Vec::new())
+            },
+            Message::AirPodsDataLoaded,
+        );
 
         (app_state, initial_command)
     }
@@ -442,13 +445,23 @@ impl Application for AppState {
                 Command::none()
             }
             Message::Tick => {
-                crate::debug_log!("ui", "Tick message received - refreshing device data");
-                // Refresh device data from CLI scanner on each tick using fast command approach
-                Self::refresh_device_data_command()
+                crate::debug_log!("ui", "Tick message received - performing continuous scan");
+                // Use the continuous scanning function for periodic updates
+                Command::perform(
+                    async {
+                        tokio::task::spawn_blocking(get_airpods_from_cli_scanner_continuous).await.unwrap_or_else(|_| Vec::new())
+                    },
+                    Message::AirPodsDataLoaded,
+                )
             }
             Message::AirPodsDataLoaded(airpods_data) => {
                 // Handle the result of the async AirPods data loading
                 log::info!("AirPods data loaded: {} devices found", airpods_data.len());
+                crate::debug_log!("airpods", "AirPods data loaded: {} devices found", airpods_data.len());
+                for (i, device) in airpods_data.iter().enumerate() {
+                    crate::debug_log!("airpods", "Device {}: {} - L:{}% R:{}% C:{}%", 
+                        i, device.name, device.left_battery, device.right_battery, device.case_battery);
+                }
 
                 // Update the state with the loaded AirPods data
                 self.airpods_devices = airpods_data;
@@ -459,8 +472,21 @@ impl Application for AppState {
 
                 Command::none()
             }
+            // Window drag handling
+            Message::WindowDragStart(_point) => {
+                crate::debug_log!("ui", "Window drag started");
+                iced::window::drag()
+            }
+            Message::WindowDragEnd => {
+                crate::debug_log!("ui", "Window drag ended");
+                Command::none()
+            }
+            Message::WindowDragMove(_point) => {
+                // Handle window drag move if needed
+                Command::none()
+            }
             _ => {
-                log::debug!("Unhandled message in state.rs");
+                crate::debug_log!("ui", "Unhandled message in state.rs: {:?}", std::any::type_name::<Message>());
                 Command::none()
             }
         }
@@ -483,8 +509,8 @@ impl Application for AppState {
         use iced::time;
         use std::time::Duration;
 
-        // Timer for periodic CLI scanner updates (every 30 seconds)
-        let timer = time::every(Duration::from_secs(30)).map(|_| Message::Tick);
+        // Timer for periodic CLI scanner updates (every 10 seconds for good responsiveness)
+        let timer = time::every(Duration::from_secs(10)).map(|_| Message::Tick);
 
         // Controller subscription for system tray communication
         let controller_subscription = iced::subscription::unfold(
@@ -799,7 +825,7 @@ impl AppState {
             async {
                 // Always use continuous scanning mode for maximum reliability
                 // This ensures we find AirPods regardless of timing quirks
-                let airpods_data = get_airpods_from_cli_scanner_continuous();
+                let airpods_data = get_airpods_from_cli_scanner();
                 crate::debug_log!(
                     "bluetooth",
                     "CLI scanner returned {} AirPods devices",
@@ -869,93 +895,112 @@ impl AppState {
 
     /// Update the merged devices with the loaded AirPods data
     fn update_merged_devices(&mut self) {
-        // Clear existing merged devices
-        self.merged_devices.clear();
+        crate::debug_log!("ui", "Updating merged devices with {} AirPods devices", self.airpods_devices.len());
+        
+        // Only update merged devices if we have actual AirPods data
+        // This prevents clearing devices when the CLI scanner temporarily returns empty results
+        if !self.airpods_devices.is_empty() {
+            // Clear existing merged devices only when we have new data to replace them
+            self.merged_devices.clear();
 
-        // Update battery estimator with new real data if estimation is enabled
-        if !self.airpods_devices.is_empty() && self.config.battery.enable_estimation {
-            for airpods in &self.airpods_devices {
-                self.battery_estimator.update_real_data(
-                    Some(airpods.left_battery),
-                    Some(airpods.right_battery),
-                    Some(airpods.case_battery),
-                );
+            // Update battery estimator with new real data if estimation is enabled
+            if self.config.battery.enable_estimation {
+                for airpods in &self.airpods_devices {
+                    self.battery_estimator.update_real_data(
+                        Some(airpods.left_battery),
+                        Some(airpods.right_battery),
+                        Some(airpods.case_battery),
+                    );
+                }
+
+                // Save updated battery estimator data to config
+                let (_left_est, _right_est, _case_est) = self.battery_estimator.get_estimated_levels();
+                self.config.battery.left_history = self.battery_estimator.left_history.clone();
+                self.config.battery.right_history = self.battery_estimator.right_history.clone();
+                self.config.battery.case_history = self.battery_estimator.case_history.clone();
             }
 
-            // Save updated battery estimator data to config
-            let (_left_est, _right_est, _case_est) = self.battery_estimator.get_estimated_levels();
-            self.config.battery.left_history = self.battery_estimator.left_history.clone();
-            self.config.battery.right_history = self.battery_estimator.right_history.clone();
-            self.config.battery.case_history = self.battery_estimator.case_history.clone();
-        }
+            // Get estimated battery levels
+            let (left_estimate, right_estimate, case_estimate) = if self.config.battery.enable_estimation {
+                self.battery_estimator.get_display_levels()
+            } else {
+                (None, None, None)
+            };
 
-        // Get estimated battery levels
-        let (left_estimate, right_estimate, case_estimate) = if self.config.battery.enable_estimation {
-            self.battery_estimator.get_display_levels()
-        } else {
-            (None, None, None)
-        };
+            // Add AirPods devices to the merged devices
+            self.merged_devices
+                .extend(self.airpods_devices.iter().map(|airpods| {
+                    crate::debug_log!("airpods", "Converting AirPods device: {} - L:{}% R:{}% C:{}%", 
+                        airpods.name, airpods.left_battery, airpods.right_battery, airpods.case_battery);
+                    
+                    // Use estimated levels if available and enabled, otherwise use raw data
+                    let left_battery = if self.config.battery.enable_estimation {
+                        left_estimate.unwrap_or(airpods.left_battery as u8)
+                    } else {
+                        airpods.left_battery as u8
+                    };
+                    
+                    let right_battery = if self.config.battery.enable_estimation {
+                        right_estimate.unwrap_or(airpods.right_battery as u8)
+                    } else {
+                        airpods.right_battery as u8
+                    };
 
-        // Add AirPods devices to the merged devices
-        self.merged_devices
-            .extend(self.airpods_devices.iter().map(|airpods| {
-                // Use estimated levels if available and enabled, otherwise use raw data
-                let left_battery = if self.config.battery.enable_estimation {
-                    left_estimate.unwrap_or(airpods.left_battery as u8)
-                } else {
-                    airpods.left_battery as u8
-                };
-                
-                let right_battery = if self.config.battery.enable_estimation {
-                    right_estimate.unwrap_or(airpods.right_battery as u8)
-                } else {
-                    airpods.right_battery as u8
-                };
+                    let case_battery = if self.config.battery.enable_estimation {
+                        case_estimate.unwrap_or(airpods.case_battery as u8)
+                    } else {
+                        airpods.case_battery as u8
+                    };
 
-                let case_battery = if self.config.battery.enable_estimation {
-                    case_estimate.unwrap_or(airpods.case_battery as u8)
-                } else {
-                    airpods.case_battery as u8
-                };
+                    crate::debug_log!("airpods", "Final merged device - L:{}% R:{}% C:{}%", 
+                        left_battery, right_battery, case_battery);
 
-                MergedBluetoothDevice {
-                    name: airpods.name.clone(),
-                    address: airpods.address.to_string(),
-                    paired: true,
-                    connected: true,
-                    device_type: DeviceType::AirPods,
-                    battery: Some(left_battery).or(Some(right_battery)),
-                    left_battery: Some(left_battery),
-                    right_battery: Some(right_battery),
-                    case_battery: Some(case_battery),
-                    device_subtype: Some("earbud".to_string()),
-                    left_in_ear: airpods.left_in_ear,
-                    right_in_ear: airpods.right_in_ear,
-                    case_lid_open: airpods.case_lid_open,
-                    side: airpods.side.map(|s| s.to_string()),
-                    both_in_case: airpods.both_in_case,
-                    color: airpods.color.map(|c| c.to_string()),
-                    switch_count: airpods.switch_count.map(|s| s as u8),
-                    is_connected: true,
-                    last_seen: std::time::SystemTime::now(),
-                    rssi: airpods.rssi.map(|r| r as i16),
-                    manufacturer_data: airpods
-                        .raw_manufacturer_data
-                        .clone()
-                        .map(|s| s.into_bytes())
-                        .unwrap_or_default(),
-                }
-            }));
+                    MergedBluetoothDevice {
+                        name: airpods.name.clone(),
+                        address: airpods.address.to_string(),
+                        paired: true,
+                        connected: true,
+                        device_type: DeviceType::AirPods,
+                        battery: Some(left_battery).or(Some(right_battery)),
+                        left_battery: Some(left_battery),
+                        right_battery: Some(right_battery),
+                        case_battery: Some(case_battery),
+                        device_subtype: Some("earbud".to_string()),
+                        left_in_ear: airpods.left_in_ear,
+                        right_in_ear: airpods.right_in_ear,
+                        case_lid_open: airpods.case_lid_open,
+                        side: airpods.side.map(|s| s.to_string()),
+                        both_in_case: airpods.both_in_case,
+                        color: airpods.color.map(|c| c.to_string()),
+                        switch_count: airpods.switch_count.map(|s| s as u8),
+                        is_connected: true,
+                        last_seen: std::time::SystemTime::now(),
+                        rssi: airpods.rssi.map(|r| r as i16),
+                        manufacturer_data: airpods
+                            .raw_manufacturer_data
+                            .clone()
+                            .map(|s| s.into_bytes())
+                            .unwrap_or_default(),
+                    }
+                }));
 
-        // Update the main window with the new merged devices
-        self.main_window.merged_devices = self.merged_devices.clone();
+            // Update the main window with the new merged devices
+            self.main_window.merged_devices = self.merged_devices.clone();
+            crate::debug_log!("ui", "Updated main_window.merged_devices count: {}", self.main_window.merged_devices.len());
 
-        // Set status message based on device count with timing info
-        if self.merged_devices.is_empty() {
-            self.status_message = Some("No AirPods devices found".to_string());
-        } else {
             // Clear status message when devices are found - only keep it for warnings/errors
             self.status_message = None;
+        } else {
+            // If no AirPods data, keep existing merged devices but update status
+            crate::debug_log!("ui", "No AirPods data available, preserving existing {} merged devices", self.merged_devices.len());
+            
+            // Only set "no devices" message if we don't have any existing devices
+            if self.merged_devices.is_empty() {
+                self.status_message = Some("No AirPods devices found".to_string());
+            } else {
+                // Keep existing devices and status, this might be a temporary scan failure
+                crate::debug_log!("ui", "Preserving existing devices during temporary scan failure");
+            }
         }
 
         let estimation_note = if self.config.battery.enable_estimation && !self.merged_devices.is_empty() {
@@ -964,12 +1009,8 @@ impl AppState {
             ""
         };
 
-        crate::debug_log!(
-            "ui",
-            "Total merged devices after async update: {}{}",
-            self.merged_devices.len(),
-            estimation_note
-        );
+        crate::debug_log!("ui", "Total merged devices after async update: {}{}", 
+            self.merged_devices.len(), estimation_note);
     }
 }
 
@@ -1049,13 +1090,55 @@ async fn async_scan_for_airpods() -> Vec<AirPodsBatteryInfo> {
 /// Get AirPods data from the CLI scanner
 #[allow(dead_code)]
 fn get_airpods_from_cli_scanner() -> Vec<AirPodsBatteryInfo> {
-    // Path to the v6 modular CLI scanner executable
-    let cli_path = "scripts/airpods_battery_cli/build/Release/airpods_battery_cli.exe";
+    use std::process::Command as ProcessCommand;
 
-    crate::debug_log!("bluetooth", "Calling CLI scanner at: {}", cli_path);
+    // Get the executable path and its directory
+    let exe_path = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("./rustpods.exe"));
+    let exe_dir = exe_path.parent().unwrap_or_else(|| std::path::Path::new("."));
+    let current_dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    
+    crate::debug_log!("bluetooth", "CLI Scanner Path Resolution Debug");
+    crate::debug_log!("bluetooth", "Executable path: {}", exe_path.display());
+    crate::debug_log!("bluetooth", "Executable directory: {}", exe_dir.display());
+    crate::debug_log!("bluetooth", "Current working directory: {}", current_dir.display());
+    
+    // Try multiple possible locations for the CLI scanner
+    let cli_paths = vec![
+        // 1. Same directory as the executable (most likely when running from target/release)
+        exe_dir.join("airpods_battery_cli.exe"),
+        // 2. bin folder relative to current working directory 
+        current_dir.join("bin").join("airpods_battery_cli.exe"),
+        // 3. bin folder relative to executable directory (if exe is in subdir)
+        exe_dir.join("bin").join("airpods_battery_cli.exe"),
+        // 4. Project root if we're in target/release (go up 2 levels)
+        exe_dir.parent().and_then(|p| p.parent()).map(|project_root| project_root.join("bin").join("airpods_battery_cli.exe")).unwrap_or_default(),
+        // 5. Development location relative to current working directory
+        current_dir.join("scripts").join("airpods_battery_cli").join("build").join("Release").join("airpods_battery_cli.exe"),
+    ];
 
-    match ProcessCommand::new(cli_path)
-        .arg("--fast") // Use ultra-fast 2-second scan with early exit
+    crate::debug_log!("bluetooth", "Trying {} possible CLI scanner locations", cli_paths.len());
+    for (i, path) in cli_paths.iter().enumerate() {
+        crate::debug_log!("bluetooth", "Path {}: {}", i + 1, path.display());
+        crate::debug_log!("bluetooth", "Path {} exists: {}", i + 1, path.exists());
+    }
+
+    // Find the first existing CLI scanner
+    let cli_path = cli_paths.into_iter().find(|path| path.exists());
+    
+    let cli_path = match cli_path {
+        Some(path) => {
+            crate::debug_log!("bluetooth", "Found CLI scanner at: {}", path.display());
+            path
+        }
+        None => {
+            log::error!("No CLI scanner found in any of the expected locations!");
+            return Vec::new();
+        }
+    };
+
+    // Execute CLI scanner
+    match ProcessCommand::new(&cli_path)
+        .arg("--fast")
         .output()
     {
         Ok(output) => {
@@ -1063,203 +1146,191 @@ fn get_airpods_from_cli_scanner() -> Vec<AirPodsBatteryInfo> {
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 crate::debug_log!("bluetooth", "CLI scanner output length: {} chars", stdout.len());
 
-                // Parse the JSON output from the CLI scanner
-                match serde_json::from_str::<crate::bluetooth::cli_scanner::CliScannerResult>(
-                    &stdout,
-                ) {
-                    Ok(scan_result) => {
-                        // Extract AirPods devices from the scan result and convert them
-                        let airpods_devices: Vec<AirPodsBatteryInfo> = scan_result
-                            .devices
-                            .into_iter()
-                            .filter_map(|device| {
-                                if let Some(airpods_data) = device.airpods_data {
-                                    // Parse model_id from hex string (e.g. "0x2014" -> 0x2014)
-                                    let model_id = if let Some(stripped) =
-                                        airpods_data.model_id.strip_prefix("0x")
-                                    {
-                                        u16::from_str_radix(stripped, 16).unwrap_or(0)
-                                    } else {
-                                        airpods_data.model_id.parse::<u16>().unwrap_or(0)
-                                    };
+                // Parse the JSON output
+                if let Ok(cli_result) = serde_json::from_str::<crate::bluetooth::cli_scanner::CliScannerResult>(&stdout) {
+                    let mut airpods_devices = Vec::new();
 
-                                    // Parse address from string to u64
-                                    let address = device.address.parse::<u64>().unwrap_or(0);
+                    for device in &cli_result.devices {
+                        if let Some(airpods_data) = &device.airpods_data {
+                            // Parse address from MAC address string (e.g. "56:4F:9A:2E:2B:96") to u64
+                            let address = device.address
+                                .replace(":", "")
+                                .chars()
+                                .collect::<String>()
+                                .parse::<u64>()
+                                .or_else(|_| {
+                                    // If direct parsing fails, try parsing as hex
+                                    u64::from_str_radix(&device.address.replace(":", ""), 16)
+                                })
+                                .unwrap_or(0);
 
-                                    Some(AirPodsBatteryInfo {
-                                        address,
-                                        name: airpods_data.model,
-                                        model_id,
-                                        left_battery: airpods_data.left_battery,
-                                        left_charging: airpods_data.left_charging,
-                                        right_battery: airpods_data.right_battery,
-                                        right_charging: airpods_data.right_charging,
-                                        case_battery: airpods_data.case_battery,
-                                        case_charging: airpods_data.case_charging,
-                                        left_in_ear: Some(airpods_data.left_in_ear),
-                                        right_in_ear: Some(airpods_data.right_in_ear),
-                                        case_lid_open: Some(airpods_data.lid_open),
-                                        side: None, // Not provided in current CLI output format
-                                        both_in_case: Some(airpods_data.both_in_case),
-                                        color: None, // Not provided in current CLI output format
-                                        switch_count: None, // Not provided in current CLI output format
-                                        rssi: Some(device.rssi),
-                                        timestamp: Some(
-                                            scan_result.scan_timestamp.parse::<u64>().unwrap_or(0),
-                                        ),
-                                        raw_manufacturer_data: Some(device.manufacturer_data_hex),
-                                    })
-                                } else {
-                                    None
-                                }
-                            })
-                            .collect();
+                            let airpods_info = crate::airpods::battery::AirPodsBatteryInfo {
+                                address,
+                                name: airpods_data.model.clone(),
+                                model_id: 0, // Not provided by CLI scanner
+                                left_battery: airpods_data.left_battery,
+                                right_battery: airpods_data.right_battery,
+                                case_battery: airpods_data.case_battery,
+                                left_charging: airpods_data.left_charging,
+                                right_charging: airpods_data.right_charging,
+                                case_charging: airpods_data.case_charging,
+                                left_in_ear: None, // Not provided by CLI scanner
+                                right_in_ear: None, // Not provided by CLI scanner  
+                                case_lid_open: None, // Not provided by CLI scanner
+                                side: None, // Not provided by CLI scanner
+                                both_in_case: None, // Not provided by CLI scanner
+                                color: None, // Not provided by CLI scanner
+                                switch_count: None, // Not provided by CLI scanner
+                                rssi: None, // Not provided by CLI scanner
+                                timestamp: None, // Not provided by CLI scanner
+                                raw_manufacturer_data: None, // Not provided by CLI scanner
+                            };
 
-                        crate::debug_log!(
-                            "bluetooth",
-                            "Parsed {} AirPods devices from CLI scanner",
-                            airpods_devices.len()
-                        );
-                        airpods_devices
+                            airpods_devices.push(airpods_info);
+                        }
                     }
-                    Err(e) => {
-                        log::error!("Failed to parse CLI scanner JSON output: {}", e);
-                        log::error!("CLI scanner JSON parse error: {}", e);
-                        crate::debug_log!(
-                            "bluetooth",
-                            "Raw output preview: {}",
-                            stdout.chars().take(200).collect::<String>()
-                        );
-                        Vec::new()
-                    }
+
+                    crate::debug_log!("bluetooth", "Parsed {} AirPods devices from CLI scanner", airpods_devices.len());
+                    airpods_devices
+                } else {
+                    log::error!("Failed to parse CLI scanner JSON output");
+                    log::error!("Raw output preview: {}", stdout.chars().take(200).collect::<String>());
+                    Vec::new()
                 }
             } else {
-                log::error!(
-                    "CLI scanner failed with exit code: {:?}",
-                    output.status.code()
-                );
-                crate::debug_log!(
-                    "bluetooth",
-                    "CLI scanner stderr: {}",
-                    String::from_utf8_lossy(&output.stderr)
-                );
+                log::error!("CLI scanner failed with exit code: {:?}", output.status.code());
+                log::error!("CLI scanner stderr: {}", String::from_utf8_lossy(&output.stderr));
                 Vec::new()
             }
         }
         Err(e) => {
             log::error!("Failed to execute CLI scanner: {}", e);
-            log::error!("CLI scanner execution error: {}", e);
+            // Already logged with log::error! above
             Vec::new()
         }
     }
 }
 
-/// Get AirPods data from the CLI scanner using continuous scanning mode
+/// Continuous CLI scanner for periodic updates every 10 seconds
+/// This function is called by the timer subscription to maintain fresh data
+#[allow(dead_code)]
 fn get_airpods_from_cli_scanner_continuous() -> Vec<AirPodsBatteryInfo> {
-    // Path to the v6 modular CLI scanner executable
-    let cli_path = "scripts/airpods_battery_cli/build/Release/airpods_battery_cli.exe";
+    use std::process::Command as ProcessCommand;
 
-    crate::debug_log!("bluetooth", "Calling continuous CLI scanner at: {}", cli_path);
+    // Get the executable path and its directory
+    let exe_path = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("./rustpods.exe"));
+    let exe_dir = exe_path.parent().unwrap_or_else(|| std::path::Path::new("."));
+    let current_dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    
+    crate::debug_log!("bluetooth", "Continuous CLI Scanner (every 10s)");
+    crate::debug_log!("bluetooth", "Executable path: {}", exe_path.display());
+    crate::debug_log!("bluetooth", "Executable directory: {}", exe_dir.display());
+    crate::debug_log!("bluetooth", "Current working directory: {}", current_dir.display());
+    
+    // Try multiple possible locations for the CLI scanner
+    let cli_paths = vec![
+        // 1. Same directory as the executable (most likely when running from target/release)
+        exe_dir.join("airpods_battery_cli.exe"),
+        // 2. bin folder relative to current working directory 
+        current_dir.join("bin").join("airpods_battery_cli.exe"),
+        // 3. bin folder relative to executable directory (if exe is in subdir)
+        exe_dir.join("bin").join("airpods_battery_cli.exe"),
+        // 4. Project root if we're in target/release (go up 2 levels)
+        exe_dir.parent().and_then(|p| p.parent()).map(|project_root| project_root.join("bin").join("airpods_battery_cli.exe")).unwrap_or_default(),
+        // 5. Development location relative to current working directory
+        current_dir.join("scripts").join("airpods_battery_cli").join("build").join("Release").join("airpods_battery_cli.exe"),
+    ];
 
-    match ProcessCommand::new(cli_path)
-        .arg("--continuous") // Use continuous scanning mode until AirPods found
+    crate::debug_log!("bluetooth", "Continuous scan - Trying {} possible CLI scanner locations", cli_paths.len());
+    for (i, path) in cli_paths.iter().enumerate() {
+        crate::debug_log!("bluetooth", "Continuous scan - Path {}: {}", i + 1, path.display());
+        crate::debug_log!("bluetooth", "Continuous scan - Path {} exists: {}", i + 1, path.exists());
+    }
+
+    // Find the first existing CLI scanner
+    let cli_path = cli_paths.into_iter().find(|path| path.exists());
+    
+    let cli_path = match cli_path {
+        Some(path) => {
+            crate::debug_log!("bluetooth", "Continuous scan - Found CLI scanner at: {}", path.display());
+            path
+        }
+        None => {
+            log::error!("Continuous scan - No CLI scanner found in any of the expected locations!");
+            return Vec::new();
+        }
+    };
+
+    // Execute CLI scanner with fast argument for 2-second scan
+    match ProcessCommand::new(&cli_path)
+        .arg("--fast")
         .output()
     {
         Ok(output) => {
             if output.status.success() {
                 let stdout = String::from_utf8_lossy(&output.stdout);
-                crate::debug_log!(
-                    "bluetooth",
-                    "Continuous CLI scanner output length: {} chars",
-                    stdout.len()
-                );
+                crate::debug_log!("bluetooth", "Continuous scan output length: {} chars", stdout.len());
 
-                // Parse the JSON output from the CLI scanner
-                match serde_json::from_str::<crate::bluetooth::cli_scanner::CliScannerResult>(
-                    &stdout,
-                ) {
-                    Ok(scan_result) => {
-                        // Extract AirPods devices from the scan result and convert them
-                        let airpods_devices: Vec<AirPodsBatteryInfo> = scan_result
-                            .devices
-                            .into_iter()
-                            .filter_map(|device| {
-                                if let Some(airpods_data) = device.airpods_data {
-                                    // Parse model_id from hex string (e.g. "0x2014" -> 0x2014)
-                                    let model_id = if let Some(stripped) =
-                                        airpods_data.model_id.strip_prefix("0x")
-                                    {
-                                        u16::from_str_radix(stripped, 16).unwrap_or(0)
-                                    } else {
-                                        airpods_data.model_id.parse::<u16>().unwrap_or(0)
-                                    };
+                // Parse the JSON output
+                if let Ok(cli_result) = serde_json::from_str::<crate::bluetooth::cli_scanner::CliScannerResult>(&stdout) {
+                    let mut airpods_devices = Vec::new();
 
-                                    // Parse address from string to u64
-                                    let address = device.address.parse::<u64>().unwrap_or(0);
+                    for device in &cli_result.devices {
+                        if let Some(airpods_data) = &device.airpods_data {
+                            // Parse address from MAC address string (e.g. "56:4F:9A:2E:2B:96") to u64
+                            let address = device.address
+                                .replace(":", "")
+                                .chars()
+                                .collect::<String>()
+                                .parse::<u64>()
+                                .or_else(|_| {
+                                    // If direct parsing fails, try parsing as hex
+                                    u64::from_str_radix(&device.address.replace(":", ""), 16)
+                                })
+                                .unwrap_or(0);
 
-                                    Some(AirPodsBatteryInfo {
-                                        address,
-                                        name: airpods_data.model,
-                                        model_id,
-                                        left_battery: airpods_data.left_battery,
-                                        left_charging: airpods_data.left_charging,
-                                        right_battery: airpods_data.right_battery,
-                                        right_charging: airpods_data.right_charging,
-                                        case_battery: airpods_data.case_battery,
-                                        case_charging: airpods_data.case_charging,
-                                        left_in_ear: Some(airpods_data.left_in_ear),
-                                        right_in_ear: Some(airpods_data.right_in_ear),
-                                        case_lid_open: Some(airpods_data.lid_open),
-                                        side: None, // Not provided in current CLI output format
-                                        both_in_case: Some(airpods_data.both_in_case),
-                                        color: None, // Not provided in current CLI output format
-                                        switch_count: None, // Not provided in current CLI output format
-                                        rssi: Some(device.rssi),
-                                        timestamp: Some(
-                                            scan_result.scan_timestamp.parse::<u64>().unwrap_or(0),
-                                        ),
-                                        raw_manufacturer_data: Some(device.manufacturer_data_hex),
-                                    })
-                                } else {
-                                    None
-                                }
-                            })
-                            .collect();
+                            let airpods_info = crate::airpods::battery::AirPodsBatteryInfo {
+                                address,
+                                name: airpods_data.model.clone(),
+                                model_id: 0, // Not provided by CLI scanner
+                                left_battery: airpods_data.left_battery,
+                                right_battery: airpods_data.right_battery,
+                                case_battery: airpods_data.case_battery,
+                                left_charging: airpods_data.left_charging,
+                                right_charging: airpods_data.right_charging,
+                                case_charging: airpods_data.case_charging,
+                                left_in_ear: None, // Not provided by CLI scanner
+                                right_in_ear: None, // Not provided by CLI scanner  
+                                case_lid_open: None, // Not provided by CLI scanner
+                                side: None, // Not provided by CLI scanner
+                                both_in_case: None, // Not provided by CLI scanner
+                                color: None, // Not provided by CLI scanner
+                                switch_count: None, // Not provided by CLI scanner
+                                rssi: None, // Not provided by CLI scanner
+                                timestamp: None, // Not provided by CLI scanner
+                                raw_manufacturer_data: None, // Not provided by CLI scanner
+                            };
 
-                        crate::debug_log!(
-                            "bluetooth",
-                            "Parsed {} AirPods devices from continuous CLI scanner",
-                            airpods_devices.len()
-                        );
-                        airpods_devices
+                            airpods_devices.push(airpods_info);
+                        }
                     }
-                    Err(e) => {
-                        log::error!("Failed to parse continuous CLI scanner JSON output: {}", e);
-                        log::error!("Continuous CLI scanner JSON parse error: {}", e);
-                        crate::debug_log!(
-                            "bluetooth",
-                            "Raw output preview: {}",
-                            stdout.chars().take(200).collect::<String>()
-                        );
-                        Vec::new()
-                    }
+
+                    crate::debug_log!("bluetooth", "Continuous scan found {} AirPods devices", airpods_devices.len());
+                    airpods_devices
+                } else {
+                    log::error!("Continuous scan - Failed to parse CLI scanner JSON output");
+                    log::error!("Continuous scan - Raw output preview: {}", stdout.chars().take(200).collect::<String>());
+                    Vec::new()
                 }
             } else {
-                log::error!(
-                    "Continuous CLI scanner failed with exit code: {:?}",
-                    output.status.code()
-                );
-                crate::debug_log!(
-                    "bluetooth",
-                    "Continuous CLI scanner stderr: {}",
-                    String::from_utf8_lossy(&output.stderr)
-                );
+                log::error!("Continuous scan - CLI scanner failed with exit code: {:?}", output.status.code());
+                log::error!("Continuous scan - CLI scanner stderr: {}", String::from_utf8_lossy(&output.stderr));
                 Vec::new()
             }
         }
         Err(e) => {
-            log::error!("Failed to execute continuous CLI scanner: {}", e);
-            log::error!("Continuous CLI scanner execution error: {}", e);
+            log::error!("Continuous scan - Failed to execute CLI scanner: {}", e);
+            // Already logged with log::error! above
             Vec::new()
         }
     }
