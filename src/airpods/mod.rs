@@ -2,6 +2,7 @@
 
 pub mod battery;
 pub mod battery_estimator;
+pub mod battery_intelligence;
 pub mod detector;
 mod filter;
 
@@ -13,6 +14,12 @@ pub use detector::{
 pub use filter::{
     airpods_all_models_filter, airpods_nearby_filter, airpods_pro_filter,
     airpods_with_battery_filter, AirPodsFilter, AirPodsFilterOptions, APPLE_COMPANY_ID,
+};
+
+pub use battery_intelligence::{
+    BatteryIntelligence, BatteryEstimate, BatteryHealthMetrics, DeviceBatteryProfile,
+    BatteryEvent, BatteryEventType, UsageSession, UsagePattern, SessionType,
+    DischargeModel, IntelligenceSettings,
 };
 
 use crate::error::{AirPodsError, ErrorContext};

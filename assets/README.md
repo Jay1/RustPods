@@ -1,73 +1,65 @@
-# Assets Directory for RustPods
+# RustPods Asset Directory: Technical Reference and Integration Protocol
 
-This directory contains static assets used by the RustPods application. These assets are embedded into the application binary at compile time.
+## Overview
+
+This directory contains all static assets utilized by the RustPods application. Assets are embedded into the application binary at compile time to ensure deterministic deployment and operational integrity.
 
 ## Directory Structure
 
 ```
 assets/
 ├── icons/
-│   ├── app/          - Application icons
-│   │   ├── logo.png  - Main application logo
-│   │   ├── icon_256.ico - 256x256 app icon
-│   │   └── icon_128.ico - 128x128 app icon
-│   ├── tray/         - System tray icons
-│   │   ├── rustpods-tray-dark-connected.ico    - Dark theme, connected
-│   │   ├── rustpods-tray-dark-disconnected.ico - Dark theme, disconnected
-│   │   ├── rustpods-tray-light-connected.ico   - Light theme, connected
-│   │   └── rustpods-tray-light-disconnected.ico - Light theme, disconnected
-│   └── ui/           - UI elements
-└── README.md         - This file
+│   ├── app/          # Application icons
+│   ├── tray/         # System tray icons
+│   └── ui/           # User interface elements
+└── README.md         # This document
 ```
 
-## Asset Usage
+## Asset Integration
 
-Assets are embedded into the application binary using Rust's `include_bytes!` macro. The `src/assets.rs` module provides access to all assets.
+Assets are integrated into the application using Rust's `include_bytes!` macro. The `src/assets.rs` module provides programmatic access to all embedded assets.
 
-### Using Assets in Code
+### Usage in Code
 
 ```rust
-// Import the assets module
 use crate::assets;
-
-// Access application logo
 let logo_bytes = assets::app::LOGO;
-
-// Access tray icons
 let tray_icon = assets::tray::DARK_CONNECTED;
 ```
 
-## Asset Requirements
+## Asset Specifications
 
 ### System Tray Icons
-- Format: ICO
-- Size: 16x16 pixels for standard Windows tray icons
-- Variations: 
+- **Format**: ICO
+- **Size**: 16x16 pixels (standard Windows tray icon)
+- **Variants**:
   - Dark theme (for light backgrounds)
   - Light theme (for dark backgrounds)
   - Connected state
   - Disconnected state
 
 ### Application Icons
-- Main logo: PNG format, high resolution
-- Windows icons: ICO format, multiple sizes (recommended: 16x16, 32x32, 48x48, 256x256)
+- **Main Logo**: PNG, high resolution
+- **Windows Icons**: ICO, multiple sizes (16x16, 32x32, 48x48, 256x256 recommended)
 
-## Adding New Assets
+## Asset Management Protocol
 
-1. Place new assets in the appropriate directory
-2. Update `src/assets.rs` to include the new asset
-3. Use the asset in your code by referencing it from the assets module
+### Adding New Assets
+1. Place the asset in the appropriate directory.
+2. Update `src/assets.rs` to include the new asset.
+3. Reference the asset in code via the assets module.
 
-## Updating Existing Assets
+### Updating Existing Assets
+1. Replace the existing file with the new version.
+2. Retain the original filename to preserve compatibility.
+3. Rebuild the application to embed the updated asset.
 
-1. Replace the existing file with the new version
-2. Keep the same filename to maintain compatibility
-3. Rebuild the application to embed the updated asset
+## Icon Design Standards
 
-## Icon Design Guidelines
+- System tray icons must be legible and recognizable at small sizes.
+- Connected/disconnected states must be visually distinct.
+- All icons must conform to the application's design language and ensure appropriate contrast for both dark and light themes.
 
-- System tray icons should be simple and recognizable at small sizes
-- Connected icons should clearly indicate a connection status
-- Disconnected icons should use more muted colors
-- All icons should follow the overall application design language
-- For dark/light themes, ensure appropriate contrast 
+## Compliance
+
+All asset modifications must adhere to the RustPods project's technical and design standards. Asset changes are subject to review for consistency, clarity, and operational suitability. 

@@ -6,6 +6,7 @@ pub mod battery_icon;
 pub mod battery_indicator;
 pub mod settings_view;
 pub mod svg_icons;
+pub mod waiting_mode;
 
 // Re-export components for convenience
 pub use airpods_popup::AirPodsPopup;
@@ -13,3 +14,4 @@ pub use battery_icon::{battery_display_row, battery_icon_display, battery_with_l
 pub use battery_indicator::view as battery_indicator_view;
 pub use settings_view::{BluetoothSetting, SettingsView, SystemSetting, UiSetting};
 pub use svg_icons::{battery_icon_svg_string, refresh_icon_svg_string};
+pub use waiting_mode::WaitingMode;

@@ -63,6 +63,10 @@ pub struct BluetoothConfig {
     #[serde(default)]
     pub paired_device_id: Option<String>,
 
+    /// Custom name for the paired device (user-friendly display name)
+    #[serde(default)]
+    pub paired_device_name: Option<String>,
+
     /// Auto-reconnect to last connected device
     #[serde(default = "default_true")]
     pub auto_reconnect: bool,
@@ -198,6 +202,10 @@ pub struct BatteryConfig {
     /// Enable intelligent battery estimation between 10% increments
     #[serde(default = "default_true")]
     pub enable_estimation: bool,
+
+    /// Force estimation mode (ignores fresh data threshold, for testing)
+    #[serde(default = "default_false")]
+    pub force_estimation: bool,
 
     /// Historical discharge data for left AirPod
     #[serde(default)]
@@ -341,6 +349,7 @@ impl Default for BluetoothConfig {
             min_rssi: Some(-70),
             battery_refresh_interval: default_battery_refresh_interval(),
             paired_device_id: None,
+            paired_device_name: None,
             auto_reconnect: default_true(),
             reconnect_attempts: default_reconnect_attempts(),
             adaptive_polling: default_true(),
@@ -387,6 +396,7 @@ impl Default for BatteryConfig {
             notify_low: default_true(),
             notify_charged: default_true(),
             enable_estimation: default_true(),
+            force_estimation: default_false(),
             left_history: DischargeHistory::default(),
             right_history: DischargeHistory::default(),
             case_history: DischargeHistory::default(),

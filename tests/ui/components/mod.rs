@@ -10,6 +10,12 @@ pub mod accessibility_tests;
 pub mod error_condition_tests;
 pub mod component_interaction_tests;
 
+// Add missing test modules for full coverage
+pub mod battery_indicator_tests;
+pub mod waiting_mode_tests;
+pub mod settings_view_tests;
+pub mod airpods_popup_tests;
+
 // Integration tests for UI components (moved from components.rs)
 use std::collections::HashMap;
 use std::time::Instant;

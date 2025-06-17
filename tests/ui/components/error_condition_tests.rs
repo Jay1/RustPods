@@ -40,7 +40,7 @@ fn test_device_connection_lost() {
     assert!(connected_device.left_battery.is_some());
     
     // Test widget creation with valid data
-    let _widget = view_circular_battery_widget(75, false);
+    let _widget = view_circular_battery_widget(75.0, false);
     
     // Simulate connection loss (battery data becomes None)
     let disconnected_device = MergedBluetoothDevice {
@@ -89,13 +89,13 @@ fn test_battery_level_edge_cases() {
     assert_eq!(zero_device.right_battery, Some(0));
     
     // Test circular widgets with zero values
-    let _zero_widget = view_circular_battery_widget(0, false);
+    let _zero_widget = view_circular_battery_widget(0.0, false);
     let _element = window.view();
     
     // Test with invalid/extreme battery levels
-    let _widget_100 = view_circular_battery_widget(100, true);
-    let _widget_negative = view_circular_battery_widget(0, false); // Clamped to 0
-    let _widget_over_100 = view_circular_battery_widget(100, false); // Clamped to 100
+    let _widget_100 = view_circular_battery_widget(100.0, true);
+    let _widget_negative = view_circular_battery_widget(0.0, false); // Clamped to 0
+    let _widget_over_100 = view_circular_battery_widget(100.0, false); // Clamped to 100
 }
 
 /// Test configuration error handling
@@ -132,8 +132,8 @@ fn test_data_corruption_handling() {
     let _element = window.view();
     
     // Test widgets with edge case values (should be clamped)
-    let _widget_high = view_circular_battery_widget(150, false); // Should clamp to 100
-    let _widget_negative = view_circular_battery_widget(0, false); // Should clamp to 0
+    let _widget_high = view_circular_battery_widget(150.0, false); // Should clamp to 100
+    let _widget_negative = view_circular_battery_widget(0.0, false); // Should clamp to 0
 }
 
 /// Test memory pressure scenarios
@@ -158,7 +158,7 @@ fn test_memory_pressure_handling() {
     
     // Create multiple widgets to test memory usage
     for i in 0..10 {
-        let _widget = view_circular_battery_widget((50 + i) % 100, i % 2 == 0);
+        let _widget = view_circular_battery_widget(((50 + i) % 100) as f32, i % 2 == 0);
     }
 }
 
@@ -179,8 +179,8 @@ fn test_concurrent_access() {
 #[test]
 fn test_invalid_input_handling() {
     // Test widgets with various invalid inputs
-    let _widget_zero = view_circular_battery_widget(0, false);
-    let _widget_max = view_circular_battery_widget(255, true); // Should clamp
+    let _widget_zero = view_circular_battery_widget(0.0, false);
+    let _widget_max = view_circular_battery_widget(255.0, true); // Should clamp
     
     // Test battery icon with invalid dimensions
     let _icon_zero_width = battery_icon_display(Some(50), false, 0.0, 10.0);

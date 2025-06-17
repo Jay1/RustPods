@@ -9,6 +9,11 @@ use iced::Application;
 
 /// Runs the UI application with system tray support
 pub fn run_ui() -> iced::Result {
+    run_ui_with_options(false)
+}
+
+/// Runs the UI application with optional test mode
+pub fn run_ui_with_options(_test_battery: bool) -> iced::Result {
     // Create a channel for communication between UI and controller
     let (controller_sender, controller_receiver) = tokio::sync::mpsc::unbounded_channel();
 

@@ -1,0 +1,102 @@
+[2025-06-09 21:11:48.894] INFO [src\config\mod.rs:111] Configuration loaded successfully
+[2025-06-09 21:11:48.895] INFO [src\config\mod.rs:160] Configuration saved successfully
+Failed to setup logging: Failed to set logger: attempted to set a logger after the logging system was already initialized
+[2025-06-09 21:11:48.895] INFO [src\main.rs:107] RustPods v0.1.0 - Starting up application
+[2025-06-09 21:11:48.896] INFO [src\config\mod.rs:111] Configuration loaded successfully
+[2025-06-09 21:11:48.896] INFO [src\config\mod.rs:160] Configuration saved successfully
+[2025-06-09 21:11:48.896] INFO [src\main.rs:158] Configuration loaded successfully
+[2025-06-09 21:11:48.896] INFO [src\main.rs:181] Launching UI...
+[2025-06-09 21:11:48.897] INFO [src\ui\utils.rs:26] Successfully loaded window icon: ICO 128x128
+[2025-06-09 21:11:48.903] INFO [src\ui\state.rs:203] AppState::new: Creating new application state with system tray communication
+[2025-06-09 21:11:48.903] INFO [src\ui\system_tray.rs:280] Creating system tray with direct window controller and theme mode: Dark
+[2025-06-09 21:11:48.903] INFO [src\ui\system_tray.rs:307] Initializing system tray...
+[2025-06-09 21:11:48.911] INFO [src\ui\system_tray.rs:337] System tray initialized successfully
+[2025-06-09 21:11:48.911] INFO [src\ui\state.rs:108] System tray initialized successfully
+[2025-06-09 21:11:48.911] INFO [src\ui\state.rs:209] Scheduling initial continuous scanning for immediate AirPods detection
+[2025-06-09 21:11:49.019] INFO [C:\Users\Jay\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\iced_wgpu-0.11.1\src\window\compositor.rs:40] Settings {
+    present_mode: AutoVsync,
+    internal_backend: Backends(
+        VULKAN | GL | METAL | DX12 | DX11 | BROWSER_WEBGPU,
+    ),
+    default_font: Font {
+        family: Name(
+            "SpaceMono Nerd Font",
+        ),
+        weight: Normal,
+        stretch: Normal,
+        monospaced: false,
+    },
+    default_text_size: 16.0,
+    antialiasing: None,
+}
+[2025-06-09 21:11:49.183] INFO [C:\Users\Jay\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\iced_wgpu-0.11.1\src\window\compositor.rs:48] Available adapters: [
+    AdapterInfo {
+        name: "NVIDIA GeForce RTX 4070 Ti SUPER",
+        vendor: 4318,
+        device: 9989,
+        device_type: DiscreteGpu,
+        driver: "NVIDIA",
+        driver_info: "576.52",
+        backend: Vulkan,
+    },
+    AdapterInfo {
+        name: "NVIDIA GeForce GTX 1050 Ti",
+        vendor: 4318,
+        device: 7298,
+        device_type: DiscreteGpu,
+        driver: "NVIDIA",
+        driver_info: "576.52",
+        backend: Vulkan,
+    },
+    AdapterInfo {
+        name: "NVIDIA GeForce RTX 4070 Ti SUPER",
+        vendor: 4318,
+        device: 9989,
+        device_type: DiscreteGpu,
+        driver: "",
+        driver_info: "",
+        backend: Dx12,
+    },
+    AdapterInfo {
+        name: "NVIDIA GeForce GTX 1050 Ti",
+        vendor: 4318,
+        device: 7298,
+        device_type: DiscreteGpu,
+        driver: "",
+        driver_info: "",
+        backend: Dx12,
+    },
+    AdapterInfo {
+        name: "Microsoft Basic Render Driver",
+        vendor: 5140,
+        device: 140,
+        device_type: Cpu,
+        driver: "",
+        driver_info: "",
+        backend: Dx12,
+    },
+]
+[2025-06-09 21:11:49.191] INFO [C:\Users\Jay\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\iced_wgpu-0.11.1\src\window\compositor.rs:68] Selected: AdapterInfo {
+    name: "NVIDIA GeForce RTX 4070 Ti SUPER",
+    vendor: 4318,
+    device: 9989,
+    device_type: DiscreteGpu,
+    driver: "NVIDIA",
+    driver_info: "576.52",
+    backend: Vulkan,
+}
+[2025-06-09 21:11:49.193] INFO [C:\Users\Jay\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\iced_wgpu-0.11.1\src\window\compositor.rs:88] Selected format: Bgra8UnormSrgb
+[2025-06-09 21:11:49.286] INFO [C:\Users\Jay\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\cosmic-text-0.9.0\src\font\system\std.rs:54] Parsed 489 font faces in 28ms.
+[2025-06-09 21:11:49.352] ERROR [src\ui\state.rs:1279] Failed to execute continuous CLI scanner: The system cannot find the path specified. (os error 3)
+[2025-06-09 21:11:49.352] ERROR [src\ui\state.rs:1280] Continuous CLI scanner execution error: The system cannot find the path specified. (os error 3)
+[2025-06-09 21:11:49.359] INFO [C:\Users\Jay\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\iced_wgpu-0.11.1\src\image\atlas.rs:89] Allocated atlas entry: Contiguous(Partial { layer: 0, region: Region { id: AllocId(2), rectangle: Box2D((0, 0), (80, 80)) } })
+[2025-06-09 21:11:49.359] INFO [C:\Users\Jay\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\iced_wgpu-0.11.1\src\image\atlas.rs:142] Current atlas: Atlas { texture: Texture { context: Context { type: "Native" }, id: ObjectId { id: Some(2305843013508661250) }, data: Any { .. }, owned: true, descriptor: TextureDescriptor { label: None, size: Extent3d { width: 2048, height: 2048, depth_or_array_layers: 1 }, mip_level_count: 1, sample_count: 1, dimension: D2, format: Rgba8UnormSrgb, usage: TextureUsages(COPY_SRC | COPY_DST | TEXTURE_BINDING), view_formats: [] } }, texture_view: TextureView { context: Context { type: "Native" }, id: ObjectId { id: Some(2305843013508661250) }, data: Any { .. } }, layers: [Busy(Allocator)] }
+[2025-06-09 21:11:49.359] INFO [C:\Users\Jay\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\iced_wgpu-0.11.1\src\image\atlas.rs:89] Allocated atlas entry: Contiguous(Partial { layer: 0, region: Region { id: AllocId(5), rectangle: Box2D((80, 0), (107, 27)) } })
+[2025-06-09 21:11:49.359] INFO [C:\Users\Jay\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\iced_wgpu-0.11.1\src\image\atlas.rs:142] Current atlas: Atlas { texture: Texture { context: Context { type: "Native" }, id: ObjectId { id: Some(2305843013508661250) }, data: Any { .. }, owned: true, descriptor: TextureDescriptor { label: None, size: Extent3d { width: 2048, height: 2048, depth_or_array_layers: 1 }, mip_level_count: 1, sample_count: 1, dimension: D2, format: Rgba8UnormSrgb, usage: TextureUsages(COPY_SRC | COPY_DST | TEXTURE_BINDING), view_formats: [] } }, texture_view: TextureView { context: Context { type: "Native" }, id: ObjectId { id: Some(2305843013508661250) }, data: Any { .. } }, layers: [Busy(Allocator)] }
+[2025-06-09 21:11:49.359] INFO [C:\Users\Jay\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\iced_wgpu-0.11.1\src\image\atlas.rs:89] Allocated atlas entry: Contiguous(Partial { layer: 0, region: Region { id: AllocId(6), rectangle: Box2D((80, 27), (107, 54)) } })
+[2025-06-09 21:11:49.359] INFO [C:\Users\Jay\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\iced_wgpu-0.11.1\src\image\atlas.rs:142] Current atlas: Atlas { texture: Texture { context: Context { type: "Native" }, id: ObjectId { id: Some(2305843013508661250) }, data: Any { .. }, owned: true, descriptor: TextureDescriptor { label: None, size: Extent3d { width: 2048, height: 2048, depth_or_array_layers: 1 }, mip_level_count: 1, sample_count: 1, dimension: D2, format: Rgba8UnormSrgb, usage: TextureUsages(COPY_SRC | COPY_DST | TEXTURE_BINDING), view_formats: [] } }, texture_view: TextureView { context: Context { type: "Native" }, id: ObjectId { id: Some(2305843013508661250) }, data: Any { .. } }, layers: [Busy(Allocator)] }
+[2025-06-09 21:11:49.360] INFO [C:\Users\Jay\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\iced_wgpu-0.11.1\src\image\atlas.rs:89] Allocated atlas entry: Contiguous(Partial { layer: 0, region: Region { id: AllocId(10), rectangle: Box2D((0, 80), (150, 230)) } })
+[2025-06-09 21:11:49.360] INFO [C:\Users\Jay\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\iced_wgpu-0.11.1\src\image\atlas.rs:142] Current atlas: Atlas { texture: Texture { context: Context { type: "Native" }, id: ObjectId { id: Some(2305843013508661250) }, data: Any { .. }, owned: true, descriptor: TextureDescriptor { label: None, size: Extent3d { width: 2048, height: 2048, depth_or_array_layers: 1 }, mip_level_count: 1, sample_count: 1, dimension: D2, format: Rgba8UnormSrgb, usage: TextureUsages(COPY_SRC | COPY_DST | TEXTURE_BINDING), view_formats: [] } }, texture_view: TextureView { context: Context { type: "Native" }, id: ObjectId { id: Some(2305843013508661250) }, data: Any { .. } }, layers: [Busy(Allocator)] }
+[2025-06-09 21:11:59.459] INFO [src\ui\system_tray.rs:210] DirectWindowController: Sending ForceQuit message to UI
+[2025-06-09 21:11:59.459] INFO [src\ui\state.rs:502] Controller subscription received message from system tray: ForceQuit
+[2025-06-09 21:11:59.459] INFO [src\ui\state.rs:250] ForceQuit message received - initiating graceful shutdown

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="80" height="80" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="40" cy="40" r="32" fill="none" stroke="#45475a" stroke-width="6"/>
+  
+  <!-- Complete ring (app logo - not a battery indicator) -->
+  <circle cx="40" cy="40" r="32" 
+          fill="none" 
+          stroke="#cdd6f4" 
+          stroke-width="6" 
+          stroke-linecap="round"/>
+  
+  <!-- Inner accent ring for visual appeal -->
+  <circle cx="40" cy="40" r="24" 
+          fill="none" 
+          stroke="#89b4fa" 
+          stroke-width="2" 
+          opacity="0.6"/>
+</svg> 

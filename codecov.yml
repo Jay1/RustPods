@@ -32,11 +32,28 @@ coverage:
         paths:
           - "src/ui/**"
           - "!src/ui/state_manager.rs"
+      ui_components:
+        target: 75%
+        paths:
+          - "src/ui/components/**"
     patch:
       default:
         target: auto
         threshold: 5%
         base: auto
+    changes: no
+
+flags:
+  unittests:
+    carryforward: true
+  ui_components:
+    paths:
+      - src/ui/components/
+    carryforward: true
+  bluetooth:
+    paths:
+      - src/bluetooth/
+    carryforward: true
         
 ignore:
   - "assets/**/*"

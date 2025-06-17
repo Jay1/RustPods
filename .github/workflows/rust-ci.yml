@@ -17,6 +17,7 @@ on:
       - 'assets/**/*.png'
       - 'assets/**/*.jpg'
       - 'assets/**/*.svg'
+  workflow_dispatch:  # Allow manual triggering
 
 env:
   CARGO_TERM_COLOR: always
@@ -47,6 +48,33 @@ jobs:
         
       - name: Run tests
         run: cargo test --verbose
+        
+      - name: Run tests with all features
+        run: cargo test --all-features --verbose
+        
+      - name: Run tests in release mode
+        run: cargo test --release --verbose
+
+  ui-tests:
+    name: UI Component Tests
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+          
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        
+      - name: Run UI component tests
+        run: cargo test --test-threads=1 tests::ui::components
+        
+      - name: Run UI integration tests
+        run: cargo test --test-threads=1 tests::ui::integration
+        
+      - name: Test with debug flags
+        run: cargo test --features="debug_all" tests::ui
         
   lint:
     name: Linting

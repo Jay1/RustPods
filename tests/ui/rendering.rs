@@ -16,10 +16,10 @@ use rustpods::ui::state::AppState;
 /// Test that the circular battery widget renders correctly with different levels
 #[test]
 fn test_circular_battery_widget_rendering() {
-    let _widget_75 = view_circular_battery_widget(75, false);
-    let _widget_empty = view_circular_battery_widget(0, false);
-    let _widget_full = view_circular_battery_widget(100, true);
-    let _widget_charging = view_circular_battery_widget(50, true);
+    let _widget_75 = view_circular_battery_widget(75.0, false);
+    let _widget_empty = view_circular_battery_widget(0.0, false);
+    let _widget_full = view_circular_battery_widget(100.0, true);
+    let _widget_charging = view_circular_battery_widget(50.0, true);
 }
 
 /// Test that battery icon display renders correctly
@@ -104,13 +104,13 @@ fn test_airpods_battery_widget_display() {
     
     if let Some(battery) = &airpods.battery {
         if let Some(left) = battery.left {
-            let _left_widget = view_circular_battery_widget(left, false);
+            let _left_widget = view_circular_battery_widget(left as f32, false);
         }
         if let Some(right) = battery.right {
-            let _right_widget = view_circular_battery_widget(right, false);
+            let _right_widget = view_circular_battery_widget(right as f32, false);
         }
         if let Some(case) = battery.case {
-            let _case_widget = view_circular_battery_widget(case, true);
+            let _case_widget = view_circular_battery_widget(case as f32, true);
         }
     }
 }
@@ -177,8 +177,8 @@ fn test_circular_widget_battery_levels() {
     let levels = [0, 25, 50, 75, 100];
     
     for &level in &levels {
-        let _widget_normal = view_circular_battery_widget(level, false);
-        let _widget_charging = view_circular_battery_widget(level, true);
+        let _widget_normal = view_circular_battery_widget(level as f32, false);
+        let _widget_charging = view_circular_battery_widget(level as f32, true);
     }
 }
 
@@ -196,12 +196,12 @@ fn test_battery_icon_dimensions() {
 #[test]
 fn test_widget_edge_cases() {
     // Test zero battery
-    let _zero_widget = view_circular_battery_widget(0, false);
-    let _zero_charging = view_circular_battery_widget(0, true);
+    let _zero_widget = view_circular_battery_widget(0.0, false);
+    let _zero_charging = view_circular_battery_widget(0.0, true);
     
     // Test full battery
-    let _full_widget = view_circular_battery_widget(100, false);
-    let _full_charging = view_circular_battery_widget(100, true);
+    let _full_widget = view_circular_battery_widget(100.0, false);
+    let _full_charging = view_circular_battery_widget(100.0, true);
     
     // Test battery icon with zero dimensions
     let _zero_width = battery_icon_display(Some(50), false, 0.0, 20.0);

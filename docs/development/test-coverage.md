@@ -112,4 +112,172 @@ The following system components may be excluded from standard coverage calculati
 4. **Review Integration**: Coverage analysis is integrated into code review workflows
 
 ### Continuous Quality Assurance
-This quality framework ensures sustained software reliability through measured validation practices, establishing a foundation for enterprise-grade software delivery and maintenance. 
+This quality framework ensures sustained software reliability through measured validation practices, establishing a foundation for enterprise-grade software delivery and maintenance.
+
+# Test Coverage Guidelines
+
+This document outlines the best practices for measuring, monitoring, and improving test coverage in the RustPods project.
+
+## Architectural Note (2025 Refactor)
+
+- **Scan logic, scan messages, and BLE scanning are no longer part of the codebase or test coverage.**
+- **Coverage targets now focus on:**
+  - Device polling (periodic, via native C++ helper)
+  - Paired device management
+  - AirPods battery info parsing and display
+  - UI state transitions and overlays
+- **Do not reference or test scan logic, scan messages, or BLE scanning in new or updated tests.**
+- **Native C++ helpers** are now used for AirPods battery info; Rust code polls these helpers periodically.
+
+## Coverage Tools Setup
+
+- **Use cargo-tarpaulin for coverage analysis**
+  - Install with `cargo install cargo-tarpaulin`
+  - Run using provided scripts: `scripts/coverage.ps1` (Windows) or `scripts/coverage.sh` (Unix)
+  - Scripts are now in the `scripts/` directory
+  - Generate both HTML and JSON reports for different use cases
+
+- **Before running coverage tools**
+  ```rust
+  // ✅ DO: Ensure code compiles without errors
+  cargo check
+  cargo test --no-run
+  
+  // ❌ DON'T: Run coverage on code with compilation errors
+  // cargo tarpaulin  // Will fail if there are compilation errors
+  ```
+
+## Coverage Targets
+
+- **Aim for tiered coverage targets**
+  - 75% overall project coverage minimum
+  - 85% for core components:
+    ```rust
+    // Core components requiring higher coverage (85%+)
+    src/bluetooth/**/*.rs
+    src/airpods/**/*.rs
+    src/config/**/*.rs
+    src/ui/state_manager.rs
+    ```
+  - 90%+ for critical paths (device polling, paired device management, AirPods protocol parsing)
+
+- **Coverage gaps to watch for**
+  - Error handling paths
+  - Edge cases in device connectivity
+  - Event handling in UI components
+  - Configuration loading failures
+
+## CI Integration
+
+- **Automated coverage reporting**
+  - Coverage report generated on each PR and merge to main
+  - Reports uploaded to Codecov via `.github/workflows/code-coverage.yml`
+  - Status checks fail if coverage decreases significantly
+
+- **Comprehensive CI/CD Test Automation**
+  - Test suite runs on each PR and push to main branch
+  - Separate jobs for different test categories:
+    - Regular unit and integration tests
+    - UI component-specific tests
+    - Linting and security checks
+  - Multi-mode testing (debug, release, all features)
+  - Component-specific coverage targets enforced
+
+- **Coverage Flags and Reporting**
+  - Separate coverage flags for different components:
+    - `unittests`: Overall unit test coverage
+    - `ui_components`: UI component-specific coverage
+    - `bluetooth`: Bluetooth module coverage
+  - Carryforward enabled to maintain coverage history
+  - Codecov comments on PRs with coverage changes
+
+- **Review coverage reports**
+  ```rust
+  // ✅ DO: Review coverage trends over time
+  // Look at the trend graph in Codecov dashboard
+  
+  // ❌ DON'T: Focus only on increasing the percentage number
+  // Writing tests that don't validate behavior just to increase coverage numbers
+  ```
+
+## Local Coverage Workflow
+
+- **Use provided scripts**
+  - Windows: `./scripts/coverage.ps1`
+  - Unix: `./scripts/coverage.sh`
+  - UI-specific test script: `./scripts/test_ui_suite.ps1`
+  - Reports stored in `./coverage/` directory
+  - Automatic browser opening of HTML report
+
+- **UI Component Testing**
+  - Run UI component tests with `cargo test tests::ui::components`
+  - Generate component-specific coverage with `./scripts/test_ui_suite.ps1`
+  - Visual regression tests ensure UI dimensions and styling remain consistent
+  - Property-based tests verify components work with all possible inputs
+
+- **Incremental coverage improvement**
+  ```rust
+  // ✅ DO: Focus on uncovered lines in critical components first
+  // After running coverage, look at core modules first
+  
+  // ✅ DO: Prioritize by risk and importance
+  // Focus on error handling paths in the device polling and AirPods battery stack before styling code
+  
+  // ❌ DON'T: Try to achieve 100% coverage everywhere
+  // Some code paths may be difficult to test or low value
+  ```
+
+## Common Coverage Issues
+
+- **Missing error module components**
+  - Current error: `unresolved imports crate::error::RustPodsError`
+  - Fix by implementing the missing error types and managers
+
+- **Missing methods on core components**
+  - Example: `no method named get_info found for struct BluetoothAdapter`
+  - Ensure all public methods are properly implemented or mocked for tests
+
+- **Type mismatches in tests**
+  - Example: `expected String, found &str`
+  - Use appropriate type conversions or create proper test fixtures
+
+## Best Practices
+
+- **Focus on meaningful tests**
+  ```rust
+  // ✅ DO: Test behavior, not implementation details
+  #[test]
+  fn test_airpods_battery_info_updates() {
+      // Test that battery info updates correctly
+  }
+  
+  // ❌ DON'T: Write tests just to increase coverage
+  #[test]
+  fn test_getter_functions() {
+      // Testing trivial getters without behavior verification
+  }
+  ```
+
+- **Use mocks for external dependencies**
+  - Use the mock implementations in `tests/bluetooth/mocks.rs` for Bluetooth tests
+  - Use `MockSystemTray` from `tests/test_helpers.rs` for tray integration tests
+
+- **Keep coverage artifacts in gitignore**
+  - Don't commit the `coverage/` directory
+  - Only store coverage configuration (codecov.yml) in the repository
+
+## Documentation
+
+- **Coverage goals and processes**
+  - Documented in `docs/development/test-coverage.md`
+  - Coverage targets in `codecov.yml` configuration
+  
+- **Manual testing**
+  - Manual testing procedures in `docs/development/manual-testing-guide.md`
+  - Use for areas difficult to get automated coverage
+
+## References
+
+- [Codecov Documentation](https://docs.codecov.io)
+- [Cargo Tarpaulin](https://github.com/xd009642/tarpaulin)
+- For project-specific test guidelines, see `docs/development/testing-best-practices.md` 

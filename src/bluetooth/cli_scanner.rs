@@ -294,8 +294,17 @@ impl CliScanner {
     ) -> Result<Vec<DetectedAirPods>, BluetoothError> {
         let start_time = Instant::now();
 
-        // Spawn the CLI process
-        let output = tokio::process::Command::new(&config.scanner_path)
+        // Spawn the CLI process with hidden console window on Windows
+        let mut command = tokio::process::Command::new(&config.scanner_path);
+        
+        // Hide console window on Windows in release builds
+        #[cfg(all(windows, not(debug_assertions)))]
+        {
+            use std::os::windows::process::CommandExt;
+            command.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
+        
+        let output = command
             .output()
             .await
             .map_err(|e| BluetoothError::Other(format!("Failed to execute CLI scanner: {}", e)))?;
@@ -328,7 +337,7 @@ impl CliScanner {
         for device in scanner_result.devices {
             if let Some(airpods_data) = device.airpods_data {
                 let detected_airpods =
-                    Self::convert_cli_data_to_airpods(device.device_id, airpods_data)?;
+                    Self::convert_cli_data_to_airpods(device.device_id, device.address, airpods_data)?;
                 airpods_list.push(detected_airpods);
             }
         }
@@ -347,6 +356,7 @@ impl CliScanner {
     /// Convert CLI data to DetectedAirPods
     fn convert_cli_data_to_airpods(
         device_id: String,
+        device_address: String,
         cli_data: CliAirPodsData,
     ) -> Result<DetectedAirPods, BluetoothError> {
         // Map model string to AirPodsType
@@ -392,8 +402,8 @@ impl CliScanner {
             charging: Some(charging_state),
         };
 
-        // Create a BDAddr from device_id (using a simple conversion for now)
-        let address = BDAddr::from([0; 6]); // TODO: Parse actual address from device_id
+        // Parse the actual MAC address from the CLI scanner
+        let address = Self::parse_mac_address(&device_address)?;
 
         Ok(DetectedAirPods {
             address,
@@ -494,6 +504,29 @@ impl CliScanner {
             || prev.right_in_ear != curr.right_in_ear
             || prev.both_in_case != curr.both_in_case
             || prev.lid_open != curr.lid_open
+    }
+
+    /// Parse MAC address string (e.g., "58:26:D7:45:AD:8B") to BDAddr
+    fn parse_mac_address(address_str: &str) -> Result<BDAddr, BluetoothError> {
+        let parts: Vec<&str> = address_str.split(':').collect();
+        if parts.len() != 6 {
+            return Err(BluetoothError::InvalidData(format!(
+                "Invalid MAC address format: {}",
+                address_str
+            )));
+        }
+
+        let mut bytes = [0u8; 6];
+        for (i, part) in parts.iter().enumerate() {
+            bytes[i] = u8::from_str_radix(part, 16).map_err(|_| {
+                BluetoothError::InvalidData(format!(
+                    "Invalid hex byte in MAC address: {}",
+                    part
+                ))
+            })?;
+        }
+
+        Ok(BDAddr::from(bytes))
     }
 
     /// Get current scanner statistics

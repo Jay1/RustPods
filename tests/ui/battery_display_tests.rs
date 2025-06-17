@@ -7,10 +7,10 @@ use rustpods::ui::components::{view_circular_battery_widget, battery_icon_displa
 /// Test basic circular battery widget creation
 #[test]
 fn test_circular_battery_widget_creation() {
-    let _widget_50 = view_circular_battery_widget(50, false);
-    let _widget_charging = view_circular_battery_widget(75, true);
-    let _widget_zero = view_circular_battery_widget(0, false);
-    let _widget_full = view_circular_battery_widget(100, true);
+    let _widget_50 = view_circular_battery_widget(50.0, false);
+    let _widget_charging = view_circular_battery_widget(75.0, true);
+    let _widget_zero = view_circular_battery_widget(0.0, false);
+    let _widget_full = view_circular_battery_widget(100.0, true);
 }
 
 /// Test battery icon display creation
@@ -25,8 +25,8 @@ fn test_battery_icon_display_creation() {
 #[test]
 fn test_battery_levels() {
     for level in 0..=100 {
-        let _widget = view_circular_battery_widget(level, false);
-        let _widget_charging = view_circular_battery_widget(level, true);
+        let _widget = view_circular_battery_widget(level as f32, false);
+        let _widget_charging = view_circular_battery_widget(level as f32, true);
     }
 }
 
@@ -36,8 +36,8 @@ fn test_charging_states() {
     let levels = [0, 25, 50, 75, 100];
     
     for &level in &levels {
-        let _not_charging = view_circular_battery_widget(level, false);
-        let _charging = view_circular_battery_widget(level, true);
+        let _not_charging = view_circular_battery_widget(level as f32, false);
+        let _charging = view_circular_battery_widget(level as f32, true);
     }
 }
 
@@ -45,12 +45,12 @@ fn test_charging_states() {
 #[test]
 fn test_battery_widget_edge_cases() {
     // Test boundary values
-    let _min_battery = view_circular_battery_widget(0, false);
-    let _max_battery = view_circular_battery_widget(100, false);
+    let _min_battery = view_circular_battery_widget(0.0, false);
+    let _max_battery = view_circular_battery_widget(100.0, false);
     
     // Test charging states at boundaries
-    let _min_charging = view_circular_battery_widget(0, true);
-    let _max_charging = view_circular_battery_widget(100, true);
+    let _min_charging = view_circular_battery_widget(0.0, true);
+    let _max_charging = view_circular_battery_widget(100.0, true);
 }
 
 /// Test battery icon with various dimensions
@@ -89,7 +89,7 @@ fn test_battery_widget_performance() {
     for i in 0..100 {
         let level = (i % 101) as u8;
         let charging = i % 2 == 0;
-        let _widget = view_circular_battery_widget(level, charging);
+        let _widget = view_circular_battery_widget(level as f32, charging);
     }
 }
 
@@ -100,8 +100,8 @@ fn test_battery_display_consistency() {
     
     for &level in &test_levels {
         // Test that widget creation succeeds for all valid levels
-        let _widget_normal = view_circular_battery_widget(level, false);
-        let _widget_charging = view_circular_battery_widget(level, true);
+        let _widget_normal = view_circular_battery_widget(level as f32, false);
+        let _widget_charging = view_circular_battery_widget(level as f32, true);
         
         // Test corresponding battery icons
         let _icon = battery_icon_display(Some(level), false, 80.0, 20.0);

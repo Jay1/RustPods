@@ -44,9 +44,21 @@ jobs:
         run: |
           cargo tarpaulin --verbose --workspace --timeout 300 --out Xml --output-dir ./coverage --skip-clean --exclude-files="target/*" --exclude-files="examples/*"
       
+      - name: Generate HTML coverage report
+        run: |
+          cargo tarpaulin --verbose --workspace --timeout 300 --out Html --output-dir ./coverage/html --skip-clean --exclude-files="target/*" --exclude-files="examples/*"
+      
+      - name: Generate component-specific coverage reports
+        run: |
+          # UI components coverage
+          cargo tarpaulin --verbose --workspace --timeout 300 --out Json --output-dir ./coverage/components --skip-clean --exclude-files="target/*" --exclude-files="examples/*" --packages rustpods --lib --tests -- tests::ui::components
+          
+          # Bluetooth module coverage
+          cargo tarpaulin --verbose --workspace --timeout 300 --out Json --output-dir ./coverage/bluetooth --skip-clean --exclude-files="target/*" --exclude-files="examples/*" --packages rustpods --lib --tests -- tests::bluetooth
+      
       - name: List coverage directory contents
         run: |
-          Get-ChildItem ./coverage
+          Get-ChildItem ./coverage -Recurse | Where-Object { !$_.PSIsContainer } | Select-Object FullName, Length
           Write-Output "Cobertura.xml size:"
           (Get-Content ./coverage/cobertura.xml | Measure-Object -Line).Lines
           Write-Output "First 10 lines of cobertura.xml:"
@@ -71,4 +83,19 @@ jobs:
           name: code-coverage-report
           path: ./coverage
           retention-days: 30
+        continue-on-error: true
+      
+      - name: Check coverage thresholds
+        run: |
+          # Extract total coverage percentage from the JSON report
+          $jsonReport = Get-Content -Path ./coverage/components/tarpaulin-report.json | ConvertFrom-Json
+          $uiCoverage = $jsonReport.percentage
+          
+          # Check UI components coverage
+          if ($uiCoverage -lt 75) {
+            Write-Error "UI components test coverage ($uiCoverage%) is below the required threshold (75%)"
+            exit 1
+          } else {
+            Write-Output "UI components test coverage: $uiCoverage% (threshold: 75%)"
+          }
         continue-on-error: true 

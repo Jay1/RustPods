@@ -14,17 +14,28 @@ use std::path::Path;
 extern crate winres;
 
 fn main() {
-    // Compile Windows resource file to embed icon and version info
+    // Configure the build script
+    println!("cargo:rerun-if-changed=app.rc");
+    println!("cargo:rerun-if-changed=assets/");
+    println!("cargo:rerun-if-changed=scripts/airpods_battery_cli/");
+
+    // Embed the icon in the executable
     #[cfg(target_os = "windows")]
     {
         let mut res = winres::WindowsResource::new();
-        res.set_icon("assets/icons/app/logo_ring.ico")
-           .set_version_info(winres::VersionInfo::PRODUCTVERSION, 0x0001000000000000)
-           .set_manifest_file("app.rc");
-        if let Err(e) = res.compile() {
-            println!("cargo:warning=Failed to compile Windows resources: {}", e);
+        res.set_icon("assets/icons/app/logo_ring.ico");
+        match res.compile() {
+            Ok(_) => {}
+            Err(e) => {
+                println!("cargo:warning=rustpods@0.1.0: RC.exe not available, using basic icon embedding");
+                embed_resource::compile("app.rc", embed_resource::NONE);
+                println!("cargo:warning={}", e);
+            }
         }
     }
+
+    // Get the output directory
+    let _out_dir = env::var("OUT_DIR").unwrap();
 
     // Only build CLI scanner on Windows (target functionality)
     if cfg!(target_os = "windows") {
@@ -297,7 +308,7 @@ fn is_path_newer_than(
 }
 
 fn setup_cli_scanner_distribution() {
-    let out_dir = env::var("OUT_DIR").unwrap();
+    let _out_dir = env::var("OUT_DIR").unwrap();
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     
     // Source CLI scanner path

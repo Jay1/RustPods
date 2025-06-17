@@ -1,12 +1,12 @@
 //! Settings window implementation for RustPods
 
 use crate::config::AppConfig;
-use crate::ui::components::UiSetting;
+use crate::ui::components::SettingsView;
 use crate::ui::theme::{self, Theme};
 use crate::ui::Message;
 use crate::ui::UiComponent;
 use iced::{
-    widget::{button, column, container, row, text, Checkbox, Space},
+    widget::{button, column, container, row, text, Space, scrollable},
     Alignment, Element, Length,
 };
 
@@ -17,14 +17,17 @@ pub struct SettingsWindow {
     config: AppConfig,
     /// Whether changes have been made
     has_changes: bool,
+    /// Settings view component
+    settings_view: SettingsView,
 }
 
 impl SettingsWindow {
     /// Create a new settings window
     pub fn new(config: AppConfig) -> Self {
         Self {
-            config,
+            config: config.clone(),
             has_changes: false,
+            settings_view: SettingsView::new(config),
         }
     }
 
@@ -35,8 +38,14 @@ impl SettingsWindow {
 
     /// Update the configuration
     pub fn update_config(&mut self, config: AppConfig) {
-        self.config = config;
+        self.config = config.clone();
+        self.settings_view.update_config(config);
         self.has_changes = false;
+    }
+
+    /// Update connected devices
+    pub fn update_connected_devices(&mut self, devices: Vec<String>) {
+        self.settings_view.update_connected_devices(devices);
     }
 
     /// Mark that changes have been made
@@ -69,12 +78,10 @@ impl UiComponent for SettingsWindow {
         ]
         .align_items(Alignment::Center);
 
-        // Minimize to tray checkbox
-        let minimize_checkbox = Checkbox::new(
-            "Minimize to tray on close",
-            self.config.ui.minimize_to_tray_on_close,
-            |value| Message::UpdateUiSetting(UiSetting::MinimizeToTrayOnClose(value)),
-        );
+        // Get all settings sections from the settings view
+        let bluetooth_settings = self.settings_view.bluetooth_settings();
+        let ui_settings = self.settings_view.ui_settings();
+        let system_settings = self.settings_view.system_settings();
 
         // Settings info text
         let info_text = text("Settings are saved automatically when changed")
@@ -96,23 +103,35 @@ impl UiComponent for SettingsWindow {
             .spacing(10)
             .align_items(Alignment::Center);
 
+        // Scrollable content with all settings sections
+        let scrollable_content = scrollable(
+            column![
+                bluetooth_settings,
+                Space::with_height(Length::Fixed(30.0)),
+                ui_settings,
+                Space::with_height(Length::Fixed(30.0)),
+                system_settings,
+                Space::with_height(Length::Fixed(30.0)),
+                info_text,
+                Space::with_height(Length::Fixed(20.0)),
+                actions
+            ]
+            .spacing(15)
+            .padding(25)
+            .align_items(Alignment::Start)
+        );
+
         let content = column![
             header,
             Space::with_height(Length::Fixed(20.0)),
-            minimize_checkbox,
-            Space::with_height(Length::Fixed(15.0)),
-            info_text,
-            Space::with_height(Length::Fixed(30.0)),
-            actions
+            scrollable_content
         ]
-        .spacing(15)
-        .padding(25)
-        .align_items(Alignment::Start);
+        .spacing(0);
 
-        // Use the same fixed dimensions as the main popup (420×320)
+        // Use the same dimensions as the main application window
         container(content)
-            .width(Length::Fixed(420.0))
-            .height(Length::Fixed(320.0))
+            .width(Length::Fill)
+            .height(Length::Fill)
             .style(iced::theme::Container::Box)
             .into()
     }

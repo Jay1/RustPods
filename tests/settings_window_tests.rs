@@ -6,7 +6,7 @@
 
 use std::time::Duration;
 
-use rustpods::config::{AppConfig, ConfigError, LogLevel, Theme};
+use rustpods::config::{AppConfig, ConfigError, Theme};
 // use rustpods::ui::{SettingsWindow, SettingsTab};
 use iced::widget::text;
 use iced::Element;
@@ -258,28 +258,12 @@ fn test_system_settings_updates() {
     let config = AppConfig::default();
     let mut settings_view = SettingsView::new(config);
 
-    // Update start on boot
-    // Skipped: start_on_boot field does not exist on SystemConfig
+    // Update system settings - only StartOnBoot is available now
+    settings_view.update_system_setting(SystemSetting::StartOnBoot(true));
+    assert!(settings_view.config().system.launch_at_startup);
 
-    // Update start minimized
-    // Skipped: start_minimized field does not exist on SystemConfig
-
-    // Update log level
-    settings_view.update_system_setting(SystemSetting::LogLevel(LogLevel::Debug));
-    assert_eq!(settings_view.config().system.log_level, LogLevel::Debug);
-
-    settings_view.update_system_setting(SystemSetting::LogLevel(LogLevel::Error));
-    assert_eq!(settings_view.config().system.log_level, LogLevel::Error);
-
-    settings_view.update_system_setting(SystemSetting::LogLevel(LogLevel::Info));
-    assert_eq!(settings_view.config().system.log_level, LogLevel::Info);
-
-    settings_view.update_system_setting(SystemSetting::LogLevel(LogLevel::Warn));
-    assert_eq!(settings_view.config().system.log_level, LogLevel::Warn);
-
-    // Update telemetry
-    settings_view.update_system_setting(SystemSetting::EnableTelemetry(true));
-    assert!(settings_view.config().system.enable_telemetry);
+    settings_view.update_system_setting(SystemSetting::StartOnBoot(false));
+    assert!(!settings_view.config().system.launch_at_startup);
 
     // Test that the view can be rendered without errors
     let _system_view = settings_view.system_settings();
@@ -429,27 +413,12 @@ impl SettingsView {
 
     fn update_bluetooth_setting(&mut self, setting: BluetoothSetting) {
         match setting {
-            BluetoothSetting::AutoScanOnStartup(value) => {
-                self.config.bluetooth.auto_scan_on_startup = value;
-            }
-            BluetoothSetting::ScanDuration(value) => {
-                self.config.bluetooth.scan_duration = std::time::Duration::from_secs(value as u64);
-            }
-            BluetoothSetting::ScanInterval(value) => {
-                self.config.bluetooth.scan_interval = std::time::Duration::from_secs(value as u64);
-            }
-            BluetoothSetting::BatteryRefreshInterval(value) => {
-                self.config.bluetooth.battery_refresh_interval = Duration::from_secs(value as u64);
-            }
-            BluetoothSetting::MinRssi(value) => {
-                self.config.bluetooth.min_rssi = Some(value as i16);
-            }
-            BluetoothSetting::AutoReconnect(value) => {
-                self.config.bluetooth.auto_reconnect = value;
-            }
-            BluetoothSetting::ReconnectAttempts(value) => {
-                self.config.bluetooth.reconnect_attempts =
-                    if value > 10 { 10 } else { value as u32 };
+            BluetoothSetting::DeviceName(value) => {
+                self.config.bluetooth.paired_device_name = if value.trim().is_empty() {
+                    None
+                } else {
+                    Some(value.trim().to_string())
+                };
             }
         }
     }
@@ -482,17 +451,8 @@ impl SettingsView {
 
     fn update_system_setting(&mut self, setting: SystemSetting) {
         match setting {
-            SystemSetting::StartOnBoot(_value) => {
-                // Skipped: start_on_boot field does not exist on SystemConfig
-            }
-            SystemSetting::StartMinimized(_value) => {
-                // Skipped: start_minimized field does not exist on SystemConfig
-            }
-            SystemSetting::LogLevel(level) => {
-                self.config.system.log_level = level;
-            }
-            SystemSetting::EnableTelemetry(value) => {
-                self.config.system.enable_telemetry = value;
+            SystemSetting::StartOnBoot(value) => {
+                self.config.system.launch_at_startup = value;
             }
         }
     }

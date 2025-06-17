@@ -1,17 +1,17 @@
-# Contributing to RustPods
+# RustPods Contribution Protocol: Technical Standards and Procedures
 
-Thank you for your interest in contributing to RustPods! This document provides guidelines and instructions for contributing to the project.
+## Introduction
 
-> **Note**: RustPods is focused exclusively on Apple AirPods and Beats products using Apple's proprietary Continuity Protocol. We do not support other Bluetooth earbuds (Sony, Bose, Samsung, etc.) due to technical limitations.
+This document delineates the formal procedures and technical standards for contributing to the RustPods project. RustPods is engineered exclusively for Apple AirPods and Beats products utilizing Apple's proprietary Continuity Protocol. Contributions pertaining to unsupported Bluetooth devices (e.g., Sony, Bose, Samsung) are not within project scope due to technical constraints.
 
 ## Code of Conduct
 
-Please be respectful and considerate of others when contributing to this project. We aim to foster an inclusive and welcoming community.
+Contributors are required to maintain a professional, respectful, and inclusive environment. All interactions must reflect the highest standards of collegiality and technical discourse.
 
-## Getting Started
+## Repository Initialization
 
-1. Fork the repository on GitHub
-2. Clone your fork locally:
+1. Fork the repository on GitHub.
+2. Clone the forked repository:
    ```sh
    git clone https://github.com/YOUR_USERNAME/RustPods.git
    cd RustPods
@@ -20,126 +20,67 @@ Please be respectful and considerate of others when contributing to this project
    ```sh
    git remote add upstream https://github.com/ORIGINAL_OWNER/RustPods.git
    ```
-4. Create a new branch for your changes:
+4. Create a dedicated feature branch:
    ```sh
    git checkout -b feature/your-feature-name
    ```
 
-## Development Environment
+## Development Environment Requirements
 
-### Prerequisites
+### Windows (Full Functionality)
+- Rust toolchain (latest stable)
+- Microsoft C++ Build Tools or Visual Studio 2019/2022 with C++ workload
+- CMake 3.16 or later
+- Git (for submodules)
 
-**Windows (Full Functionality):**
-- [Rust toolchain](https://rustup.rs/) (latest stable)
-- [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) or Visual Studio 2019/2022 with C++ workload
-- [CMake](https://cmake.org/download/) 3.16 or later
-- [Git](https://git-scm.com/) (for submodules)
-
-**Linux/macOS (Limited Functionality):**
-- [Rust toolchain](https://rustup.rs/) (latest stable)
+### Linux/macOS (Limited Functionality)
+- Rust toolchain (latest stable)
 - C++ compiler (gcc or clang)
-- [CMake](https://cmake.org/download/) 3.16 or later
-- [Git](https://git-scm.com/) (for submodules)
+- CMake 3.16 or later
+- Git (for submodules)
 
-> **Note:** Full AirPods battery monitoring requires Windows. Linux/macOS builds will have limited Bluetooth capabilities.
+> **Note:** Full AirPods battery monitoring is supported exclusively on Windows. Linux/macOS builds provide limited Bluetooth functionality.
 
-### Quick Setup
+## Build and Execution Procedures
 
-**Option 1: Automated Build (Recommended)**
+### Automated Build (Recommended)
 
-Use our automated build scripts that handle everything:
-
+Utilize the provided automation scripts:
 ```powershell
-# Windows (PowerShell)
-.\scripts\build_all.ps1
-
-# Linux/macOS (Bash)  
+# Windows
+./scripts/build_all.ps1
+# Linux/macOS
 ./scripts/build_all.sh
 ```
 
-**Option 2: Standard Cargo Build**
-
-The project includes automated CLI scanner building:
+### Standard Cargo Build
 
 ```sh
-# This will automatically build the CLI scanner and Rust app
-cargo build
-
-# For release builds
-cargo build --release
+cargo build           # Builds both CLI scanner and Rust application
+cargo build --release # Release build
 ```
 
-**Option 3: Manual Build**
-
-If the automated builds don't work:
+### Manual Build Sequence
 
 ```sh
-# 1. Initialize submodules
+# Initialize submodules
 git submodule update --init --recursive
-
-# 2. Build CLI scanner manually
+# Build CLI scanner
 cd scripts/airpods_battery_cli
 cmake -B build -S . -G "Visual Studio 17 2022" -A x64  # Windows
 cmake -B build -S . -DCMAKE_BUILD_TYPE=Release         # Linux/macOS
 cmake --build build --config Release
-
-# 3. Build Rust application
+# Build Rust application
 cd ../..
 cargo build --release
 ```
 
-### Development Workflow
-
-1. **Initial setup**:
-   ```sh
-   cargo build  # This builds everything automatically
-   ```
-
-2. **Run the application**:
-   ```sh
-   cargo run    # Launch with default UI
-   cargo run -- help  # Show command options
-   ```
-
-3. **Run tests**:
-   ```sh
-   cargo test
-   ```
-
-4. **Check code quality**:
-   ```sh
-   cargo fmt     # Format code
-   cargo clippy  # Run linter
-   ```
-
-### Build System Architecture
-
-RustPods uses a hybrid build system:
-
-- **Rust Application**: Built with Cargo as usual
-- **CLI Scanner**: Native C++ component built with CMake
-- **Automated Integration**: `build.rs` automatically builds the CLI scanner during `cargo build`
-- **Build Scripts**: PowerShell/Bash scripts for complete automation
-
-**Key Files:**
-- `build.rs` - Rust build script that builds CLI scanner
-- `scripts/build_all.ps1` - Windows automated build script
-- `scripts/build_all.sh` - Linux/macOS automated build script
-- `scripts/airpods_battery_cli/CMakeLists.txt` - CLI scanner build configuration
-
-## Making Changes
-
-### Code Organization
-
-The project is structured as follows:
+## Project Structure
 
 ```
 RustPods/
 ├── src/                           # Rust source code
 │   ├── bluetooth/                 # Bluetooth functionality
-│   │   ├── cli_scanner.rs         # CLI scanner integration
-│   │   ├── battery_monitor.rs     # Battery monitoring
-│   │   └── ...
 │   ├── airpods/                   # AirPods-specific logic
 │   ├── ui/                        # User interface components
 │   └── config/                    # Application configuration
@@ -153,180 +94,127 @@ RustPods/
 └── docs/                          # Documentation
 ```
 
-### Development Guidelines
+## Development Protocols
 
-1. **Follow Rust conventions**: Use `cargo fmt` and `cargo clippy`
-2. **Add tests**: Write unit tests for new functionality
-3. **Update documentation**: Keep README and docs current
-4. **CLI Scanner Changes**: If modifying the CLI scanner, ensure it builds on Windows
-5. **Cross-platform**: Consider Linux/macOS compatibility where possible
+- Adhere to Rust conventions: execute `cargo fmt` and `cargo clippy` prior to submission.
+- Implement comprehensive unit tests for all new functionality.
+- Maintain and update documentation in parallel with code changes.
+- For CLI scanner modifications, ensure successful Windows builds.
+- Consider cross-platform compatibility in all contributions.
 
-### Testing Your Changes
+## Testing Procedures
 
 ```sh
-# Test Rust code
-cargo test
-
-# Test CLI scanner (Windows only)
+cargo test                         # Execute Rust test suite
 cd scripts/airpods_battery_cli/build/Release
-./airpods_battery_cli.exe
-
-# Test full integration
-cargo run -- airpods  # Test AirPods detection
-cargo run             # Test full UI
+./airpods_battery_cli.exe          # Test CLI scanner (Windows only)
+cargo run -- airpods               # Test AirPods detection
+cargo run                          # Launch full UI
 ```
 
-## Troubleshooting Build Issues
+## Troubleshooting and Diagnostics
 
-### Common Problems
+- **Submodule Initialization:**
+  ```sh
+  git submodule update --init --recursive --force
+  ```
+- **CMake Installation:**
+  - Windows: https://cmake.org/download/
+  - Linux: `sudo apt install cmake`
+  - macOS: `brew install cmake`
+- **MSVC Installation:**
+  - Install Visual Studio Build Tools or Visual Studio with C++ workload
+- **CLI Scanner Build Failure:**
+  ```sh
+  cd scripts/airpods_battery_cli
+  cmake -B build -S . --fresh
+  cmake --build build --config Release --verbose
+  ```
+- **Rust Compilation Errors:**
+  ```sh
+  rustup update
+  cargo clean
+  cargo build
+  ```
 
-**1. Git Submodule Issues**
-```sh
-# Fix: Re-initialize submodules
-git submodule update --init --recursive --force
-```
+## Commit Standards
 
-**2. CMake Not Found**
-```sh
-# Windows: Install from https://cmake.org/download/
-# Linux: sudo apt install cmake
-# macOS: brew install cmake
-```
+- Employ clear, imperative commit messages (e.g., "Add", "Fix", "Update").
+- Reference issue numbers where applicable (e.g., "Fix #42: Resolve battery level display issue").
+- Restrict commits to a single, focused change.
 
-**3. MSVC Not Found (Windows)**
-- Install [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
-- Or install Visual Studio 2019/2022 with "Desktop development with C++" workload
+## Submission Workflow
 
-**4. CLI Scanner Build Fails**
-```sh
-# Try manual build
-cd scripts/airpods_battery_cli
-cmake -B build -S . --fresh  # Fresh configuration
-cmake --build build --config Release --verbose
-```
-
-**5. Rust Compilation Errors**
-```sh
-# Update Rust toolchain
-rustup update
-
-# Clean and rebuild
-cargo clean
-cargo build
-```
-
-### Getting Help
-
-If you encounter issues:
-
-1. **Check the automated build scripts**: They often provide more detailed error messages
-2. **Search existing [GitHub Issues](https://github.com/Jay1/RustPods/issues)**
-3. **Create a new issue** with:
-   - Your operating system and version
-   - Rust version (`rustc --version`)
-   - CMake version (`cmake --version`)
-   - Complete error output
-   - Steps you tried
-
-## Commit Guidelines
-
-- Use clear, descriptive commit messages
-- Start with a capitalized, imperative verb (e.g., "Add", "Fix", "Update")
-- Reference issue numbers if applicable (e.g., "Fix #42: Resolve battery level display issue")
-- Keep commits focused on a single change
-
-## Submitting Changes
-
-1. Push your changes to your fork:
+1. Push changes to the feature branch:
    ```sh
    git push origin feature/your-feature-name
    ```
-2. Open a pull request against the main repository
-3. Provide a clear description of the changes and any relevant issue numbers
-4. Be responsive to feedback and be prepared to make additional changes if requested
+2. Open a pull request against the main repository.
+3. Provide a precise description of the changes and reference relevant issues.
+4. Respond promptly to review feedback and implement requested modifications.
 
-## Pull Request Process
+## Pull Request Review Criteria
 
-1. Ensure your code follows the project's style and conventions
-2. Update documentation as needed
-3. Include screenshots or GIFs for UI changes
-4. Add appropriate tests for your changes
-5. Your pull request will be reviewed by maintainers
-6. Address any feedback or suggestions from the review
+- Conformance to project style and conventions
+- Documentation updates as required
+- Inclusion of test evidence for UI changes
+- Adequate test coverage for new or modified code
+- Responsiveness to reviewer feedback
 
-## Types of Contributions
+## Accepted Contribution Types
 
-We welcome the following types of contributions:
+- Defect remediation (bug fixes)
+- Feature enhancements
+- Documentation improvements
+- Performance optimizations
+- User interface and accessibility improvements
+- Test coverage expansion
+- Support for additional AirPods/Beats models
+- Build system and automation enhancements
 
-- **Bug fixes** - Especially cross-platform compatibility issues
-- **Feature enhancements** - New AirPods features, UI improvements
-- **Documentation improvements** - Build guides, API docs, examples
-- **Performance optimizations** - Battery polling efficiency, UI responsiveness
-- **UI/UX improvements** - Better user experience, accessibility
-- **Test coverage improvements** - Unit tests, integration tests
-- **Support for additional models** - More AirPods variants, additional Beats products
-- **Build system improvements** - Better automation, cross-platform support
+## Code Style and Documentation
 
-## Code Style
+- Adhere to Rust's official style guide
+- Employ descriptive, unambiguous identifiers
+- Document complex logic and all public APIs
+- Execute `cargo fmt` and ensure `cargo clippy` passes without warnings
 
-- Follow Rust's official style guide
-- Use meaningful variable and function names
-- Write comments for complex logic
-- Include documentation comments for public APIs
-- Run `cargo fmt` before submitting your code
-- Ensure your code passes `cargo clippy` with no warnings
+## Testing and Validation
 
-## Testing
+- Implement unit tests for all new code
+- Ensure all tests pass (`cargo test`)
+- For UI changes, provide functional verification
+- For Bluetooth features, utilize mocks as appropriate
+- Validate CLI scanner changes on Windows
 
-- Write unit tests for your code
-- Ensure all tests pass with `cargo test`
-- For UI changes, include tests that verify the functionality
-- For Bluetooth functionality, provide mocks where appropriate
-- Test CLI scanner changes on Windows when possible
+## Documentation Protocols
 
-## Documentation
-
-- Update documentation to reflect your changes
+- Update documentation to reflect all substantive changes
 - Document public APIs with doc comments
-- For significant changes, update the relevant guides in the `docs/` directory
-- Update the README if adding new features or changing build instructions
+- For major changes, update guides in the `docs/` directory
+- Revise the README for new features or build instructions
 
-## Performance Considerations
+## Performance and Platform Considerations
 
-- **Battery Polling**: Consider impact on system resources
-- **UI Responsiveness**: Ensure UI remains responsive during Bluetooth operations
-- **Memory Usage**: Monitor memory usage, especially for long-running operations
-- **CLI Scanner Efficiency**: Optimize CLI scanner calls and JSON parsing
+- Optimize for minimal system resource consumption
+- Ensure UI responsiveness under all operational conditions
+- Monitor and manage memory usage
+- Optimize CLI scanner invocation and data parsing
+- Windows is the primary target; ensure graceful degradation on Linux/macOS
 
-## Platform-Specific Notes
+## Security and Licensing
 
-### Windows Development
-- Full functionality available
-- Test CLI scanner integration thoroughly
-- Ensure proper error handling for Windows APIs
+- Never commit sensitive or confidential data
+- Ensure native code is free from security vulnerabilities
+- Respect user privacy in all Bluetooth operations
+- All contributions are licensed under the project's MIT license
 
-### Linux/macOS Development
-- Limited Bluetooth functionality
-- Focus on UI components and core Rust code
-- Test build scripts on these platforms
+## Support and Inquiries
 
-## Security Considerations
-
-- **Public Repository**: Never commit sensitive data
-- **CLI Scanner**: Ensure no security vulnerabilities in native code
-- **User Privacy**: Respect user privacy in Bluetooth operations
-
-## Licensing
-
-By contributing to this project, you agree that your contributions will be licensed under the project's MIT license.
-
-## Questions?
-
-If you have any questions or need help with contributing, please:
-
-1. Check this CONTRIBUTING.md guide
-2. Look at existing issues and pull requests
-3. Open a GitHub issue for discussion
-4. Reach out to the maintainers
+For technical assistance or procedural clarification:
+1. Consult this protocol document
+2. Review existing issues and pull requests
+3. Open a GitHub issue for further discussion
+4. Contact project maintainers as necessary
 
 Thank you for contributing to RustPods! 🦀🎧 

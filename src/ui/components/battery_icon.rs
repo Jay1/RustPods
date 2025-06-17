@@ -310,9 +310,9 @@ fn pulse_color(pulse: f32) -> iced::Color {
 }
 
 /// Create a circular progress SVG for battery display
-fn create_circular_battery_svg(level: u8, is_charging: bool) -> String {
-    // Clamp level between 0 and 100
-    let level = level.min(100);
+fn create_circular_battery_svg(level: f32, is_charging: bool) -> String {
+    // Clamp level between 0.0 and 100.0
+    let level = level.clamp(0.0, 100.0);
     
     // SVG circle parameters - increased by 50%
     let radius = 48.0;  // Was 32.0
@@ -321,7 +321,7 @@ fn create_circular_battery_svg(level: u8, is_charging: bool) -> String {
     let circumference = 2.0 * std::f32::consts::PI * radius;
     
     // Calculate progress arc length (starting from top, clockwise)
-    let progress = (level as f32 / 100.0) * circumference;
+    let progress = (level / 100.0) * circumference;
     let dash_offset = circumference - progress;
     
     // Catppuccin Mocha theme colors
@@ -342,7 +342,7 @@ fn create_circular_battery_svg(level: u8, is_charging: bool) -> String {
     ).unwrap();
     
     // Progress arc (only if level > 0)
-    if level > 0 {
+    if level > 0.0 {
         write!(&mut svg,
             r#"<circle cx="{}" cy="{}" r="{}" fill="none" stroke="{}" stroke-width="{}" stroke-dasharray="{}" stroke-dashoffset="{}" stroke-linecap="round" transform="rotate(-90 {} {})"/>"#,
             center, center, radius, progress_color, stroke_width, circumference, dash_offset, center, center
@@ -363,7 +363,7 @@ fn create_circular_battery_svg(level: u8, is_charging: bool) -> String {
 
 /// Create a minimalist circular battery widget inspired by modern UI design
 pub fn view_circular_battery_widget<'a>(
-    level: u8,
+    level: f32,
     is_charging: bool,
 ) -> Element<'a, Message, iced::Renderer<Theme>> {
     // Store Catppuccin Mocha theme colors in owned variables that can be moved into the closure
@@ -378,13 +378,20 @@ pub fn view_circular_battery_widget<'a>(
         .width(Length::Fixed(120.0))  // Increased from 80.0 to 120.0
         .height(Length::Fixed(120.0)); // Increased from 80.0 to 120.0
 
+    // Format the level with 1 decimal place if it's not a whole number
+    let level_text = if level.fract() == 0.0 {
+        format!("{}%", level as u8)
+    } else {
+        format!("{:.1}%", level)
+    };
+
     // Create the main container with fixed dimensions
     let main_container = container(
         column![
             // Circular battery progress indicator
             svg_element,
-            // Battery percentage text (keeping same size as requested)
-            text(format!("{}%", level))
+            // Battery percentage text with fractional support
+            text(level_text)
                 .size(24)
                 .style(text_color)
         ]
@@ -415,39 +422,45 @@ mod tests {
     #[test]
     fn test_create_circular_battery_svg() {
         // Test SVG generation with different battery levels
-        let svg_25 = create_circular_battery_svg(25, false);
+        let svg_25 = create_circular_battery_svg(25.0, false);
         assert!(svg_25.contains("svg"));
         assert!(svg_25.contains("circle"));
         
-        let svg_75_charging = create_circular_battery_svg(75, true);
+        let svg_75_charging = create_circular_battery_svg(75.0, true);
         assert!(svg_75_charging.contains("svg"));
         assert!(svg_75_charging.contains("circle"));
         assert!(svg_75_charging.contains("path")); // Lightning bolt
         
         // Test edge cases
-        let svg_0 = create_circular_battery_svg(0, false);
+        let svg_0 = create_circular_battery_svg(0.0, false);
         assert!(svg_0.contains("svg"));
         
-        let svg_100 = create_circular_battery_svg(100, false);
+        let svg_100 = create_circular_battery_svg(100.0, false);
         assert!(svg_100.contains("svg"));
         
         // Test clamping
-        let svg_over_100 = create_circular_battery_svg(150, true);
+        let svg_over_100 = create_circular_battery_svg(150.0, true);
         assert!(svg_over_100.contains("svg"));
+        
+        // Test fractional levels
+        let svg_fractional = create_circular_battery_svg(67.3, false);
+        assert!(svg_fractional.contains("svg"));
     }
 
     #[test]
     fn test_view_circular_battery_widget() {
         // Test widget creation with various parameters
-        let widget_25 = view_circular_battery_widget(25, false);
-        let widget_75_charging = view_circular_battery_widget(75, true);
-        let widget_0 = view_circular_battery_widget(0, false);
-        let widget_100 = view_circular_battery_widget(100, false);
+        let widget_25 = view_circular_battery_widget(25.0, false);
+        let widget_75_charging = view_circular_battery_widget(75.0, true);
+        let widget_0 = view_circular_battery_widget(0.0, false);
+        let widget_100 = view_circular_battery_widget(100.0, false);
+        let widget_fractional = view_circular_battery_widget(67.3, false);
         
         // Widgets should be created without panicking
         let _ = widget_25;
         let _ = widget_75_charging;
         let _ = widget_0;
         let _ = widget_100;
+        let _ = widget_fractional;
     }
 }

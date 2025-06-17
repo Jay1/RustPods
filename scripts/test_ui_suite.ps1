@@ -11,6 +11,36 @@ if (-not (Test-Path "Cargo.toml")) {
     exit 1
 }
 
+# Check if tarpaulin is installed
+$tarpaulinInstalled = $null -ne (Get-Command cargo-tarpaulin -ErrorAction SilentlyContinue)
+if (-not $tarpaulinInstalled) {
+    Write-Host "⚠️  Warning: cargo-tarpaulin not found. Coverage reports will not be generated." -ForegroundColor Yellow
+    Write-Host "   Install with: cargo install cargo-tarpaulin" -ForegroundColor Yellow
+    Write-Host ""
+    $generateCoverage = $false
+} else {
+    $generateCoverage = $true
+}
+
+Write-Host "🧪 Running UI Component Tests..." -ForegroundColor Yellow
+Write-Host "Testing individual UI components:" -ForegroundColor Gray
+Write-Host "  • Battery indicator component" -ForegroundColor Gray
+Write-Host "  • AirPods popup component" -ForegroundColor Gray
+Write-Host "  • Settings view component" -ForegroundColor Gray
+Write-Host "  • Waiting mode component" -ForegroundColor Gray
+Write-Host "  • SVG icons component" -ForegroundColor Gray
+Write-Host ""
+
+$componentTests = cargo test --test-threads=1 tests::ui::components --no-default-features --features testing 2>&1
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "✅ UI Component Tests: PASSED" -ForegroundColor Green
+} else {
+    Write-Host "❌ UI Component Tests: FAILED" -ForegroundColor Red
+    Write-Host $componentTests
+    exit 1
+}
+
+Write-Host ""
 Write-Host "🔍 Running Visual Regression Tests..." -ForegroundColor Yellow
 Write-Host "These tests lock down all our carefully tuned UI elements:" -ForegroundColor Gray
 Write-Host "  • Window dimensions (414×455px)" -ForegroundColor Gray  
@@ -73,19 +103,6 @@ if ($LASTEXITCODE -eq 0) {
 }
 
 Write-Host ""
-Write-Host "🧪 Running Existing UI Component Tests..." -ForegroundColor Yellow
-Write-Host "Verifying all existing UI tests still pass:" -ForegroundColor Gray
-
-$uiTests = cargo test ui:: --no-default-features --features testing 2>&1
-if ($LASTEXITCODE -eq 0) {
-    Write-Host "✅ Existing UI Tests: PASSED" -ForegroundColor Green
-} else {
-    Write-Host "❌ Existing UI Tests: FAILED" -ForegroundColor Red
-    Write-Host $uiTests
-    exit 1
-}
-
-Write-Host ""
 Write-Host "🎯 Running Critical Asset Tests..." -ForegroundColor Yellow
 Write-Host "Verifying image assets and paths are valid:" -ForegroundColor Gray
 
@@ -112,14 +129,53 @@ if ($assetErrors.Count -gt 0) {
     Write-Host "✅ Asset Tests: PASSED" -ForegroundColor Green
 }
 
+# Generate coverage reports if tarpaulin is available
+if ($generateCoverage) {
+    Write-Host ""
+    Write-Host "📊 Generating Coverage Reports..." -ForegroundColor Yellow
+    
+    # Create coverage directory if it doesn't exist
+    if (-not (Test-Path "coverage")) {
+        New-Item -ItemType Directory -Path "coverage" | Out-Null
+    }
+    
+    # Generate UI component coverage
+    Write-Host "  • Generating UI component coverage..." -ForegroundColor Gray
+    cargo tarpaulin --verbose --workspace --timeout 300 --out Html --output-dir ./coverage/ui-components --skip-clean --exclude-files="target/*" --exclude-files="examples/*" --packages rustpods --lib --tests -- tests::ui::components | Out-Null
+    
+    # Generate overall coverage
+    Write-Host "  • Generating overall coverage..." -ForegroundColor Gray
+    cargo tarpaulin --verbose --workspace --timeout 300 --out Html --output-dir ./coverage/overall --skip-clean --exclude-files="target/*" --exclude-files="examples/*" | Out-Null
+    
+    Write-Host "✅ Coverage reports generated in ./coverage directory" -ForegroundColor Green
+    
+    # Try to extract coverage percentages
+    try {
+        $uiComponentsJson = Get-Content -Path ./coverage/ui-components/tarpaulin-report.json -ErrorAction SilentlyContinue | ConvertFrom-Json -ErrorAction SilentlyContinue
+        $overallJson = Get-Content -Path ./coverage/overall/tarpaulin-report.json -ErrorAction SilentlyContinue | ConvertFrom-Json -ErrorAction SilentlyContinue
+        
+        if ($uiComponentsJson -and $overallJson) {
+            Write-Host ""
+            Write-Host "📊 Coverage Summary:" -ForegroundColor Cyan
+            Write-Host "  • UI Components: $($uiComponentsJson.percentage)% coverage" -ForegroundColor $(if ($uiComponentsJson.percentage -ge 75) { "Green" } else { "Yellow" })
+            Write-Host "  • Overall: $($overallJson.percentage)% coverage" -ForegroundColor $(if ($overallJson.percentage -ge 75) { "Green" } else { "Yellow" })
+        }
+    } catch {
+        Write-Host "⚠️  Could not parse coverage reports" -ForegroundColor Yellow
+    }
+}
+
 Write-Host ""
 Write-Host "🏁 TEST SUITE SUMMARY" -ForegroundColor Cyan
 Write-Host "====================" -ForegroundColor Cyan
+Write-Host "✅ UI Component Tests - Individual components validated" -ForegroundColor Green
 Write-Host "✅ Visual Regression Tests - UI dimensions and styling locked" -ForegroundColor Green
 Write-Host "✅ Property-Based Tests - Components robust across all inputs" -ForegroundColor Green  
 Write-Host "✅ Integration Tests - End-to-end workflows validated" -ForegroundColor Green
-Write-Host "✅ Existing UI Tests - Backward compatibility maintained" -ForegroundColor Green
 Write-Host "✅ Asset Tests - Image files accessible" -ForegroundColor Green
+if ($generateCoverage) {
+    Write-Host "✅ Coverage Reports - Test coverage measured and reported" -ForegroundColor Green
+}
 Write-Host ""
 Write-Host "🛡️  YOUR UI IS BULLETPROOF! 🛡️" -ForegroundColor Green
 Write-Host ""

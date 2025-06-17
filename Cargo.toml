@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 # Core runtime
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "full"] }
+tokio = { version = "1.0", features = ["full"] }
 log = "0.4"
 env_logger = "0.10"
 
@@ -14,14 +14,14 @@ btleplug = "0.10"
 uuid = { version = "1.3", features = ["v4", "serde"] }
 
 # AirPods communication and parsing
-serde = { version = "1", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 # UI framework
-iced = { version = "0.10", features = ["tokio", "debug", "advanced", "svg", "image"] }
+iced = { version = "0.10", features = ["tokio", "debug", "svg", "image"] }
 
 # System tray integration
-tray-icon = "0.15"
+tray-icon = "0.14"
 
 # Configuration and persistence
 dirs = "5.0"
@@ -46,6 +46,7 @@ tracing = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
 regex = "1.0"
 ctrlc = "3.0"
+crossbeam-channel = "0.5.15"
 
 # Windows API for direct window control
 [target.'cfg(windows)'.dependencies]
@@ -71,6 +72,7 @@ async-trait = "0.1"
 
 [build-dependencies]
 winres = "0.1"
+embed-resource = "2.4"
 
 [lib]
 name = "rustpods"

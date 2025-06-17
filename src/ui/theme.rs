@@ -785,6 +785,11 @@ pub fn settings_button_style() -> iced::theme::Button {
     iced::theme::Button::Secondary
 }
 
+// Secondary button style for general use buttons
+pub fn secondary_button_style() -> iced::theme::Button {
+    iced::theme::Button::Secondary
+}
+
 // NOTE: To use SpaceMono Nerd Font, ensure the font file is included in your assets and registered in main.rs or the application entry point using iced::font::Family or similar.
 
 // Returns the color to use for the settings cogwheel icon based on the theme

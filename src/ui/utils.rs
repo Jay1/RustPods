@@ -6,15 +6,15 @@ use iced::window::Icon;
 pub fn load_window_icon() -> Option<Icon> {
     // Try different icon sources in order of preference
     let icon_attempts = [
-        // Primary icon - 128x128 ICO
+        // Primary icon - logo_ring.ico (contains multiple sizes including 128x128)
         (
-            "ICO 128x128",
-            include_bytes!("../../assets/icons/app/icon_128.ico") as &[u8],
+            "ICO logo_ring",
+            include_bytes!("../../assets/icons/app/logo_ring.ico") as &[u8],
         ),
-        // Fallback - 256x256 ICO
+        // Fallback - PNG version
         (
-            "ICO 256x256",
-            include_bytes!("../../assets/icons/app/icon_256.ico") as &[u8],
+            "PNG logo_ring",
+            include_bytes!("../../assets/icons/app/logo_ring.png") as &[u8],
         ),
     ];
 

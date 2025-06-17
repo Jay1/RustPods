@@ -1,250 +1,197 @@
-# Manual Testing Guide
+# RustPods Manual Testing Protocol: Technical Reference and Verification Procedures
 
-This document outlines procedures for manually testing aspects of RustPods that are difficult to automate. While we aim to automate as much testing as possible, some features require human verification, especially those involving device interaction, UI responsiveness, and platform-specific behaviors.
+## Preamble: Document Scope and Relevance
+
+This document defines the formal procedures for manual verification of RustPods functionality that cannot be fully automated. It is intended for engineers and testers responsible for validating device interaction, user interface responsiveness, and platform-specific behaviors. All procedures are current as of the latest system architecture. Legacy or deprecated steps are clearly marked.
 
 ## Table of Contents
 
 1. [Bluetooth Device Interaction](#bluetooth-device-interaction)
-2. [System Tray Testing](#system-tray-testing)
-3. [UI Responsiveness Testing](#ui-responsiveness-testing)
-4. [Cross-Platform Verification](#cross-platform-verification)
-5. [AirPods Connection Testing](#airpods-connection-testing)
-6. [Reporting Issues Found During Manual Testing](#reporting-issues)
+2. [System Tray Verification](#system-tray-verification)
+3. [User Interface Responsiveness](#user-interface-responsiveness)
+4. [Cross-Platform and Remote Desktop Validation](#cross-platform-and-remote-desktop-validation)
+5. [AirPods Connection Lifecycle Testing](#airpods-connection-lifecycle-testing)
+6. [Issue Reporting and Documentation](#issue-reporting-and-documentation)
 
-## Bluetooth Device Interaction
+## 1. Bluetooth Device Interaction
 
-Automatic testing of actual Bluetooth device interaction is challenging. Use the following procedures to verify Bluetooth functionality:
+### 1.1 Adapter Discovery Verification
+- **Prerequisites:**
+  - At least one physical Bluetooth adapter present
+  - Bluetooth service enabled in Windows
+- **Procedure:**
+  1. Launch RustPods in CLI mode: `rustpods adapters`
+  2. Confirm all physical Bluetooth adapters are detected and listed
+  3. For systems with multiple adapters, verify each is correctly identified (name, address)
+- **Expected Results:**
+  - All adapters are detected and displayed with accurate information
+  - No errors or spurious warnings in terminal output
 
-### Adapter Discovery Testing
+### 1.2 Paired Device Polling Verification
+- **Prerequisites:**
+  - Functional Bluetooth adapter
+  - At least one paired Bluetooth device
+- **Procedure:**
+  1. Launch RustPods and allow automatic polling for paired devices
+  2. Confirm all paired devices are detected and displayed in the UI
+  3. Verify device information (name, address, type) for accuracy
+- **Expected Results:**
+  - All paired devices are detected and displayed
+  - Device information is accurate and updates as devices are paired/unpaired
 
-1. **Prerequisites:**
-   - At least one Bluetooth adapter physically available on the system
-   - Bluetooth service enabled in Windows
+### 1.3 AirPods Device Detection
+- **Prerequisites:**
+  - AirPods paired with Windows
+  - AirPods case with sufficient charge
+- **Procedure:**
+  1. Ensure AirPods are in the case with lid closed
+  2. Launch RustPods
+  3. Open the case lid or remove AirPods
+  4. Confirm AirPods detection in the UI and verify battery level readings
+  5. Remove and replace each AirPod to verify detection status changes
+- **Expected Results:**
+  - AirPods are detected within 5 seconds of activation
+  - Battery levels are reported accurately and update as expected
+  - Device status changes are reflected in the UI
 
-2. **Test Procedure:**
-   - Launch RustPods in CLI mode with: `rustpods adapters`
-   - Verify that all physical Bluetooth adapters are detected and listed
-   - If multiple adapters are present, verify each is correctly identified with its name and address
+## 2. System Tray Verification
 
-3. **Expected Outcome:**
-   - All physical Bluetooth adapters are detected and displayed
-   - Adapter information (name, address, capabilities) is accurate
-   - No errors are shown in the terminal output
+### 2.1 Tray Icon Appearance
+- **Procedure:**
+  1. Launch RustPods
+  2. Confirm the system tray icon appears in the Windows taskbar
+  3. Verify icon clarity and correct sizing under various display scaling settings
+- **Expected Results:**
+  - Icon appears immediately and is visually clear
+  - Icon remains properly sized and themed under all scaling configurations
 
-### Paired Device Polling Testing
+### 2.2 Tray Menu Functionality
+- **Procedure:**
+  1. Right-click the tray icon to open the context menu
+  2. Verify all menu items are present and readable
+  3. Test each menu item:
+     - "Show": Brings main window to foreground
+     - "Settings": Opens settings window
+     - "Exit": Closes the application
+- **Expected Results:**
+  - Menu appears without delay
+  - All items function as specified
+  - Menu closes properly after selection or loss of focus
 
-1. **Prerequisites:**
-   - Bluetooth adapter is properly functioning
-   - At least one Bluetooth device (preferably multiple) paired with Windows
+### 2.3 Tray Icon State Updates
+- **Procedure:**
+  1. Connect AirPods and verify tray icon updates to reflect battery status
+  2. Allow battery state to change and confirm icon updates accordingly
+  3. Disconnect AirPods and verify icon returns to default state
+- **Expected Results:**
+  - Icon accurately reflects current battery status and connection state
+  - Updates occur within a reasonable timeframe
 
-2. **Test Procedure:**
-   - Launch RustPods and allow it to poll for paired devices (no manual scan required)
-   - Verify that all paired Bluetooth devices are detected and displayed in the UI
-   - Check that device information (name, address, type) is accurate
+## 3. User Interface Responsiveness
 
-3. **Expected Outcome:**
-   - All paired Bluetooth devices are detected and displayed
-   - Device information is accurate (address matches the actual device)
-   - UI updates as devices are paired/unpaired in Windows
+### 3.1 Window and Transition Performance
+- **Procedure:**
+  1. Launch RustPods and measure time to main window appearance
+  2. Open and close the settings window repeatedly
+  3. Minimize to tray and restore multiple times
+- **Expected Results:**
+  - Main window opens within 2 seconds
+  - Settings window transitions are smooth and free of UI freezing
+  - Application restores from minimized state in under 1 second
 
-### Testing with Real AirPods
+### 3.2 Animation and State Transition Smoothness
+- **Procedure:**
+  1. Observe battery indicator and other UI animations
+  2. Trigger state changes to test transition animations
+  3. Test on both high-performance and lower-end systems
+- **Expected Results:**
+  - Animations are smooth and free of stutter
+  - UI remains responsive during all transitions
 
-1. **Prerequisites:**
-   - AirPods paired with the Windows system
-   - AirPods case with some charge
+### 3.3 Input Responsiveness
+- **Procedure:**
+  1. Interact with buttons and controls in rapid succession
+  2. Type in text input fields in the settings window
+  3. Drag and resize windows rapidly
+- **Expected Results:**
+  - UI responds to all input events without delay
+  - No input events are missed or processed out of order
+  - Application remains stable under rapid input
 
-2. **Test Procedure:**
-   - Ensure AirPods are in case and case is closed
-   - Launch RustPods
-   - Open the AirPods case lid or take AirPods out of the case
-   - Verify that the AirPods are detected in the UI
-   - Note battery level readings and verify they seem reasonable
+## 4. Cross-Platform and Remote Desktop Validation
 
-3. **Verification Steps:**
-   - Remove one AirPod and verify the detection status changes
-   - Replace it and remove the other, verifying the same
-   - Test with different charge levels to ensure battery reporting is accurate
+### 4.1 Windows Version Compatibility
+- **Procedure:**
+  1. Test on Windows 10, Windows 11, and Windows Server (if applicable)
+  2. Verify core functionality and UI scaling on each platform
+- **Expected Results:**
+  - Core functionality and UI scaling are consistent across all tested Windows versions
+  - System tray integration is reliable on all platforms
 
-## System Tray Testing
+### 4.2 Remote Desktop Session Testing
+- **Procedure:**
+  1. Launch RustPods in a remote desktop session
+  2. Test core functionality and system tray integration
+  3. Verify Bluetooth access (if supported in remote session)
+- **Expected Results:**
+  - Application functions correctly in remote desktop environments
+  - System tray integration is reliable
+  - Any limitations are documented
 
-System tray behavior can vary based on Windows version and configuration:
+## 5. AirPods Connection Lifecycle Testing
 
-### Tray Icon Appearance
+### 5.1 Initial Detection and Model Identification
+- **Procedure:**
+  1. Start with AirPods in case, lid closed
+  2. Launch RustPods
+  3. Open case lid or remove AirPods
+  4. Measure detection time and verify model identification
+- **Expected Results:**
+  - AirPods are detected within 5 seconds
+  - Correct model is identified
+  - Case battery level is reported accurately
 
-1. **Test Procedure:**
-   - Launch RustPods
-   - Verify the system tray icon appears in the taskbar
-   - Ensure the icon is clear and properly sized
-   - Verify icon behavior when changing display scaling settings
+### 5.2 Battery Reporting Accuracy
+- **Procedure:**
+  1. Test AirPods at various battery levels: >80%, 30-80%, <30%, <10%
+  2. Compare reported levels with iOS/macOS device if available
+- **Expected Results:**
+  - Battery levels are reported with reasonable accuracy
+  - Low battery triggers appropriate notifications
+  - Battery levels update at expected intervals
 
-2. **Expected Outcome:**
-   - Icon appears immediately upon application launch
-   - Icon is visually clear and matches the application theme
-   - Icon remains properly sized when display scaling changes
+### 5.3 Disconnection and Reconnection Handling
+- **Procedure:**
+  1. Connect AirPods and verify detection
+  2. Close case and move AirPods out of range
+  3. Confirm disconnection is detected
+  4. Return AirPods to range and verify reconnection
+- **Expected Results:**
+  - Disconnection is detected within expected timeframe
+  - UI updates to reflect disconnection
+  - Reconnection occurs automatically when AirPods return to range
 
-### Tray Menu Functionality
+## 6. Issue Reporting and Documentation
 
-1. **Test Procedure:**
-   - Right-click the system tray icon to open the context menu
-   - Verify all menu items are displayed correctly
-   - Test each menu item:
-     - "Show" - Should bring the main window to front if minimized
-     - "Settings" - Should open the settings window
-     - "Exit" - Should close the application completely
+### 6.1 Issue Documentation Protocol
+- **Required Information:**
+  - Step-by-step reproduction instructions
+  - Expected vs. actual behavior
+  - System configuration details (OS version, hardware, Bluetooth adapter)
+  - Screenshots or video evidence (if applicable)
 
-2. **Expected Behavior:**
-   - Menu appears without delay when right-clicking
-   - All menu items are readable and properly aligned
-   - Menu items function as expected when clicked
-   - Menu closes properly after selection or clicking elsewhere
+### 6.2 Severity Classification
+- **Critical:** Prevents core functionality
+- **Major:** Significantly impacts user experience, but has workarounds
+- **Minor:** Cosmetic or minor functional issues
+- **Enhancement:** Suggestions for improvement
 
-### Tray Icon Updates
+### 6.3 Reporting Process
+- Create a GitHub issue using the appropriate template
+- Label with "manual-test" and the correct severity
+- Include all reproduction steps and system details
+- If possible, propose or include automated test cases that could detect the issue
 
-1. **Test Procedure:**
-   - Connect AirPods and verify the tray icon updates to reflect battery status
-   - Allow battery to change and verify the icon updates accordingly
-   - Disconnect AirPods and verify the icon returns to the default state
+---
 
-2. **Expected Outcome:**
-   - Icon updates to reflect current battery status
-   - Updates occur within a reasonable timeframe after status changes
-   - Icon is clearly distinguishable at different battery levels
-
-## UI Responsiveness Testing
-
-Automated testing tools may not accurately measure perceived responsiveness:
-
-### Window Opening and Transition Testing
-
-1. **Test Procedure:**
-   - Launch the application and measure time until main window appears
-   - Open and close the settings window repeatedly
-   - Minimize the application to tray and restore it multiple times
-
-2. **Expected Outcome:**
-   - Main window opens within 2 seconds of application launch
-   - Settings window opens and closes smoothly without UI freezing
-   - Application restores from minimized state quickly (under 1 second)
-
-### Animation Smoothness Testing
-
-1. **Test Procedure:**
-   - Observe battery level indicator animations
-   - Trigger state changes to test transition animations
-   - Test on both high-performance and lower-end systems
-
-2. **Expected Outcome:**
-   - Animations play smoothly without stuttering
-   - UI remains responsive during animations
-   - Animations complete in expected timeframe
-
-### Input Responsiveness Testing
-
-1. **Test Procedure:**
-   - Click various buttons and controls in rapid succession
-   - Type quickly in text input fields in the settings window
-   - Drag/resize windows rapidly
-
-2. **Expected Outcome:**
-   - UI responds to all input events without noticeable delay
-   - No input events are missed or processed out of order
-   - Application remains stable under rapid input
-
-## Cross-Platform Verification
-
-While Windows is the primary target, verify basic functionality on other platforms:
-
-### Windows Version Testing
-
-1. **Test Procedure:**
-   - Test on multiple Windows versions:
-     - Windows 10
-     - Windows 11
-     - Windows Server (if applicable)
-   - Verify core functionality on each platform
-
-2. **Expected Outcome:**
-   - Core functionality works consistently across Windows versions
-   - UI scaling behaves appropriately on each platform
-   - System tray integration works on all tested versions
-
-### Remote Desktop Testing
-
-1. **Test Procedure:**
-   - Launch application on a remote desktop session
-   - Test core functionality and system tray integration
-   - Verify Bluetooth access works through remote session (if applicable)
-
-2. **Expected Outcome:**
-   - Application functions properly in remote desktop environment
-   - System tray integration works correctly
-   - Any limitations are properly documented
-
-## AirPods Connection Testing
-
-Testing the full AirPods connection lifecycle is important:
-
-### Initial Detection
-
-1. **Test Procedure:**
-   - Start with AirPods in case with lid closed
-   - Launch RustPods
-   - Open AirPods case lid or take AirPods out
-   - Verify detection time and accuracy
-
-2. **Expected Outcome:**
-   - AirPods are detected within 5 seconds of opening the case or removing from case
-   - Correct AirPods model is identified
-   - Case battery level is reported accurately
-
-### Battery Reporting Accuracy
-
-1. **Test Procedure:**
-   - Test AirPods at different battery levels:
-     - Nearly full (>80%)
-     - Moderate (30-80%)
-     - Low (<30%)
-     - Very low (<10%)
-   - Compare reported battery levels with iOS/macOS device if available
-
-2. **Expected Outcome:**
-   - Battery levels are reported with reasonable accuracy
-   - Low battery levels trigger appropriate notifications
-   - Battery levels update at the expected refresh interval
-
-### Disconnection and Reconnection
-
-1. **Test Procedure:**
-   - Connect AirPods and verify detection
-   - Close case and move AirPods out of range
-   - Verify disconnection is detected
-   - Bring AirPods back in range and verify reconnection
-
-2. **Expected Outcome:**
-   - Disconnection is detected within expected timeframe
-   - UI updates to show disconnection state
-   - Reconnection occurs automatically when AirPods return to range
-
-## Reporting Issues {#reporting-issues}
-
-When manual testing reveals issues:
-
-1. **Document the Issue:**
-   - Specific steps to reproduce
-   - Expected vs. actual behavior
-   - System configuration details
-   - Screenshots or videos if applicable
-
-2. **Issue Severity Classification:**
-   - **Critical:** Prevents core functionality from working
-   - **Major:** Significantly impacts user experience but has workarounds
-   - **Minor:** Cosmetic issues or minor functional problems
-   - **Enhancement:** Suggestions for improvements rather than bugs
-
-3. **Reporting Process:**
-   - Create a GitHub issue with the appropriate template
-   - Label with "manual-test" and appropriate severity
-   - Include all reproduction steps and system details
-   - If possible, include automated test cases that could have caught the issue
-
-By following these manual testing procedures, we can ensure aspects of the application that are difficult to test automatically still maintain high quality standards. 
+**This protocol is maintained as a living reference. Update as the application evolves or as new manual verification requirements are identified.** 

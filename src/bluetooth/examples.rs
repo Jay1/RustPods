@@ -244,10 +244,17 @@ pub async fn airpods_filtering() -> Result<(), Box<dyn std::error::Error>> {
     println!("Scanning for AirPods...\n");
 
     // Execute the CLI scanner with fast mode
-    let output = tokio::process::Command::new(cli_path)
-        .arg("--fast") // Use fast 2-second scan with early exit
-        .output()
-        .await?;
+    let mut command = tokio::process::Command::new(cli_path);
+    command.arg("--fast"); // Use fast 2-second scan with early exit
+    
+    // Hide console window on Windows in release builds
+    #[cfg(all(windows, not(debug_assertions)))]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    
+    let output = command.output().await?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);

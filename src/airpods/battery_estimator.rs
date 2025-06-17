@@ -107,6 +107,17 @@ impl BatteryEstimator {
         )
     }
 
+    /// Get fractional estimated percentages for 1% increment display
+    pub fn get_fractional_display_levels(&self) -> (Option<f32>, Option<f32>, Option<f32>) {
+        let (left, right, case) = self.get_estimated_levels();
+        
+        (
+            if left.level >= 0.0 { Some(left.level) } else { None },
+            if right.level >= 0.0 { Some(right.level) } else { None },
+            if case.level >= 0.0 { Some(case.level) } else { None },
+        )
+    }
+
     /// Check if we have any recent real data
     pub fn has_recent_data(&self) -> bool {
         let cutoff = SystemTime::now() - Duration::from_secs(300); // 5 minutes
@@ -118,6 +129,43 @@ impl BatteryEstimator {
                     .map(|time| time > cutoff)
                     .unwrap_or(false)
             })
+    }
+
+    /// Inject fake historical data for testing (simulates realistic battery discharge)
+    pub fn inject_test_data(&mut self) {
+        let now = SystemTime::now();
+        
+        // Simulate battery discharge history over the past 2 hours
+        let test_intervals = [
+            (120, 80), // 2 hours ago: 80%
+            (90, 78),  // 1.5 hours ago: 78% (discharge rate: 1.33%/30min = 0.044%/min)
+            (60, 75),  // 1 hour ago: 75% (discharge rate: 3%/30min = 0.1%/min)
+            (30, 72),  // 30 min ago: 72% (discharge rate: 3%/30min = 0.1%/min)
+            (5, 70),   // 5 min ago: 70% (discharge rate: 2%/25min = 0.08%/min)
+        ];
+
+        for (minutes_ago, level) in test_intervals {
+            let timestamp = now - Duration::from_secs(minutes_ago * 60);
+            
+            // Add to all three histories (left, right, case)
+            self.left_history.update_real_reading(level, timestamp);
+            self.right_history.update_real_reading(level, timestamp);
+            self.case_history.update_real_reading(level, timestamp);
+        }
+
+        crate::debug_log!("airpods", "Injected test battery history: 80% -> 78% -> 75% -> 72% -> 70% over 2 hours");
+        crate::debug_log!("airpods", "Left history rates: {}", self.left_history.discharge_rates.len());
+        crate::debug_log!("airpods", "Right history rates: {}", self.right_history.discharge_rates.len());
+        crate::debug_log!("airpods", "Case history rates: {}", self.case_history.discharge_rates.len());
+    }
+
+    /// Force estimation mode (for testing/development) - ignores fresh data threshold
+    pub fn get_forced_display_levels(&self) -> (Option<u8>, Option<u8>, Option<u8>) {
+        (
+            self.left_history.get_forced_estimated_level().map(|e| e.level.round() as u8),
+            self.right_history.get_forced_estimated_level().map(|e| e.level.round() as u8),
+            self.case_history.get_forced_estimated_level().map(|e| e.level.round() as u8),
+        )
     }
 }
 
@@ -190,8 +238,9 @@ impl DischargeHistory {
             },
         };
 
-        // If reading is very recent (< 1 minute), treat as real data
-        if elapsed.as_secs() < 60 {
+        // If reading is very recent (< 15 seconds), treat as real data
+        // Reduced from 60 seconds to allow estimation with frequent updates
+        if elapsed.as_secs() < 15 {
             return EstimatedBattery {
                 level: last_level as f32,
                 is_real_data: true,
@@ -216,7 +265,7 @@ impl DischargeHistory {
     }
 
     /// Get average discharge rate from recent history
-    fn get_average_discharge_rate(&self) -> f32 {
+    pub fn get_average_discharge_rate(&self) -> f32 {
         if self.discharge_rates.is_empty() {
             return DEFAULT_DISCHARGE_RATE;
         }
@@ -259,6 +308,40 @@ impl DischargeHistory {
         confidence *= 0.3 + 0.7 * data_quality; // Range: 30% to 100%
 
         confidence.max(0.1).min(1.0) // Clamp between 10% and 100%
+    }
+
+    /// Force estimation ignoring fresh data threshold (for testing/development)
+    pub fn get_forced_estimated_level(&self) -> Option<EstimatedBattery> {
+        // If no data available, return None
+        let (last_level, last_time) = match (self.last_known_level, self.last_known_time) {
+            (Some(level), Some(time)) => (level, time),
+            _ => return None,
+        };
+
+        let now = SystemTime::now();
+        let elapsed = match now.duration_since(last_time) {
+            Ok(duration) => duration,
+            Err(_) => return Some(EstimatedBattery {
+                level: last_level as f32,
+                is_real_data: true,
+                confidence: 1.0,
+            }),
+        };
+
+        // Force estimation calculation regardless of elapsed time
+        let minutes_elapsed = elapsed.as_secs_f32() / 60.0;
+        let avg_discharge_rate = self.get_average_discharge_rate();
+        let estimated_discharge = avg_discharge_rate * minutes_elapsed;
+        let estimated_level = (last_level as f32 - estimated_discharge).max(0.0);
+
+        // Calculate confidence
+        let confidence = self.calculate_confidence(elapsed);
+
+        Some(EstimatedBattery {
+            level: estimated_level,
+            is_real_data: false,
+            confidence,
+        })
     }
 }
 

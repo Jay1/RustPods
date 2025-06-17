@@ -75,7 +75,8 @@ pub fn view_device_popup(device: &MergedBluetoothDevice) -> Element<'static, Mes
         // Left earbud circular widget
         column![
             view_circular_battery_widget(
-                device.left_battery.unwrap_or(0),
+                device.left_battery_fractional
+                    .unwrap_or(device.left_battery.unwrap_or(0) as f32),
                 false // For now, charging state is not available in MergedBluetoothDevice
             ),
             text("Left")
@@ -89,7 +90,8 @@ pub fn view_device_popup(device: &MergedBluetoothDevice) -> Element<'static, Mes
         // Right earbud circular widget
         column![
             view_circular_battery_widget(
-                device.right_battery.unwrap_or(0),
+                device.right_battery_fractional
+                    .unwrap_or(device.right_battery.unwrap_or(0) as f32),
                 false // For now, charging state is not available in MergedBluetoothDevice
             ),
             text("Right")
@@ -103,7 +105,8 @@ pub fn view_device_popup(device: &MergedBluetoothDevice) -> Element<'static, Mes
         // Case circular widget
         column![
             view_circular_battery_widget(
-                device.case_battery.unwrap_or(0),
+                device.case_battery_fractional
+                    .unwrap_or(device.case_battery.unwrap_or(0) as f32),
                 false // For now, charging state is not available in MergedBluetoothDevice
             ),
             text("Case")
@@ -167,7 +170,8 @@ impl UiComponent for AirPodsPopup {
             // Left earbud circular widget
             column![
                 view_circular_battery_widget(
-                    self.device.left_battery.unwrap_or(0),
+                    self.device.left_battery_fractional
+                        .unwrap_or(self.device.left_battery.unwrap_or(0) as f32),
                     false // For now, charging state is not available in MergedBluetoothDevice
                 ),
                 text("Left")
@@ -181,7 +185,8 @@ impl UiComponent for AirPodsPopup {
             // Right earbud circular widget
             column![
                 view_circular_battery_widget(
-                    self.device.right_battery.unwrap_or(0),
+                    self.device.right_battery_fractional
+                        .unwrap_or(self.device.right_battery.unwrap_or(0) as f32),
                     false // For now, charging state is not available in MergedBluetoothDevice
                 ),
                 text("Right")
@@ -195,7 +200,8 @@ impl UiComponent for AirPodsPopup {
             // Case circular widget
             column![
                 view_circular_battery_widget(
-                    self.device.case_battery.unwrap_or(0),
+                    self.device.case_battery_fractional
+                        .unwrap_or(self.device.case_battery.unwrap_or(0) as f32),
                     false // For now, charging state is not available in MergedBluetoothDevice
                 ),
                 text("Case")

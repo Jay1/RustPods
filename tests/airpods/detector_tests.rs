@@ -30,7 +30,7 @@ fn create_device_with_data(address: &str, name: Option<&str>, data: Vec<u8>) -> 
 
 /// Test AirPods detection with valid manufacturer data
 #[test]
-fn test_detect_airpods_valid_data() {
+fn test_detect_airpods_with_valid_data() {
     // Example AirPods Pro 2nd Gen manufacturer data
     // Based on actual Apple Continuity Protocol format with correct battery offsets
     let manufacturer_data = vec![
@@ -190,14 +190,14 @@ fn test_identify_airpods_types() {
     }
 }
 
-/// Test battery level extraction
+/// Test battery level extraction and validation
 #[test]
 fn test_battery_extraction() {
     // Different battery level values in manufacturer data
     // Based on actual Apple Continuity Protocol format with correct offsets
     let test_cases = [
         // Create test data with battery values at correct offsets (12, 13, 15)
-        // Format: [prefix...padding...left_battery, right_battery, charging_status, case_battery, ...]
+        // Format: [prefix...padding...left_battery, right_battery, charging_status, case_battery, ...] 
         (
             vec![
                 0x07, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 7, 7, 0, 0,
@@ -206,114 +206,248 @@ fn test_battery_extraction() {
             Some(70),
             Some(70),
             Some(0),
-            AirPodsChargingState::NotCharging,
+            Some(AirPodsChargingState::NotCharging),
         ),
         (
             vec![
-                0x07, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 7, 9, 2, 0,
+                0x07, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 50, 60, 4, 8,
                 0, 0,
             ],
-            Some(70),
-            Some(90),
-            Some(0),
-            AirPodsChargingState::RightCharging,
+            Some(100),
+            Some(100),
+            Some(80),
+            Some(AirPodsChargingState::CaseCharging),
         ),
         (
             vec![
-                0x07, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 6, 0xFF, 0,
-                0, 0, 0,
+                0x07, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 9, 9, 1, 10,
+                0, 0,
             ],
-            Some(60),
-            None,
-            Some(0),
-            AirPodsChargingState::NotCharging,
+            Some(90),
+            Some(90),
+            Some(100),
+            Some(AirPodsChargingState::LeftCharging),
         ),
     ];
 
-    for (data, left_expected, right_expected, case_expected, charging_expected) in test_cases {
-        let device = create_device_with_data("11:22:33:44:55:66", Some("AirPods"), data);
-
+    for (data, expected_left, expected_right, expected_case, expected_charging) in test_cases {
+        // Create a device with manufacturer data
+        let device = create_device_with_data("00:11:22:33:44:55", Some("AirPods"), data);
+        
+        // Detect AirPods
         let result = detect_airpods(&device);
-        assert!(result.is_ok(), "AirPods detection should not fail");
-
-        if let Ok(Some(airpods)) = result {
-            // Check battery status if it exists
-            if let Some(battery) = &airpods.battery {
-                assert_eq!(battery.left, left_expected, "Left battery level mismatch");
-                assert_eq!(
-                    battery.right, right_expected,
-                    "Right battery level mismatch"
-                );
-                assert_eq!(battery.case, case_expected, "Case battery level mismatch");
-                assert_eq!(
-                    battery.charging,
-                    Some(charging_expected),
-                    "Charging status mismatch"
-                );
-            } else {
-                panic!("Battery information is missing");
-            }
-        } else {
-            panic!("Failed to detect AirPods for battery test");
-        }
+        assert!(result.is_ok(), "Should successfully detect AirPods");
+        
+        let airpods_option = result.unwrap();
+        assert!(airpods_option.is_some(), "Expected Some(DetectedAirPods), got None");
+        
+        let airpods = airpods_option.unwrap();
+        let battery = airpods.battery.unwrap();
+        
+        // Verify battery levels
+        assert_eq!(battery.left, expected_left, "Left bud battery should match expected value");
+        assert_eq!(battery.right, expected_right, "Right bud battery should match expected value");
+        assert_eq!(battery.case, expected_case, "Case battery should match expected value");
+        assert_eq!(battery.charging, expected_charging, "Charging state should match expected value");
     }
 }
 
-/// Test creating a DetectedAirPods manually
+/// Test DetectedAirPods object creation
 #[test]
 fn test_detected_airpods_creation() {
-    // Create a DetectedAirPods instance manually
-    let airpods = DetectedAirPods {
-        address: BDAddr::from([0x11, 0x22, 0x33, 0x44, 0x55, 0x66]),
-        name: Some("My AirPods".to_string()),
-        device_type: AirPodsType::AirPodsPro,
-        battery: Some(AirPodsBattery {
-            left: Some(85),
-            right: Some(90),
-            case: Some(60),
-            charging: Some(AirPodsChargingState::LeftCharging),
-        }),
-        rssi: Some(-55),
-        last_seen: Instant::now(),
-        is_connected: false,
-    };
+    let address: BDAddr = "11:22:33:44:55:66".parse().unwrap();
+    let name = Some("AirPods Pro".to_string());
+    let rssi = Some(-60);
+    let device_type = AirPodsType::AirPodsPro;
+    let battery = Some(AirPodsBattery {
+        left: Some(80),
+        right: Some(75),
+        case: Some(90),
+        charging: Some(AirPodsChargingState::NotCharging),
+    });
+    let is_connected = true;
 
-    // Verify properties
-    assert_eq!(
-        airpods.address,
-        BDAddr::from([0x11, 0x22, 0x33, 0x44, 0x55, 0x66])
+    let airpods = DetectedAirPods::new(
+        address,
+        name.clone(),
+        rssi,
+        device_type.clone(), // Clone the device_type since AirPodsType doesn't implement Copy
+        battery.clone(),
+        is_connected,
     );
-    assert_eq!(airpods.name, Some("My AirPods".to_string()));
-    assert_eq!(airpods.device_type, AirPodsType::AirPodsPro);
 
-    // Check battery status
-    if let Some(battery) = airpods.battery.as_ref() {
-        assert_eq!(battery.left, Some(85));
-        assert_eq!(battery.right, Some(90));
-        assert_eq!(battery.case, Some(60));
-        assert!(battery
-            .charging
-            .as_ref()
-            .is_some_and(|c| c.is_left_charging()));
-    } else {
-        panic!("Battery information is missing");
-    }
-
-    assert_eq!(airpods.rssi, Some(-55));
-
-    // No longer testing Display here since that may have been refactored
+    assert_eq!(airpods.address, address);
+    assert_eq!(airpods.name, name);
+    assert_eq!(airpods.rssi, rssi);
+    assert_eq!(airpods.device_type, device_type);
+    assert_eq!(airpods.battery, battery);
+    assert_eq!(airpods.is_connected, is_connected);
 }
 
-/// Test default AirPods battery implementation
+/// Test AirPodsBattery default implementation
 #[test]
 fn test_airpods_battery_default() {
     let battery = AirPodsBattery::default();
-
-    // Verify defaults
     assert_eq!(battery.left, None);
     assert_eq!(battery.right, None);
     assert_eq!(battery.case, None);
     assert_eq!(battery.charging, None);
+}
 
-    // No longer testing Display here since that may have been refactored
+/// Test connection status monitoring for AirPods devices
+#[test]
+fn test_connection_status_monitoring() {
+    // Create two devices - one connected, one disconnected
+    let connected_data = vec![
+        0x0E, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 8, 8, 0, 10, 0, 0,
+    ];
+    let disconnected_data = vec![
+        0x0E, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 8, 8, 0, 10, 0, 0,
+    ];
+
+    let mut connected_device = create_device_with_data(
+        "AA:BB:CC:11:22:33",
+        Some("AirPods Pro"),
+        connected_data,
+    );
+    let disconnected_device = create_device_with_data(
+        "DD:EE:FF:44:55:66",
+        Some("AirPods Pro"),
+        disconnected_data,
+    );
+    
+    // Mark one device as connected
+    connected_device.is_connected = true;
+    
+    // Check both devices
+    let connected_result = detect_airpods(&connected_device);
+    let disconnected_result = detect_airpods(&disconnected_device);
+    
+    assert!(connected_result.is_ok());
+    assert!(disconnected_result.is_ok());
+    
+    if let (Ok(Some(connected)), Ok(Some(disconnected))) = (connected_result, disconnected_result) {
+        assert!(connected.is_connected, "Device should be marked as connected");
+        assert!(!disconnected.is_connected, "Device should be marked as disconnected");
+    } else {
+        panic!("Failed to detect both AirPods devices");
+    }
+}
+
+/// Test AirPods detection with extremely low RSSI values
+#[test]
+fn test_detection_with_low_rssi() {
+    let manufacturer_data = vec![
+        0x07, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 5, 5, 0, 5, 0, 0,
+    ];
+
+    // Create a device with extremely low RSSI
+    let mut device = create_device_with_data(
+        "11:22:33:44:55:66", 
+        Some("AirPods"), 
+        manufacturer_data,
+    );
+    
+    // Test with different RSSI values
+    let rssi_values = [-90, -80, -70, -60, -50];
+    
+    for rssi in rssi_values {
+        device.rssi = Some(rssi);
+        let result = detect_airpods(&device);
+        
+        // All should be detected properly regardless of RSSI
+        assert!(result.is_ok());
+        assert!(result.as_ref().unwrap().is_some());
+        
+        if let Ok(Some(airpods)) = result {
+            assert_eq!(airpods.rssi, Some(rssi));
+        }
+    }
+}
+
+/// Test edge case for unknown AirPods model but with Apple manufacturer data
+#[test]
+fn test_unknown_airpods_model_detection() {
+    // Create data with a valid Apple manufacturer data but with an unknown prefix byte
+    // The 0x07 prefix is specifically for valid AirPods, so we're using a prefix that would 
+    // be recognized as an Apple device by the manufacturer ID (76) but with an unknown model prefix
+    let manufacturer_data = vec![
+        0x07, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 5, 5, 0, 5, 0, 0,
+    ];
+
+    let device = create_device_with_data(
+        "11:22:33:44:55:66",
+        Some("Unknown Apple Device"),
+        manufacturer_data,
+    );
+    
+    let result = detect_airpods(&device);
+    assert!(result.is_ok(), "AirPods detection should not fail");
+    
+    if let Ok(Some(airpods)) = result {
+        // With an unknown device name and standard AirPods prefix, the detector should still
+        // identify it as a general AirPods device but with the Unknown variant
+        assert!(matches!(airpods.device_type, AirPodsType::Unknown) || 
+                matches!(airpods.device_type, AirPodsType::AirPods1), 
+                "Should be detected as unknown or default model, got {:?}", airpods.device_type);
+        
+        // But still have battery info
+        assert!(airpods.battery.is_some(), "Battery info should still be extracted");
+    } else {
+        panic!("Expected to detect as unknown AirPods but got None");
+    }
+}
+
+/// Test detection of partial battery data (only one AirPod present or detected)
+#[test]
+fn test_partial_battery_detection() {
+    // Create data with only left AirPod battery info (right shows as missing/disconnected)
+    let left_only_data = vec![
+        0x0E, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 6, 0xFF, 0, 7, 0, 0,
+    ];
+    
+    // Create data with only right AirPod battery info (left shows as missing/disconnected)
+    let right_only_data = vec![
+        0x0E, 0x19, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 6, 0, 7, 0, 0,
+    ];
+    
+    // Test left only
+    let left_device = create_device_with_data(
+        "11:22:33:44:55:66",
+        Some("AirPods Pro"),
+        left_only_data,
+    );
+    
+    let left_result = detect_airpods(&left_device);
+    assert!(left_result.is_ok());
+    
+    if let Ok(Some(airpods)) = left_result {
+        if let Some(battery) = airpods.battery {
+            assert_eq!(battery.left, Some(60), "Left battery should be 60%");
+            assert_eq!(battery.right, None, "Right battery should be None");
+            assert_eq!(battery.case, Some(70), "Case battery should be 70%");
+        } else {
+            panic!("Battery info missing for left only AirPod");
+        }
+    }
+    
+    // Test right only
+    let right_device = create_device_with_data(
+        "11:22:33:44:55:66",
+        Some("AirPods Pro"),
+        right_only_data,
+    );
+    
+    let right_result = detect_airpods(&right_device);
+    assert!(right_result.is_ok());
+    
+    if let Ok(Some(airpods)) = right_result {
+        if let Some(battery) = airpods.battery {
+            assert_eq!(battery.left, None, "Left battery should be None");
+            assert_eq!(battery.right, Some(60), "Right battery should be 60%");
+            assert_eq!(battery.case, Some(70), "Case battery should be 70%");
+        } else {
+            panic!("Battery info missing for right only AirPod");
+        }
+    }
 }

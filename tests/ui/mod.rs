@@ -26,6 +26,7 @@ pub mod state;
 // Tests for user interface components and theme functionality.
 
 pub mod battery_display_tests;
+pub mod battery_intelligence_integration_tests;
 pub mod fixed_state_test;
 pub mod real_time_battery_display_tests;
 pub mod theme_tests;

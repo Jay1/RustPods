@@ -1,5 +1,9 @@
 //! To run the main UI: cargo run
 //! To run the state-managed UI: cargo run --bin rustpods stateui
+
+// Hide console window on Windows when running as GUI application
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 // Module exports for project structure
 pub mod airpods;
 pub mod app;
@@ -50,6 +54,7 @@ pub struct AppArgs {
     pub debug_flags: DebugFlags,
     pub log_level: LogLevel,
     pub verbose: bool, // Legacy verbose flag (same as --debug-all)
+    pub test_battery: bool, // Enable battery estimation test mode
 }
 
 fn main() {
@@ -59,8 +64,30 @@ fn main() {
     let args = match parse_enhanced_args() {
         Ok(args) => args,
         Err(e) => {
-            eprintln!("Error parsing arguments: {}", e);
-            print_usage();
+            // In release mode with windows subsystem, we can't use eprintln!
+            // Show error dialog instead for GUI launches
+            #[cfg(all(windows, not(debug_assertions)))]
+            {
+                use std::ffi::CString;
+                use std::ptr;
+                
+                let title = CString::new("RustPods Error").unwrap();
+                let message = CString::new(format!("Error parsing arguments: {}", e)).unwrap();
+                
+                unsafe {
+                    winapi::um::winuser::MessageBoxA(
+                        ptr::null_mut(),
+                        message.as_ptr(),
+                        title.as_ptr(),
+                        winapi::um::winuser::MB_OK | winapi::um::winuser::MB_ICONERROR,
+                    );
+                }
+            }
+            #[cfg(not(all(windows, not(debug_assertions))))]
+            {
+                eprintln!("Error parsing arguments: {}", e);
+                print_usage();
+            }
             std::process::exit(1);
         }
     };
@@ -125,7 +152,7 @@ fn main() {
         ) {
             info!("Launching UI (StateUI command is deprecated, redirecting to new UI)...");
         }
-        if let Err(e) = ui::run_ui() {
+        if let Err(e) = ui::run_ui_with_options(args.test_battery) {
             error!("Failed to run UI: {}", e);
             std::process::exit(1);
         }
@@ -184,7 +211,7 @@ async fn main_async(args: AppArgs) {
             ) {
                 info!("Launching UI...");
             }
-            if let Err(e) = ui::run_ui() {
+            if let Err(e) = ui::run_ui_with_options(args.test_battery) {
                 error!("Failed to run UI: {}", e);
                 std::process::exit(1);
             }
@@ -230,6 +257,7 @@ fn parse_enhanced_args() -> Result<AppArgs, String> {
     let mut debug_flags = DebugFlags::default();
     let mut log_level = LogLevel::Warn; // Default to warnings and errors only
     let mut verbose = false;
+    let mut test_battery = false;
     let mut command = AppCommand::UI; // Default command - use new UI
 
     let mut i = 1;
@@ -247,6 +275,11 @@ fn parse_enhanced_args() -> Result<AppArgs, String> {
                 debug_flags.all = true;
                 verbose = true;
                 log_level = LogLevel::Debug;
+            }
+            "--test-battery" => {
+                // Enable battery estimation test mode
+                test_battery = true;
+                println!("Battery estimation test mode enabled");
             }
 
             // Log level flags
@@ -301,6 +334,7 @@ fn parse_enhanced_args() -> Result<AppArgs, String> {
         debug_flags,
         log_level,
         verbose,
+        test_battery,
     })
 }
 
@@ -523,12 +557,16 @@ fn print_usage() {
     println!("  --debug-system          - System operations, lifecycle, persistence");
     println!("  --debug-all, -v         - Enable all debug categories");
 
+    println!("\nTEST FLAGS:");
+    println!("  --test-battery          - Enable battery estimation test mode with simulated data");
+
     println!("\nEXAMPLES:");
     println!("  rustpods                           # Normal UI with warnings/errors only");
     println!("  rustpods --debug-bluetooth scan    # Debug bluetooth during scan");
     println!("  rustpods --debug-ui                # Debug UI messages in normal mode");
     println!("  rustpods -v                        # Full debug output for everything");
     println!("  rustpods --quiet diagnostic        # Run diagnostics with errors only");
+    println!("  rustpods --test-battery            # Test battery estimation with simulated data");
 }
 
 /// Initialize logging from the application configuration

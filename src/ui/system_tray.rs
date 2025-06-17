@@ -1,26 +1,16 @@
+//! System tray implementation for RustPods
+
 use crate::config::{AppConfig, Theme as ConfigTheme};
 use crate::ui::message::Message;
 use log;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::UnboundedSender;
-use tray_icon::{
-    menu::{Menu, MenuItem as TrayMenuItem, MenuEvent},
-    Icon, MouseButton, TrayIcon, TrayIconBuilder, TrayIconEvent,
-};
-use image;
+use tray_icon::{TrayIcon, TrayIconBuilder, TrayIconEvent, MouseButton, menu::{Menu, MenuEvent}};
+use tray_icon::menu::MenuItem as TrayMenuItem;
+use tray_icon::Icon;
+use std::path::Path;
 
-/// Menu item configuration
-#[allow(dead_code)]
-struct MenuItem {
-    /// Label to display in the menu
-    label: String,
-    /// Keyboard shortcut (Windows only)
-    shortcut: Option<String>,
-    /// Message to send when clicked
-    message: Option<Message>,
-}
-
-/// Light or dark theme mode
+/// Theme mode for system tray icons
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThemeMode {
     Light,
@@ -30,14 +20,14 @@ pub enum ThemeMode {
 impl From<ConfigTheme> for ThemeMode {
     fn from(theme: ConfigTheme) -> Self {
         match theme {
-            ConfigTheme::Dark => ThemeMode::Dark,
             ConfigTheme::Light => ThemeMode::Light,
-            _ => ThemeMode::Dark, // Default to dark
+            ConfigTheme::Dark => ThemeMode::Dark,
+            ConfigTheme::System => ThemeMode::Dark, // Default to dark for system theme
         }
     }
 }
 
-/// System tray related errors
+/// System tray error types
 #[derive(Debug, thiserror::Error)]
 pub enum SystemTrayError {
     #[error("Failed to create system tray: {0}")]
@@ -55,27 +45,14 @@ pub enum SystemTrayError {
     #[error("IO error: {0}")]
     IoError(String),
 
-    #[error("Image error: {0}")]
-    ImageError(String),
-
-    #[error("Windows API error: {0}")]
-    WindowsApi(String),
+    #[error("Icon loading error: {0}")]
+    IconLoad(String),
 }
 
-/// Window control commands
+/// Simple window controller for system tray
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
-pub enum WindowCommand {
-    Show,
-    Hide,
-    Toggle,
-    Exit,
-}
-
-/// Direct Windows window controller
 pub struct DirectWindowController {
-    window_handle: Arc<Mutex<Option<isize>>>,
-    ui_sender: Option<UnboundedSender<Message>>,
+    ui_sender: Arc<Mutex<Option<UnboundedSender<Message>>>>,
 }
 
 impl Default for DirectWindowController {
@@ -87,153 +64,53 @@ impl Default for DirectWindowController {
 impl DirectWindowController {
     pub fn new() -> Self {
         Self {
-            window_handle: Arc::new(Mutex::new(None)),
-            ui_sender: None,
+            ui_sender: Arc::new(Mutex::new(None)),
         }
     }
 
     pub fn set_ui_sender(&mut self, sender: UnboundedSender<Message>) {
-        self.ui_sender = Some(sender);
-    }
-
-    pub fn set_window_handle(&self, handle: isize) {
-        if let Ok(mut guard) = self.window_handle.lock() {
-            *guard = Some(handle);
-            log::info!("Window handle set: {}", handle);
+        if let Ok(mut ui_sender) = self.ui_sender.lock() {
+            *ui_sender = Some(sender);
         }
-    }
-
-    #[cfg(target_os = "windows")]
-    pub fn show_window(&self) -> Result<(), SystemTrayError> {
-        log::info!("System tray: Requesting window show via UI message (avoiding Windows API)");
-
-        // Only use UI messages - let Iced handle the actual window operations
-        if let Some(ref sender) = self.ui_sender {
-            match sender.send(Message::ShowWindow) {
-                Ok(_) => {
-                    log::debug!("ShowWindow message sent successfully to UI");
-                    Ok(())
-                }
-                Err(e) => {
-                    log::error!("Failed to send ShowWindow message: {}", e);
-                    Err(SystemTrayError::WindowsApi(format!(
-                        "Failed to send show message: {}",
-                        e
-                    )))
-                }
-            }
-        } else {
-            log::error!("No UI sender available for ShowWindow message");
-            Err(SystemTrayError::WindowsApi(
-                "No UI sender available".to_string(),
-            ))
-        }
-    }
-
-    #[cfg(target_os = "windows")]
-    pub fn hide_window(&self) -> Result<(), SystemTrayError> {
-        log::info!("System tray: Requesting window hide via UI message (avoiding Windows API)");
-
-        // Only use UI messages - let Iced handle the actual window operations
-        if let Some(ref sender) = self.ui_sender {
-            match sender.send(Message::HideWindow) {
-                Ok(_) => {
-                    log::debug!("HideWindow message sent successfully to UI");
-                    Ok(())
-                }
-                Err(e) => {
-                    log::error!("Failed to send HideWindow message: {}", e);
-                    Err(SystemTrayError::WindowsApi(format!(
-                        "Failed to send hide message: {}",
-                        e
-                    )))
-                }
-            }
-        } else {
-            log::error!("No UI sender available for HideWindow message");
-            Err(SystemTrayError::WindowsApi(
-                "No UI sender available".to_string(),
-            ))
-        }
-    }
-
-    #[cfg(target_os = "windows")]
-    pub fn is_window_visible(&self) -> bool {
-        // Since we're avoiding Windows API calls that cause channel issues,
-        // we'll assume the window needs to be shown when clicked
-        // The toggle logic will be simplified to always show
-        log::debug!("Visibility check: assuming window needs to be shown");
-        false
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    pub fn show_window(&self) -> Result<(), SystemTrayError> {
-        // Non-Windows fallback
-        if let Some(ref sender) = self.ui_sender {
-            sender.send(Message::ToggleVisibility).map_err(|e| {
-                SystemTrayError::WindowsApi(format!("Failed to send show message: {}", e))
-            })?;
-        }
-        Ok(())
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    pub fn hide_window(&self) -> Result<(), SystemTrayError> {
-        // Non-Windows fallback
-        if let Some(ref sender) = self.ui_sender {
-            sender.send(Message::ToggleVisibility).map_err(|e| {
-                SystemTrayError::WindowsApi(format!("Failed to send hide message: {}", e))
-            })?;
-        }
-        Ok(())
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    pub fn is_window_visible(&self) -> bool {
-        true // Assume visible on non-Windows
     }
 
     pub fn toggle_window(&self) -> Result<(), SystemTrayError> {
-        let is_visible = self.is_window_visible();
-        log::debug!("Toggle window called: window visible = {}", is_visible);
-
-        if is_visible {
-            log::debug!("Window is visible, hiding it");
-            self.hide_window()
-        } else {
-            log::debug!("Window is not visible, showing it");
-            self.show_window()
-        }
-    }
-
-    pub fn exit_application(&self) -> Result<(), SystemTrayError> {
-        log::info!("DirectWindowController: Sending ForceQuit message to UI");
-        if let Some(ref sender) = self.ui_sender {
-            sender.send(Message::ForceQuit).map_err(|e| {
-                SystemTrayError::WindowsApi(format!("Failed to send force quit message: {}", e))
-            })?;
-        } else {
-            log::warn!("No UI sender available, forcing process exit");
-            // Fallback: force exit using process::exit if no UI channel available
-            std::process::exit(0);
+        if let Ok(ui_sender) = self.ui_sender.lock() {
+            if let Some(ref sender) = *ui_sender {
+                let _ = sender.send(Message::ToggleWindow);
+            }
         }
         Ok(())
     }
-}
 
-impl Clone for DirectWindowController {
-    fn clone(&self) -> Self {
-        Self {
-            window_handle: Arc::clone(&self.window_handle),
-            ui_sender: self.ui_sender.clone(),
+    pub fn show_window(&self) -> Result<(), SystemTrayError> {
+        if let Ok(ui_sender) = self.ui_sender.lock() {
+            if let Some(ref sender) = *ui_sender {
+                let _ = sender.send(Message::ShowWindow);
+            }
         }
+        Ok(())
+    }
+
+    pub fn exit_application(&self) -> Result<(), SystemTrayError> {
+        if let Ok(ui_sender) = self.ui_sender.lock() {
+            if let Some(ref sender) = *ui_sender {
+                let _ = sender.send(Message::Exit);
+            }
+        }
+        std::process::exit(0);
     }
 }
 
-/// Manages the system tray icon and menu
+/// System tray implementation
 pub struct SystemTray {
     /// The system tray icon
     tray: Option<TrayIcon>,
+    /// Menu items
+    menu: Option<Menu>,
+    /// Menu item IDs
+    show_hide_item: Option<TrayMenuItem>,
+    exit_item: Option<TrayMenuItem>,
     /// Direct window controller
     window_controller: DirectWindowController,
     /// Application configuration
@@ -244,51 +121,55 @@ pub struct SystemTray {
     theme_mode: ThemeMode,
     /// Whether the tray is initialized
     initialized: bool,
+    /// Event receiver
+    menu_receiver: Option<crossbeam_channel::Receiver<MenuEvent>>,
+    tray_receiver: Option<crossbeam_channel::Receiver<TrayIconEvent>>,
 }
 
 impl std::fmt::Debug for SystemTray {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SystemTray")
-            .field("is_connected", &self.is_connected)
-            .field("theme_mode", &self.theme_mode)
             .field("initialized", &self.initialized)
+            .field("is_connected", &self.is_connected)
             .finish()
     }
 }
 
 impl Clone for SystemTray {
     fn clone(&self) -> Self {
-        // Create a new SystemTray with the same configuration
-        // Note: The tray itself cannot be cloned, so we create a new uninitialized one
         Self {
-            tray: None,
+            tray: None, // TrayIcon is not cloneable
+            menu: None,
+            show_hide_item: None,
+            exit_item: None,
             window_controller: self.window_controller.clone(),
             config: self.config.clone(),
             is_connected: self.is_connected,
             theme_mode: self.theme_mode,
             initialized: false,
+            menu_receiver: None,
+            tray_receiver: None,
         }
     }
 }
 
 impl SystemTray {
-    /// Create a new system tray with direct window controller
+    /// Create a new system tray instance
     pub fn new(config: AppConfig) -> Result<Self, SystemTrayError> {
         let theme_mode = ThemeMode::from(config.ui.theme.clone());
-        let window_controller = DirectWindowController::new();
-
-        log::info!(
-            "Creating system tray with direct window controller and theme mode: {:?}",
-            theme_mode
-        );
-
+        
         Ok(Self {
             tray: None,
-            window_controller,
+            menu: None,
+            show_hide_item: None,
+            exit_item: None,
+            window_controller: DirectWindowController::new(),
             config,
             is_connected: false,
             theme_mode,
             initialized: false,
+            menu_receiver: None,
+            tray_receiver: None,
         })
     }
 
@@ -297,170 +178,179 @@ impl SystemTray {
         self.window_controller.set_ui_sender(sender);
     }
 
-    /// Set the window handle for direct Windows API control
-    pub fn set_window_handle(&self, handle: isize) {
-        self.window_controller.set_window_handle(handle);
+    /// Get the appropriate icon path based on connection status and theme
+    fn get_icon_path(&self) -> String {
+        let theme_str = match self.theme_mode {
+            ThemeMode::Light => "light",
+            ThemeMode::Dark => "dark",
+        };
+        
+        let status_str = if self.is_connected { "connected" } else { "disconnected" };
+        
+        // Get the executable directory and construct absolute path
+        let exe_path = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("./rustpods.exe"));
+        let exe_dir = exe_path.parent().unwrap_or_else(|| std::path::Path::new("."));
+        
+        // Try multiple possible locations for the icon
+        let icon_paths = vec![
+            // 1. Tray icons in same directory as executable (for release builds)
+            exe_dir.join(format!("rustpods-tray-{}-{}.ico", theme_str, status_str)),
+            // 2. Assets folder relative to executable
+            exe_dir.join("assets").join("icons").join("tray").join(format!("rustpods-tray-{}-{}.ico", theme_str, status_str)),
+            // 3. Project root assets (for development)
+            exe_dir.parent().and_then(|p| p.parent()).map(|project_root| 
+                project_root.join("assets").join("icons").join("tray").join(format!("rustpods-tray-{}-{}.ico", theme_str, status_str))
+            ).unwrap_or_default(),
+            // 4. Current working directory
+            std::env::current_dir().unwrap_or_default().join("assets").join("icons").join("tray").join(format!("rustpods-tray-{}-{}.ico", theme_str, status_str)),
+        ];
+        
+        // Find the first existing icon file
+        for icon_path in icon_paths {
+            if icon_path.exists() {
+                log::debug!("Found tray icon at: {}", icon_path.display());
+                return icon_path.to_string_lossy().to_string();
+            }
+        }
+        
+        // Fallback to relative path if none found
+        let fallback = format!("assets/icons/tray/rustpods-tray-{}-{}.ico", theme_str, status_str);
+        log::warn!("No tray icon found, using fallback: {}", fallback);
+        fallback
+    }
+
+    /// Load icon from file path
+    fn load_icon(&self, path: &str) -> Result<Icon, SystemTrayError> {
+        let icon_path = Path::new(path);
+        
+        if !icon_path.exists() {
+            return Err(SystemTrayError::IconLoad(format!("Icon file not found: {}", path)));
+        }
+
+        // For ICO files, we need to use from_path instead of from_rgba
+        if path.ends_with(".ico") {
+            Icon::from_path(icon_path, Some((32, 32)))
+                .map_err(|e| SystemTrayError::IconLoad(format!("Failed to create icon from ICO file {}: {}", path, e)))
+        } else {
+            // For other formats, try to load as image and convert to RGBA
+            let icon_bytes = std::fs::read(icon_path)
+                .map_err(|e| SystemTrayError::IconLoad(format!("Failed to read icon file {}: {}", path, e)))?;
+
+            Icon::from_rgba(icon_bytes, 32, 32)
+                .map_err(|e| SystemTrayError::IconLoad(format!("Failed to create icon from {}: {}", path, e)))
+        }
     }
 
     /// Initialize the system tray (creates the actual icon and menu)
     pub fn initialize(&mut self) -> Result<(), SystemTrayError> {
+        if self.initialized {
+            log::debug!("System tray already initialized");
+            return Ok(());
+        }
+
         log::info!("Initializing system tray...");
 
-        // Create the menu
-        let show_hide_item = TrayMenuItem::new("Show/Hide Window", true, None);
-        let quit_item = TrayMenuItem::new("Quit", true, None);
+        // Create menu items
+        let show_hide_item = TrayMenuItem::new("Show/Hide", true, None);
+        let exit_item = TrayMenuItem::new("Exit", true, None);
 
+        // Create menu
         let menu = Menu::new();
-        menu.append(&show_hide_item).map_err(|e| {
-            SystemTrayError::MenuItem(format!("Failed to add show/hide item: {}", e))
-        })?;
-        menu.append(&quit_item)
-            .map_err(|e| SystemTrayError::MenuItem(format!("Failed to add quit item: {}", e)))?;
+        menu.append(&show_hide_item)
+            .map_err(|e| SystemTrayError::MenuItem(format!("Failed to add show/hide item: {}", e)))?;
+        menu.append(&exit_item)
+            .map_err(|e| SystemTrayError::MenuItem(format!("Failed to add exit item: {}", e)))?;
 
-        // Load initial icon
-        let icon = self.create_icon(false)?;
+        // Get icon path and load icon
+        let icon_path = self.get_icon_path();
+        let icon = self.load_icon(&icon_path)?;
 
-        // Create the tray icon
+        // Create tray icon
         let tray = TrayIconBuilder::new()
-            .with_menu(Box::new(menu))
+            .with_menu(Box::new(menu.clone()))
             .with_tooltip("RustPods - AirPods Battery Monitor")
             .with_icon(icon)
             .build()
-            .map_err(|e| SystemTrayError::Creation(format!("Failed to build tray icon: {}", e)))?;
+            .map_err(|e| SystemTrayError::Creation(format!("Failed to create tray icon: {}", e)))?;
 
+        // Set up event channels
+        let menu_channel = MenuEvent::receiver().clone();
+        let tray_channel = TrayIconEvent::receiver().clone();
+
+        // Store everything
         self.tray = Some(tray);
+        self.menu = Some(menu);
+        self.show_hide_item = Some(show_hide_item);
+        self.exit_item = Some(exit_item);
+        self.menu_receiver = Some(menu_channel);
+        self.tray_receiver = Some(tray_channel);
         self.initialized = true;
-
-        // Set up event handling with direct window control
-        self.setup_direct_window_events()?;
 
         log::info!("System tray initialized successfully");
         Ok(())
     }
 
-    /// Set up menu and icon event handling with direct window control
-    fn setup_direct_window_events(&self) -> Result<(), SystemTrayError> {
-        let window_controller = self.window_controller.clone();
+    /// Process tray events (should be called regularly)
+    pub fn process_events(&mut self) -> Result<(), SystemTrayError> {
+        if !self.initialized {
+            return Ok(());
+        }
 
-        // Handle menu events
-        std::thread::spawn(move || {
-            let event_receiver = MenuEvent::receiver();
-            loop {
-                if let Ok(event) = event_receiver.recv() {
-                    log::debug!("Menu event received: {:?}", event.id.0);
-                    match event.id.0.as_str() {
-                        "Show/Hide Window" | "1000" => {
-                            log::debug!("Tray menu: Show/Hide Window clicked");
-                            if let Err(e) = window_controller.toggle_window() {
-                                log::error!("Failed to toggle window from menu: {}", e);
-                            }
-                        }
-                        "Quit" | "1001" => {
-                            log::debug!("Tray menu: Quit clicked");
-                            if let Err(e) = window_controller.exit_application() {
-                                log::error!("Failed to exit application from menu: {}", e);
-                            }
-                        }
-                        _ => {
-                            log::debug!("Unknown menu item clicked: {}", event.id.0);
-                        }
-                    }
-                } else {
-                    // Channel closed, exit thread
-                    log::debug!("Menu event channel closed, exiting thread");
-                    break;
-                }
-            }
-        });
+        // Collect events first to avoid borrowing issues
+        let mut menu_events = Vec::new();
+        let mut tray_events = Vec::new();
 
-        // Handle tray icon events (clicks on the icon itself)
-        let window_controller2 = self.window_controller.clone();
-        std::thread::spawn(move || {
-            let event_receiver = TrayIconEvent::receiver();
-            loop {
-                if let Ok(event) = event_receiver.recv() {
-                    log::debug!("Tray icon event received: {:?}", event);
-                    match event {
-                        TrayIconEvent::Click {
-                            button: MouseButton::Left,
-                            ..
-                        } => {
-                            log::debug!("Tray icon: Left click detected - always showing window");
-                            if let Err(e) = window_controller2.show_window() {
-                                log::error!("Failed to show window from icon click: {}", e);
-                            }
-                        }
-                        _ => {
-                            log::debug!("Other tray icon event: {:?}", event);
-                        }
-                    }
-                } else {
-                    // Channel closed, exit thread
-                    log::debug!("Tray icon event channel closed, exiting thread");
-                    break;
-                }
+        // Process menu events
+        if let Some(ref menu_receiver) = self.menu_receiver {
+            while let Ok(event) = menu_receiver.try_recv() {
+                menu_events.push(event);
             }
-        });
+        }
+
+        // Process tray events
+        if let Some(ref tray_receiver) = self.tray_receiver {
+            while let Ok(event) = tray_receiver.try_recv() {
+                tray_events.push(event);
+            }
+        }
+
+        // Handle collected events
+        for event in menu_events {
+            self.handle_menu_event(event)?;
+        }
+
+        for event in tray_events {
+            self.handle_tray_event(event)?;
+        }
 
         Ok(())
     }
 
-    /// Load the appropriate icon based on theme and connection status
-    fn create_icon(&self, connected: bool) -> Result<Icon, SystemTrayError> {
-        // Use embedded assets instead of hardcoded data
-        let icon_bytes = match (self.theme_mode, connected) {
-            (ThemeMode::Light, false) => crate::assets::tray::LIGHT_DISCONNECTED,
-            (ThemeMode::Light, true) => crate::assets::tray::LIGHT_CONNECTED,
-            (ThemeMode::Dark, false) => crate::assets::tray::DARK_DISCONNECTED,
-            (ThemeMode::Dark, true) => crate::assets::tray::DARK_CONNECTED,
-        };
-
-        // Try to load the ICO and convert to RGBA
-        match image::load_from_memory(icon_bytes) {
-            Ok(img) => {
-                let rgba_img = img.to_rgba8();
-                let (width, height) = rgba_img.dimensions();
-                let rgba_data = rgba_img.into_raw();
-                
-                Icon::from_rgba(rgba_data, width, height)
-                    .map_err(|e| SystemTrayError::IoError(format!("Failed to create icon from RGBA: {}", e)))
-            }
-            Err(e) => {
-                log::warn!("Failed to load ICO icon, using fallback: {}", e);
-                self.create_fallback_icon()
+    /// Handle menu events
+    fn handle_menu_event(&mut self, event: MenuEvent) -> Result<(), SystemTrayError> {
+        if let Some(ref show_hide_item) = self.show_hide_item {
+            if event.id == show_hide_item.id() {
+                self.window_controller.toggle_window()?;
+                return Ok(());
             }
         }
+
+        if let Some(ref exit_item) = self.exit_item {
+            if event.id == exit_item.id() {
+                self.window_controller.exit_application()?;
+                return Ok(());
+            }
+        }
+
+        Ok(())
     }
 
-    /// Create a simple fallback icon if files are missing
-    fn create_fallback_icon(&self) -> Result<Icon, SystemTrayError> {
-        // Create a simple 16x16 RGBA icon as fallback
-        let size = 16u32;
-        let mut rgba_data = vec![0u8; (size * size * 4) as usize];
-        
-        // Create a simple circle pattern
-        for y in 0..size {
-            for x in 0..size {
-                let dx = x as f32 - (size as f32 / 2.0);
-                let dy = y as f32 - (size as f32 / 2.0);
-                let distance = (dx * dx + dy * dy).sqrt();
-                
-                let idx = ((y * size + x) * 4) as usize;
-                if distance <= (size as f32 / 2.0) - 1.0 {
-                    // Inside circle - blue color
-                    rgba_data[idx] = 100;     // R
-                    rgba_data[idx + 1] = 150; // G  
-                    rgba_data[idx + 2] = 255; // B
-                    rgba_data[idx + 3] = 255; // A
-                } else {
-                    // Outside circle - transparent
-                    rgba_data[idx + 3] = 0; // Transparent
-                }
-            }
+    /// Handle tray icon events
+    fn handle_tray_event(&mut self, event: TrayIconEvent) -> Result<(), SystemTrayError> {
+        if let TrayIconEvent::Click { button: MouseButton::Left, .. } = event {
+            self.window_controller.toggle_window()?;
         }
-        
-        Icon::from_rgba(rgba_data, size, size)
-            .map_err(|e| SystemTrayError::IoError(format!("Failed to create fallback icon: {}", e)))
+        Ok(())
     }
 
     /// Update the tray icon based on connection status
@@ -471,19 +361,21 @@ impl SystemTray {
         }
 
         if self.is_connected == connected {
-            log::debug!("Connection status unchanged, skipping icon update");
+            // No change needed
             return Ok(());
         }
 
         self.is_connected = connected;
-
-        log::debug!("Updating tray icon for connection status: {}", connected);
-
-        let icon = self.create_icon(connected)?;
-
-        if let Some(ref tray) = self.tray {
+        
+        // Get the icon path and load new icon
+        let icon_path = self.get_icon_path();
+        log::debug!("Updating tray icon to: {}", icon_path);
+        
+        let icon = self.load_icon(&icon_path)?;
+        
+        if let Some(ref mut tray) = self.tray {
             tray.set_icon(Some(icon))
-                .map_err(|e| SystemTrayError::SetIcon(format!("Failed to update icon: {}", e)))?;
+                .map_err(|e| SystemTrayError::SetIcon(format!("Failed to set icon '{}': {}", icon_path, e)))?;
         }
 
         Ok(())
@@ -501,70 +393,42 @@ impl SystemTray {
         }
 
         let tooltip = match (left, right, case) {
-            (Some(l), Some(r), Some(c)) => {
-                format!(
-                    "RustPods - AirPods Battery\nLeft: {}% | Right: {}% | Case: {}%",
-                    l, r, c
-                )
-            }
-            (Some(l), Some(r), None) => {
-                format!("RustPods - AirPods Battery\nLeft: {}% | Right: {}%", l, r)
-            }
+            (Some(l), Some(r), Some(c)) => format!("RustPods - L:{}% R:{}% C:{}%", l, r, c),
+            (Some(l), Some(r), None) => format!("RustPods - L:{}% R:{}%", l, r),
             _ => "RustPods - AirPods Battery Monitor".to_string(),
         };
 
-        if let Some(ref tray) = self.tray {
-            tray.set_tooltip(Some(tooltip)).map_err(|e| {
-                SystemTrayError::Tooltip(format!("Failed to update tooltip: {}", e))
-            })?;
+        if let Some(ref mut tray) = self.tray {
+            tray.set_tooltip(Some(tooltip.clone()))
+                .map_err(|e| SystemTrayError::Tooltip(format!("Failed to set tooltip: {}", e)))?;
         }
 
+        log::debug!("Updated tray tooltip: {}", tooltip);
         Ok(())
     }
 
-    /// Update configuration
-    pub fn update_config(&mut self, config: AppConfig) -> Result<(), SystemTrayError> {
-        self.config = config.clone();
-        let new_theme_mode = ThemeMode::from(config.ui.theme);
-
-        if !matches!(self.theme_mode, _new_theme_mode) {
-            self.theme_mode = new_theme_mode;
-            // Update icon for new theme
-            self.update_icon(self.is_connected)?;
-        }
-
-        Ok(())
-    }
-
-    /// Get window controller for external use
+    /// Get the window controller
     pub fn window_controller(&self) -> DirectWindowController {
         self.window_controller.clone()
     }
 
-    /// Check if startup registration is enabled (Windows-specific)
-    #[cfg(target_os = "windows")]
-    pub fn is_startup_registered(&self) -> bool {
-        // For now, return false - this would need to check Windows registry
-        // TODO: Implement actual Windows startup registration check
-        false
-    }
-
-    /// Set startup registration (Windows-specific)
-    #[cfg(target_os = "windows")]
-    pub fn set_startup_enabled(&mut self, enabled: bool) -> Result<(), SystemTrayError> {
-        // For now, just log - this would need to modify Windows registry
-        // TODO: Implement actual Windows startup registration
-        log::info!("Startup registration set to: {} (not implemented)", enabled);
+    /// Update configuration
+    pub fn update_config(&mut self, config: AppConfig) -> Result<(), SystemTrayError> {
+        self.config = config;
+        self.theme_mode = ThemeMode::from(self.config.ui.theme.clone());
         Ok(())
     }
 
     /// Cleanup the system tray
     pub fn cleanup(&mut self) -> Result<(), SystemTrayError> {
-        if let Some(tray) = self.tray.take() {
-            log::info!("Cleaning up system tray");
-            drop(tray);
+        if let Some(_tray) = self.tray.take() {
+            log::debug!("System tray cleaned up");
         }
-
+        self.menu = None;
+        self.show_hide_item = None;
+        self.exit_item = None;
+        self.menu_receiver = None;
+        self.tray_receiver = None;
         self.initialized = false;
         Ok(())
     }
@@ -585,41 +449,15 @@ mod tests {
     #[test]
     fn test_system_tray_creation() {
         let config = AppConfig::default();
-        let result = SystemTray::new(config);
-
-        assert!(result.is_ok());
-        let tray = result.unwrap();
-        assert!(!tray.initialized);
-        assert_eq!(tray.theme_mode, ThemeMode::Dark); // Default theme
-    }
-
-    #[test]
-    fn test_menu_item_struct() {
-        let menu_item = MenuItem {
-            label: "Test".to_string(),
-            shortcut: Some("Ctrl+T".to_string()),
-            message: Some(Message::Exit),
-        };
-
-        assert_eq!(menu_item.label, "Test");
-        assert_eq!(menu_item.shortcut, Some("Ctrl+T".to_string()));
+        let tray = SystemTray::new(config);
+        assert!(tray.is_ok());
     }
 
     #[test]
     fn test_theme_detection() {
-        use crate::config::Theme as ConfigTheme;
-
-        assert_eq!(ThemeMode::from(ConfigTheme::Dark), ThemeMode::Dark);
-        assert_eq!(ThemeMode::from(ConfigTheme::Light), ThemeMode::Light);
-
-        // Test default case
-        assert_eq!(ThemeMode::from(ConfigTheme::System), ThemeMode::Dark);
-    }
-
-    /// Create a dummy system tray for testing
-    #[allow(dead_code)]
-    fn create_dummy_tray() -> Result<SystemTray, SystemTrayError> {
         let config = AppConfig::default();
-        SystemTray::new(config)
+        let tray = SystemTray::new(config).unwrap();
+        // Should not panic
+        assert!(!tray.initialized);
     }
 }

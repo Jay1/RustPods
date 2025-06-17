@@ -1,59 +1,53 @@
-# Security Policy
+# RustPods Security Policy: Technical Standards and Protocols
 
 ## Supported Versions
 
-Currently, we provide security updates for the following versions of RustPods:
+The RustPods project provides security maintenance for the following release series:
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 0.1.x   | :white_check_mark: |
+| Version | Maintenance Status    |
+| ------- | -------------------- |
+| 0.1.x   | Supported            |
 
-## Reporting a Vulnerability
+## Vulnerability Reporting Protocol
 
-The RustPods team takes security issues seriously. We appreciate your efforts to responsibly disclose your findings.
+The RustPods engineering team maintains a rigorous approach to security incident management. Responsible disclosure is essential to the integrity of the project.
 
-**Please do not report security vulnerabilities through public GitHub issues.**
+**Do not disclose security vulnerabilities via public GitHub issues.**
 
-Instead, please follow these steps:
+### Reporting Procedure
 
-1. **Email**: Send details to [j-chiasson@outlook.com]
-   - Replace this with your preferred security contact method
+1. **Confidential Submission**: Communicate vulnerability details directly to the security team at [j-chiasson@outlook.com].
+2. **Required Information**:
+   - Classification of the vulnerability (e.g., buffer overflow, injection, etc.)
+   - Full source file paths implicated in the issue
+   - Precise code location (tag/branch/commit or direct URL)
+   - Any special configuration required for reproduction
+   - Stepwise reproduction instructions
+   - Proof-of-concept or exploit code, if available
+   - Assessment of impact and potential exploitation vectors
+3. **Response Commitment**: The team will acknowledge receipt within 48 hours and provide a comprehensive response within 5 business days.
+4. **Coordinated Disclosure**: Disclosure timelines will be determined in collaboration with the reporter upon confirmation of the issue.
 
-2. **Include Information**:
-   - Type of issue (e.g., buffer overflow, SQL injection, etc.)
-   - Full paths of source file(s) related to the vulnerability
-   - Location of the affected source code (tag/branch/commit or direct URL)
-   - Any special configuration required to reproduce the issue
-   - Step-by-step instructions to reproduce the issue
-   - Proof-of-concept or exploit code (if possible)
-   - Impact of the issue, including how an attacker might exploit it
+## Security Architecture and Controls
 
-3. **Response Time**: We will acknowledge receipt of your vulnerability report within 48 hours and provide a detailed response within 5 business days.
+- **Bluetooth Data Minimization**: Only essential Bluetooth data is collected.
+- **Local Data Residency**: All operational data is stored exclusively on the user's device.
+- **No Remote Connectivity**: RustPods does not initiate outbound connections to remote servers during standard operation.
+- **Principle of Least Privilege**: Only the minimum necessary Bluetooth permissions are requested.
 
-4. **Disclosure**: The RustPods team will coordinate with you to determine an appropriate disclosure timeline once the issue is confirmed.
+## Contributor Security Standards
 
-## Security Measures
+Contributors are required to adhere to the following security engineering practices:
 
-RustPods implements the following security measures:
+1. **No Sensitive Data in Source Control**: Never commit API keys, credentials, or personal data.
+2. **Input Validation**: Rigorously validate all user and Bluetooth input.
+3. **Robust Error Handling**: Implement comprehensive error handling to prevent system crashes and information leakage.
+4. **Dependency Management**: Maintain up-to-date dependencies to mitigate known vulnerabilities.
 
-- **Bluetooth Data**: We only collect the minimum necessary data from your Bluetooth devices.
-- **Local Storage**: All application data is stored locally on your device.
-- **No Remote Services**: RustPods does not connect to any remote servers during normal operation.
-- **Permissions**: We request only the Bluetooth permissions necessary for functionality.
+## Policy Maintenance
 
-## Security Considerations for Contributors
-
-If you're contributing to RustPods, please keep these security best practices in mind:
-
-1. **No Sensitive Data**: Never commit API keys, credentials, or personal information.
-2. **Input Validation**: Validate all user input and Bluetooth data.
-3. **Error Handling**: Implement proper error handling to prevent crashes and information disclosure.
-4. **Dependencies**: Keep dependencies updated to address known vulnerabilities.
-
-## Updates
-
-We will revise this security policy as the project evolves. Check back for updates.
+This security policy is subject to revision as the project evolves. Contributors and users are advised to consult this document regularly for updates.
 
 ---
 
-Last updated: May 2025 
+_Last revised: May 2025_ 

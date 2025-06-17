@@ -3,10 +3,9 @@
 //! Implements the main UI window component with device list and battery status display.
 
 use iced::widget::svg::Handle as SvgHandle;
-use iced::widget::image::Handle as ImageHandle;
 use iced::{
     alignment::Horizontal,
-    widget::{button, column, container, image, row, text, Space, Svg, mouse_area},
+    widget::{button, column, container, row, text, Space, Svg, mouse_area},
     Alignment, Command, Element, Length,
 };
 
@@ -17,8 +16,9 @@ use crate::ui::theme;
 use crate::ui::Message;
 use crate::ui::UiComponent;
 
-use crate::ui::state::MergedBluetoothDevice;
+use crate::ui::state::{MergedBluetoothDevice, DeviceDetectionState};
 use crate::ui::theme::Theme;
+use crate::ui::components::WaitingMode;
 
 /// Main window component
 #[derive(Debug, Clone)]
@@ -43,6 +43,12 @@ pub struct MainWindow {
 
     /// AirPods popup component
     pub show_airpods_dialog: bool,
+
+    /// Device detection state to track AirPods connectivity
+    pub device_detection_state: DeviceDetectionState,
+
+    /// Waiting mode component for when no devices are detected
+    pub waiting_mode: WaitingMode,
 }
 
 impl Default for MainWindow {
@@ -67,6 +73,8 @@ impl MainWindow {
             config: AppConfig::default(),
             advanced_display_mode: false,
             show_airpods_dialog: false,
+            device_detection_state: DeviceDetectionState::Scanning,
+            waiting_mode: WaitingMode::new(),
         }
     }
 
@@ -140,28 +148,20 @@ impl MainWindow {
         self
     }
 
+    /// Update device detection state
+    pub fn update_device_detection_state(&mut self, state: DeviceDetectionState) {
+        self.device_detection_state = state.clone();
+        self.waiting_mode.update_detection_state(state);
+    }
+
+    /// Update waiting mode animation
+    pub fn update_waiting_mode_animation(&mut self, progress: f32) {
+        self.waiting_mode.update_animation(progress);
+    }
+
     // Update the view method to use the helper methods
     fn view_content(&self) -> Element<'_, Message, iced::Renderer<Theme>> {
         crate::debug_log!("ui", "MainWindow::view_content - merged_devices.len() = {}", self.merged_devices.len());
-
-        // Always show the battery UI - get device data or use defaults (Left and Right only)
-        let (left_battery, right_battery) = if let Some(device) = self.merged_devices.first() {
-            crate::debug_log!("ui", "Showing UI for device: {} - L:{}% R:{}%", 
-                device.name, 
-                device.left_battery.unwrap_or(0), 
-                device.right_battery.unwrap_or(0)
-            );
-            (device.left_battery.unwrap_or(0), device.right_battery.unwrap_or(0))
-        } else {
-            crate::debug_log!("ui", "No devices found, showing default battery UI with 0% values");
-            (0, 0)
-        };
-
-        crate::debug_log!(
-            "ui",
-            "MainWindow::view_content: merged_devices.len() = {}",
-            self.merged_devices.len()
-        );
 
         // Custom title bar header (Discord-style) - make it draggable
         let header_row = mouse_area(
@@ -172,7 +172,7 @@ impl MainWindow {
                         row![
                             // App logo icon
                             container(
-                                image(ImageHandle::from_memory(crate::assets::app::LOGO))
+                                Svg::new(SvgHandle::from_memory(crate::assets::app::LOGO_SVG))
                                     .width(Length::Fixed(24.0))
                                     .height(Length::Fixed(24.0))
                             )
@@ -213,58 +213,110 @@ impl MainWindow {
         )
         .on_press(Message::WindowDragStart(iced::Point::new(0.0, 0.0))); // Make entire title bar draggable
 
-        // Two-column layout: each battery centered in its half of the window
-        let content_row = row![
-            // Left column - Left earbud centered in left half
-            container(
-                column![
-                    crate::ui::components::view_circular_battery_widget(
-                        left_battery,
-                        false // TODO: Add charging status when available
-                    ),
-                    text("Left")
-                        .size(14)
-                        .style(theme::TEXT)
-                        .horizontal_alignment(Horizontal::Center)
-                ]
-                .align_items(Alignment::Center)
-                .spacing(5)
-            )
-            .width(Length::FillPortion(1))
-            .center_x(),
+        // Determine what content to show based on device detection state
+        let main_content = if self.merged_devices.is_empty() || !self.device_detection_state.has_active_device() {
+            // Show waiting mode when no devices are detected or not connected
+            crate::debug_log!("ui", "No devices detected, showing waiting mode");
+            self.waiting_mode.view()
+        } else if let Some(device) = self.merged_devices.first() {
+            // Show battery widgets when devices are connected
+            // Use fractional battery levels if available, otherwise fall back to integer levels
+            let left_battery = device.left_battery_fractional
+                .unwrap_or(device.left_battery.unwrap_or(0) as f32);
+            let right_battery = device.right_battery_fractional
+                .unwrap_or(device.right_battery.unwrap_or(0) as f32);
             
-            // Right column - Right earbud centered in right half
+            crate::debug_log!("ui", "Showing battery UI for device: {} - L:{:.1}% R:{:.1}%", 
+                device.name, left_battery, right_battery);
+
+            // Get custom device name from config if available
+            let display_name = self.config.bluetooth.paired_device_name
+                .as_ref()
+                .unwrap_or(&device.name);
+
+            // Main layout with device name at top and battery widgets below
             container(
                 column![
-                    crate::ui::components::view_circular_battery_widget(
-                        right_battery,
-                        false // TODO: Add charging status when available
-                    ),
-                    text("Right")
-                        .size(14)
-                        .style(theme::TEXT)
-                        .horizontal_alignment(Horizontal::Center)
+                    // Device name at the top
+                    container(
+                        text(display_name)
+                            .size(18)
+                            .style(theme::TEXT)
+                            .horizontal_alignment(Horizontal::Center)
+                    )
+                    .width(Length::Fill)
+                    .center_x()
+                    .padding([0, 0, 15, 0]), // Bottom padding to separate from battery widgets
+                    
+                    // Two-column layout: each battery centered in its half of the window
+                    container(
+                        row![
+                            // Left column - Left earbud centered in left half
+                            container(
+                                column![
+                                    crate::ui::components::view_circular_battery_widget(
+                                        left_battery,
+                                        false // TODO: Add charging status when available
+                                    ),
+                                    text("Left")
+                                        .size(14)
+                                        .style(theme::TEXT)
+                                        .horizontal_alignment(Horizontal::Center)
+                                ]
+                                .align_items(Alignment::Center)
+                                .spacing(5)
+                            )
+                            .width(Length::FillPortion(1))
+                            .center_x(),
+                            
+                            // Right column - Right earbud centered in right half
+                            container(
+                                column![
+                                    crate::ui::components::view_circular_battery_widget(
+                                        right_battery,
+                                        false // TODO: Add charging status when available
+                                    ),
+                                    text("Right")
+                                        .size(14)
+                                        .style(theme::TEXT)
+                                        .horizontal_alignment(Horizontal::Center)
+                                ]
+                                .align_items(Alignment::Center)
+                                .spacing(5)
+                            )
+                            .width(Length::FillPortion(1))
+                            .center_x()
+                        ]
+                        .width(Length::Fill)
+                    )
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .center_x()
                 ]
                 .align_items(Alignment::Center)
-                .spacing(5)
+                .spacing(0)
             )
-            .width(Length::FillPortion(1))
+            .width(Length::Fill)
+            .height(Length::Fill)
             .center_x()
-        ]
-        .width(Length::Fill);
+            .center_y()
+            .into()
+        } else {
+            // Fallback to waiting mode
+            crate::debug_log!("ui", "Fallback to waiting mode");
+            self.waiting_mode.view()
+        };
 
-        // Main layout: title bar at top, battery widgets centered in remaining space
+        // Main layout: title bar at top, main content centered in remaining space
         container(
             column![
                 // Title bar stays at the top with proper background
                 header_row,
                 
-                // Battery widgets centered in the remaining space
-                container(content_row)
+                // Main content (battery widgets or waiting mode) centered in the remaining space
+                container(main_content)
                     .width(Length::Fill)
                     .height(Length::Fill)
-                    .center_x()
-                    .center_y()
             ]
             .width(Length::Fill)
             .height(Length::Fill)

@@ -26,9 +26,9 @@ fn test_device_battery_sync() {
     assert_eq!(test_device.right_battery, Some(80));
     
     // Test circular widget creation
-    let _left_widget = view_circular_battery_widget(75, false);
-    let _right_widget = view_circular_battery_widget(80, false);
-    let _case_widget = view_circular_battery_widget(85, true);
+    let _left_widget = view_circular_battery_widget(75.0, false);
+    let _right_widget = view_circular_battery_widget(80.0, false);
+    let _case_widget = view_circular_battery_widget(85.0, true);
     
     let _element = window.view();
 }
@@ -60,9 +60,9 @@ fn test_battery_level_propagation() {
     };
     
     // Test initial widgets
-    let _initial_left = view_circular_battery_widget(50, false);
-    let _initial_right = view_circular_battery_widget(55, false);
-    let _initial_case = view_circular_battery_widget(60, false);
+    let _initial_left = view_circular_battery_widget(50.0, false);
+    let _initial_right = view_circular_battery_widget(55.0, false);
+    let _initial_case = view_circular_battery_widget(60.0, false);
     
     let _initial_element = window.view();
     
@@ -76,9 +76,9 @@ fn test_battery_level_propagation() {
     };
     
     // Test updated widgets
-    let _updated_left = view_circular_battery_widget(45, false);
-    let _updated_right = view_circular_battery_widget(50, false);
-    let _updated_case = view_circular_battery_widget(55, false);
+    let _updated_left = view_circular_battery_widget(45.0, false);
+    let _updated_right = view_circular_battery_widget(50.0, false);
+    let _updated_case = view_circular_battery_widget(55.0, false);
     
     // Verify changes are reflected
     assert_eq!(updated_device.left_battery, Some(45));
@@ -123,14 +123,14 @@ fn test_charging_state_propagation() {
     let window = MainWindow::new();
     
     // Test non-charging state
-    let _non_charging_left = view_circular_battery_widget(60, false);
-    let _non_charging_right = view_circular_battery_widget(65, false);
-    let _non_charging_case = view_circular_battery_widget(70, false);
+    let _non_charging_left = view_circular_battery_widget(60.0, false);
+    let _non_charging_right = view_circular_battery_widget(65.0, false);
+    let _non_charging_case = view_circular_battery_widget(70.0, false);
     
     // Test charging state
-    let _charging_left = view_circular_battery_widget(60, true);
-    let _charging_right = view_circular_battery_widget(65, true);
-    let _charging_case = view_circular_battery_widget(70, true);
+    let _charging_left = view_circular_battery_widget(60.0, true);
+    let _charging_right = view_circular_battery_widget(65.0, true);
+    let _charging_case = view_circular_battery_widget(70.0, true);
     
     let _element = window.view();
     
@@ -165,9 +165,9 @@ fn test_multiple_device_rendering() {
     for device in &devices {
         if let (Some(left), Some(right), Some(case)) = 
             (device.left_battery, device.right_battery, device.case_battery) {
-            let _left_widget = view_circular_battery_widget(left, false);
-            let _right_widget = view_circular_battery_widget(right, false);
-            let _case_widget = view_circular_battery_widget(case, false);
+            let _left_widget = view_circular_battery_widget(left as f32, false);
+            let _right_widget = view_circular_battery_widget(right as f32, false);
+            let _case_widget = view_circular_battery_widget(case as f32, false);
         }
     }
     
@@ -182,7 +182,7 @@ fn test_rapid_update_handling() {
     
     // Test rapid battery level changes
     for level in (0..=100).step_by(10) {
-        let _widget = view_circular_battery_widget(level, level % 20 == 0);
+        let _widget = view_circular_battery_widget(level as f32, level % 20 == 0);
     }
     
     let _element = window.view();
@@ -198,8 +198,8 @@ fn test_state_consistency() {
     let battery_levels = [0, 25, 50, 75, 100];
     
     for &level in &battery_levels {
-        let _widget_not_charging = view_circular_battery_widget(level, false);
-        let _widget_charging = view_circular_battery_widget(level, true);
+        let _widget_not_charging = view_circular_battery_widget(level as f32, false);
+        let _widget_charging = view_circular_battery_widget(level as f32, true);
     }
     
     let _element = window.view();
@@ -217,10 +217,10 @@ fn test_theme_consistency() {
     let _element = window.view();
     
     // Test widgets with theme
-    let _widget_low = view_circular_battery_widget(25, false);
-    let _widget_medium = view_circular_battery_widget(50, false);
-    let _widget_high = view_circular_battery_widget(75, false);
-    let _widget_charging = view_circular_battery_widget(50, true);
+    let _widget_low = view_circular_battery_widget(25.0, false);
+    let _widget_medium = view_circular_battery_widget(50.0, false);
+    let _widget_high = view_circular_battery_widget(75.0, false);
+    let _widget_charging = view_circular_battery_widget(50.0, true);
     
     // Test battery icons
     let _icon_display = battery_icon_display(Some(60), false, 80.0, 0.0);
@@ -276,7 +276,7 @@ fn test_component_performance() {
      for i in 0..50 {
          let level = ((i * 2) % 101) as u8;
          let charging = i % 3 == 0;
-         let _widget = view_circular_battery_widget(level, charging);
+         let _widget = view_circular_battery_widget(level as f32, charging);
      }
     
     let _element = window.view();

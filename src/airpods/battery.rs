@@ -4,6 +4,8 @@ use std::process::Command;
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct AirPodsBatteryInfo {
     pub address: u64,
+    /// Canonical device identifier (lowercased MAC address without colons, e.g., "5826d745ad8b")
+    pub canonical_address: String,
     pub name: String,
     pub model_id: u16,
     pub left_battery: i32,
@@ -70,8 +72,8 @@ mod tests {
     #[test]
     fn test_parse_compact_json_lines() {
         let sample = r#"
-{"address":123,"name":"AirPods","model_id":8206,"left_battery":90,"left_charging":true,"right_battery":80,"right_charging":false,"case_battery":70,"case_charging":true}
-{"address":456,"name":"","model_id":8211,"left_battery":100,"left_charging":false,"right_battery":100,"right_charging":false,"case_battery":100,"case_charging":false}
+{"address":123,"canonical_address":"000000000007b","name":"AirPods","model_id":8206,"left_battery":90,"left_charging":true,"right_battery":80,"right_charging":false,"case_battery":70,"case_charging":true}
+{"address":456,"canonical_address":"0000000001c8","name":"","model_id":8211,"left_battery":100,"left_charging":false,"right_battery":100,"right_charging":false,"case_battery":100,"case_charging":false}
         "#;
         let mut infos = Vec::new();
         for line in sample.lines() {
@@ -84,10 +86,12 @@ mod tests {
         }
         assert_eq!(infos.len(), 2);
         assert_eq!(infos[0].address, 123);
+        assert_eq!(infos[0].canonical_address, "000000000007b");
         assert_eq!(infos[0].name, "AirPods");
         assert_eq!(infos[0].model_id, 0x200E);
         assert!(infos[0].left_charging);
         assert_eq!(infos[1].address, 456);
+        assert_eq!(infos[1].canonical_address, "0000000001c8");
         assert_eq!(infos[1].model_id, 0x2013);
     }
 }

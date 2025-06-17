@@ -19,7 +19,7 @@ pub mod window_management;
 pub mod window_visibility;
 
 // Re-exports for easier access
-pub use app::run_ui;
+pub use app::{run_ui, run_ui_with_options};
 pub use message::Message;
 pub use state::AppState;
 pub use system_tray::SystemTray;

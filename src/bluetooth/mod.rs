@@ -1,7 +1,6 @@
 //! BLE scanning and device management
 
 pub mod adapter;
-pub mod airpods_bridge;
 pub mod battery;
 pub mod battery_monitor;
 pub mod cli_scanner;

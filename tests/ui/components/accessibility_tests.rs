@@ -77,8 +77,8 @@ fn test_semantic_information_availability() {
     assert!(!test_device.name.is_empty());
     
     // Test circular battery widget accessibility
-    let _widget = view_circular_battery_widget(75, false);
-    let _case_widget = view_circular_battery_widget(85, true);
+    let _widget = view_circular_battery_widget(75.0, false);
+    let _case_widget = view_circular_battery_widget(85.0, true);
 }
 
 /// Test keyboard navigation accessibility
@@ -97,12 +97,12 @@ fn test_keyboard_navigation() {
 #[test]
 fn test_battery_level_announcements() {
     // Test different battery levels with circular widgets
-    let _low_battery = view_circular_battery_widget(25, false);
-    let _high_battery = view_circular_battery_widget(85, false);
-    let _critical_battery = view_circular_battery_widget(5, false);
+    let _low_battery = view_circular_battery_widget(25.0, false);
+    let _high_battery = view_circular_battery_widget(85.0, false);
+    let _critical_battery = view_circular_battery_widget(5.0, false);
     
     // Test charging state accessibility
-    let _charging_widget = view_circular_battery_widget(50, true);
+    let _charging_widget = view_circular_battery_widget(50.0, true);
     
     // Test battery icon displays
     let _icon_display = battery_icon_display(Some(75), false, 80.0, 0.0);
@@ -150,20 +150,20 @@ fn test_error_state_accessibility() {
     assert_eq!(empty_device.right_battery, None);
     
     // Test zero battery display
-    let _zero_widget = view_circular_battery_widget(0, false);
+    let _zero_widget = view_circular_battery_widget(0.0, false);
 }
 
 /// Test responsive text sizing for accessibility
 #[test]
 fn test_responsive_text_sizing() {
     // Test that battery widgets handle different values appropriately
-    let _widget_67 = view_circular_battery_widget(67, false);
-    let _widget_73 = view_circular_battery_widget(73, true);
-    let _widget_81 = view_circular_battery_widget(81, false);
+    let _widget_67 = view_circular_battery_widget(67.0, false);
+    let _widget_73 = view_circular_battery_widget(73.0, true);
+    let _widget_81 = view_circular_battery_widget(81.0, false);
     
     // Test edge cases
-    let _widget_0 = view_circular_battery_widget(0, false);
-    let _widget_100 = view_circular_battery_widget(100, true);
+    let _widget_0 = view_circular_battery_widget(0.0, false);
+    let _widget_100 = view_circular_battery_widget(100.0, true);
     
     // In a complete implementation, would test:
     // - Minimum font sizes for readability
@@ -195,9 +195,9 @@ fn test_state_transition_accessibility() {
     let _empty_state = window.view();
     
     // Test battery state transitions
-    let _low_battery = view_circular_battery_widget(15, false);
-    let _charging_battery = view_circular_battery_widget(15, true);
-    let _full_battery = view_circular_battery_widget(100, false);
+    let _low_battery = view_circular_battery_widget(15.0, false);
+    let _charging_battery = view_circular_battery_widget(15.0, true);
+    let _full_battery = view_circular_battery_widget(100.0, false);
     
     assert!(true); // Placeholder for state transition testing
 }

@@ -15,6 +15,9 @@ pub enum Message {
     /// Toggle the application window visibility
     ToggleVisibility,
 
+    /// Toggle the application window (show/hide)
+    ToggleWindow,
+
     /// Exit the application
     Exit,
 
@@ -158,12 +161,33 @@ pub enum Message {
 
     /// Disconnect from a device
     DisconnectDevice,
+
+    /// Device detection state changed
+    DeviceDetectionStateChanged(crate::ui::state::DeviceDetectionState),
+
+
+
+    /// Device scan completed
+    ScanCompleted,
+
+    /// Device scan failed
+    ScanFailed(String),
+
+    /// Set custom device name
+    SetDeviceName(String),
+
+    /// Open battery intelligence profile folder
+    OpenProfileFolder,
+
+    /// Purge all battery intelligence profiles (reset)
+    PurgeProfiles,
 }
 
 impl PartialEq for Message {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::ToggleVisibility, Self::ToggleVisibility) => true,
+            (Self::ToggleWindow, Self::ToggleWindow) => true,
             (Self::Exit, Self::Exit) => true,
             (Self::ForceQuit, Self::ForceQuit) => true,
             (Self::NoOp, Self::NoOp) => true,
@@ -212,6 +236,10 @@ impl PartialEq for Message {
             (Self::ClosePopup, Self::ClosePopup) => true,
             (Self::ConnectDevice, Self::ConnectDevice) => true,
             (Self::DisconnectDevice, Self::DisconnectDevice) => true,
+            (Self::DeviceDetectionStateChanged(a), Self::DeviceDetectionStateChanged(b)) => a == b,
+
+            (Self::ScanCompleted, Self::ScanCompleted) => true,
+            (Self::ScanFailed(a), Self::ScanFailed(b)) => a == b,
             _ => false,
         }
     }

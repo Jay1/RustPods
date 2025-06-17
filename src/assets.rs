@@ -5,6 +5,9 @@ pub mod app {
     /// Main application logo (PNG format)
     pub const LOGO: &[u8] = include_bytes!("../assets/icons/app/logo_ring.png");
 
+    /// Main application logo SVG (vector format for crisp scaling)
+    pub const LOGO_SVG: &[u8] = include_bytes!("../assets/icons/app/logo_ring.svg");
+
     /// Application icon 256x256 (ICO format)
     pub const ICON_256: &[u8] = include_bytes!("../assets/icons/app/logo_ring.ico");
 
