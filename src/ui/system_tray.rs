@@ -3,12 +3,15 @@
 use crate::config::{AppConfig, Theme as ConfigTheme};
 use crate::ui::message::Message;
 use log;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::UnboundedSender;
-use tray_icon::{TrayIcon, TrayIconBuilder, TrayIconEvent, MouseButton, menu::{Menu, MenuEvent}};
 use tray_icon::menu::MenuItem as TrayMenuItem;
 use tray_icon::Icon;
-use std::path::Path;
+use tray_icon::{
+    menu::{Menu, MenuEvent},
+    MouseButton, TrayIcon, TrayIconBuilder, TrayIconEvent,
+};
 
 /// Theme mode for system tray icons
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -157,7 +160,7 @@ impl SystemTray {
     /// Create a new system tray instance
     pub fn new(config: AppConfig) -> Result<Self, SystemTrayError> {
         let theme_mode = ThemeMode::from(config.ui.theme.clone());
-        
+
         Ok(Self {
             tray: None,
             menu: None,
@@ -184,27 +187,51 @@ impl SystemTray {
             ThemeMode::Light => "light",
             ThemeMode::Dark => "dark",
         };
-        
-        let status_str = if self.is_connected { "connected" } else { "disconnected" };
-        
+
+        let status_str = if self.is_connected {
+            "connected"
+        } else {
+            "disconnected"
+        };
+
         // Get the executable directory and construct absolute path
-        let exe_path = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("./rustpods.exe"));
-        let exe_dir = exe_path.parent().unwrap_or_else(|| std::path::Path::new("."));
-        
+        let exe_path =
+            std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("./rustpods.exe"));
+        let exe_dir = exe_path
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new("."));
+
         // Try multiple possible locations for the icon
         let icon_paths = vec![
             // 1. Tray icons in same directory as executable (for release builds)
             exe_dir.join(format!("rustpods-tray-{}-{}.ico", theme_str, status_str)),
             // 2. Assets folder relative to executable
-            exe_dir.join("assets").join("icons").join("tray").join(format!("rustpods-tray-{}-{}.ico", theme_str, status_str)),
+            exe_dir
+                .join("assets")
+                .join("icons")
+                .join("tray")
+                .join(format!("rustpods-tray-{}-{}.ico", theme_str, status_str)),
             // 3. Project root assets (for development)
-            exe_dir.parent().and_then(|p| p.parent()).map(|project_root| 
-                project_root.join("assets").join("icons").join("tray").join(format!("rustpods-tray-{}-{}.ico", theme_str, status_str))
-            ).unwrap_or_default(),
+            exe_dir
+                .parent()
+                .and_then(|p| p.parent())
+                .map(|project_root| {
+                    project_root
+                        .join("assets")
+                        .join("icons")
+                        .join("tray")
+                        .join(format!("rustpods-tray-{}-{}.ico", theme_str, status_str))
+                })
+                .unwrap_or_default(),
             // 4. Current working directory
-            std::env::current_dir().unwrap_or_default().join("assets").join("icons").join("tray").join(format!("rustpods-tray-{}-{}.ico", theme_str, status_str)),
+            std::env::current_dir()
+                .unwrap_or_default()
+                .join("assets")
+                .join("icons")
+                .join("tray")
+                .join(format!("rustpods-tray-{}-{}.ico", theme_str, status_str)),
         ];
-        
+
         // Find the first existing icon file
         for icon_path in icon_paths {
             if icon_path.exists() {
@@ -212,9 +239,12 @@ impl SystemTray {
                 return icon_path.to_string_lossy().to_string();
             }
         }
-        
+
         // Fallback to relative path if none found
-        let fallback = format!("assets/icons/tray/rustpods-tray-{}-{}.ico", theme_str, status_str);
+        let fallback = format!(
+            "assets/icons/tray/rustpods-tray-{}-{}.ico",
+            theme_str, status_str
+        );
         log::warn!("No tray icon found, using fallback: {}", fallback);
         fallback
     }
@@ -222,22 +252,31 @@ impl SystemTray {
     /// Load icon from file path
     fn load_icon(&self, path: &str) -> Result<Icon, SystemTrayError> {
         let icon_path = Path::new(path);
-        
+
         if !icon_path.exists() {
-            return Err(SystemTrayError::IconLoad(format!("Icon file not found: {}", path)));
+            return Err(SystemTrayError::IconLoad(format!(
+                "Icon file not found: {}",
+                path
+            )));
         }
 
         // For ICO files, we need to use from_path instead of from_rgba
         if path.ends_with(".ico") {
-            Icon::from_path(icon_path, Some((32, 32)))
-                .map_err(|e| SystemTrayError::IconLoad(format!("Failed to create icon from ICO file {}: {}", path, e)))
+            Icon::from_path(icon_path, Some((32, 32))).map_err(|e| {
+                SystemTrayError::IconLoad(format!(
+                    "Failed to create icon from ICO file {}: {}",
+                    path, e
+                ))
+            })
         } else {
             // For other formats, try to load as image and convert to RGBA
-            let icon_bytes = std::fs::read(icon_path)
-                .map_err(|e| SystemTrayError::IconLoad(format!("Failed to read icon file {}: {}", path, e)))?;
+            let icon_bytes = std::fs::read(icon_path).map_err(|e| {
+                SystemTrayError::IconLoad(format!("Failed to read icon file {}: {}", path, e))
+            })?;
 
-            Icon::from_rgba(icon_bytes, 32, 32)
-                .map_err(|e| SystemTrayError::IconLoad(format!("Failed to create icon from {}: {}", path, e)))
+            Icon::from_rgba(icon_bytes, 32, 32).map_err(|e| {
+                SystemTrayError::IconLoad(format!("Failed to create icon from {}: {}", path, e))
+            })
         }
     }
 
@@ -256,8 +295,9 @@ impl SystemTray {
 
         // Create menu
         let menu = Menu::new();
-        menu.append(&show_hide_item)
-            .map_err(|e| SystemTrayError::MenuItem(format!("Failed to add show/hide item: {}", e)))?;
+        menu.append(&show_hide_item).map_err(|e| {
+            SystemTrayError::MenuItem(format!("Failed to add show/hide item: {}", e))
+        })?;
         menu.append(&exit_item)
             .map_err(|e| SystemTrayError::MenuItem(format!("Failed to add exit item: {}", e)))?;
 
@@ -347,7 +387,11 @@ impl SystemTray {
 
     /// Handle tray icon events
     fn handle_tray_event(&mut self, event: TrayIconEvent) -> Result<(), SystemTrayError> {
-        if let TrayIconEvent::Click { button: MouseButton::Left, .. } = event {
+        if let TrayIconEvent::Click {
+            button: MouseButton::Left,
+            ..
+        } = event
+        {
             self.window_controller.toggle_window()?;
         }
         Ok(())
@@ -366,16 +410,17 @@ impl SystemTray {
         }
 
         self.is_connected = connected;
-        
+
         // Get the icon path and load new icon
         let icon_path = self.get_icon_path();
         log::debug!("Updating tray icon to: {}", icon_path);
-        
+
         let icon = self.load_icon(&icon_path)?;
-        
+
         if let Some(ref mut tray) = self.tray {
-            tray.set_icon(Some(icon))
-                .map_err(|e| SystemTrayError::SetIcon(format!("Failed to set icon '{}': {}", icon_path, e)))?;
+            tray.set_icon(Some(icon)).map_err(|e| {
+                SystemTrayError::SetIcon(format!("Failed to set icon '{}': {}", icon_path, e))
+            })?;
         }
 
         Ok(())

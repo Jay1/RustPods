@@ -79,7 +79,8 @@ impl BatteryEstimator {
         }
 
         if let Some(right_level) = right {
-            self.right_history.update_real_reading(right_level as u8, now);
+            self.right_history
+                .update_real_reading(right_level as u8, now);
         }
 
         if let Some(case_level) = case {
@@ -99,33 +100,58 @@ impl BatteryEstimator {
     /// Get just the estimated percentages as integers for display
     pub fn get_display_levels(&self) -> (Option<u8>, Option<u8>, Option<u8>) {
         let (left, right, case) = self.get_estimated_levels();
-        
+
         (
-            if left.level >= 0.0 { Some(left.level.round() as u8) } else { None },
-            if right.level >= 0.0 { Some(right.level.round() as u8) } else { None },
-            if case.level >= 0.0 { Some(case.level.round() as u8) } else { None },
+            if left.level >= 0.0 {
+                Some(left.level.round() as u8)
+            } else {
+                None
+            },
+            if right.level >= 0.0 {
+                Some(right.level.round() as u8)
+            } else {
+                None
+            },
+            if case.level >= 0.0 {
+                Some(case.level.round() as u8)
+            } else {
+                None
+            },
         )
     }
 
     /// Get fractional estimated percentages for 1% increment display
     pub fn get_fractional_display_levels(&self) -> (Option<f32>, Option<f32>, Option<f32>) {
         let (left, right, case) = self.get_estimated_levels();
-        
+
         (
-            if left.level >= 0.0 { Some(left.level) } else { None },
-            if right.level >= 0.0 { Some(right.level) } else { None },
-            if case.level >= 0.0 { Some(case.level) } else { None },
+            if left.level >= 0.0 {
+                Some(left.level)
+            } else {
+                None
+            },
+            if right.level >= 0.0 {
+                Some(right.level)
+            } else {
+                None
+            },
+            if case.level >= 0.0 {
+                Some(case.level)
+            } else {
+                None
+            },
         )
     }
 
     /// Check if we have any recent real data
     pub fn has_recent_data(&self) -> bool {
         let cutoff = SystemTime::now() - Duration::from_secs(300); // 5 minutes
-        
+
         [&self.left_history, &self.right_history, &self.case_history]
             .iter()
             .any(|history| {
-                history.last_known_time
+                history
+                    .last_known_time
                     .map(|time| time > cutoff)
                     .unwrap_or(false)
             })
@@ -134,7 +160,7 @@ impl BatteryEstimator {
     /// Inject fake historical data for testing (simulates realistic battery discharge)
     pub fn inject_test_data(&mut self) {
         let now = SystemTime::now();
-        
+
         // Simulate battery discharge history over the past 2 hours
         let test_intervals = [
             (120, 80), // 2 hours ago: 80%
@@ -146,25 +172,46 @@ impl BatteryEstimator {
 
         for (minutes_ago, level) in test_intervals {
             let timestamp = now - Duration::from_secs(minutes_ago * 60);
-            
+
             // Add to all three histories (left, right, case)
             self.left_history.update_real_reading(level, timestamp);
             self.right_history.update_real_reading(level, timestamp);
             self.case_history.update_real_reading(level, timestamp);
         }
 
-        crate::debug_log!("airpods", "Injected test battery history: 80% -> 78% -> 75% -> 72% -> 70% over 2 hours");
-        crate::debug_log!("airpods", "Left history rates: {}", self.left_history.discharge_rates.len());
-        crate::debug_log!("airpods", "Right history rates: {}", self.right_history.discharge_rates.len());
-        crate::debug_log!("airpods", "Case history rates: {}", self.case_history.discharge_rates.len());
+        crate::debug_log!(
+            "airpods",
+            "Injected test battery history: 80% -> 78% -> 75% -> 72% -> 70% over 2 hours"
+        );
+        crate::debug_log!(
+            "airpods",
+            "Left history rates: {}",
+            self.left_history.discharge_rates.len()
+        );
+        crate::debug_log!(
+            "airpods",
+            "Right history rates: {}",
+            self.right_history.discharge_rates.len()
+        );
+        crate::debug_log!(
+            "airpods",
+            "Case history rates: {}",
+            self.case_history.discharge_rates.len()
+        );
     }
 
     /// Force estimation mode (for testing/development) - ignores fresh data threshold
     pub fn get_forced_display_levels(&self) -> (Option<u8>, Option<u8>, Option<u8>) {
         (
-            self.left_history.get_forced_estimated_level().map(|e| e.level.round() as u8),
-            self.right_history.get_forced_estimated_level().map(|e| e.level.round() as u8),
-            self.case_history.get_forced_estimated_level().map(|e| e.level.round() as u8),
+            self.left_history
+                .get_forced_estimated_level()
+                .map(|e| e.level.round() as u8),
+            self.right_history
+                .get_forced_estimated_level()
+                .map(|e| e.level.round() as u8),
+            self.case_history
+                .get_forced_estimated_level()
+                .map(|e| e.level.round() as u8),
         )
     }
 }
@@ -221,21 +268,25 @@ impl DischargeHistory {
         // If no data available, return unknown
         let (last_level, last_time) = match (self.last_known_level, self.last_known_time) {
             (Some(level), Some(time)) => (level, time),
-            _ => return EstimatedBattery {
-                level: -1.0, // Unknown
-                is_real_data: false,
-                confidence: 0.0,
-            },
+            _ => {
+                return EstimatedBattery {
+                    level: -1.0, // Unknown
+                    is_real_data: false,
+                    confidence: 0.0,
+                };
+            }
         };
 
         let now = SystemTime::now();
         let elapsed = match now.duration_since(last_time) {
             Ok(duration) => duration,
-            Err(_) => return EstimatedBattery {
-                level: last_level as f32,
-                is_real_data: true,
-                confidence: 1.0,
-            },
+            Err(_) => {
+                return EstimatedBattery {
+                    level: last_level as f32,
+                    is_real_data: true,
+                    confidence: 1.0,
+                }
+            }
         };
 
         // If reading is very recent (< 15 seconds), treat as real data
@@ -277,13 +328,15 @@ impl DischargeHistory {
 
         for rate in &self.discharge_rates {
             // Calculate age in hours
-            let age_hours = now.duration_since(rate.timestamp)
+            let age_hours = now
+                .duration_since(rate.timestamp)
                 .unwrap_or(Duration::from_secs(3600))
-                .as_secs_f32() / 3600.0;
+                .as_secs_f32()
+                / 3600.0;
 
             // Recent data gets higher weight (exponential decay)
             let weight = (-age_hours / 24.0).exp(); // Half-life of 24 hours
-            
+
             weighted_sum += rate.percentage_per_minute * weight;
             total_weight += weight;
         }
@@ -304,7 +357,8 @@ impl DischargeHistory {
         confidence *= (-hours_elapsed / 6.0).exp(); // Drops to ~37% after 6 hours
 
         // Confidence increases with more historical data
-        let data_quality = (self.discharge_rates.len() as f32 / MAX_HISTORY_ENTRIES as f32).min(1.0);
+        let data_quality =
+            (self.discharge_rates.len() as f32 / MAX_HISTORY_ENTRIES as f32).min(1.0);
         confidence *= 0.3 + 0.7 * data_quality; // Range: 30% to 100%
 
         confidence.max(0.1).min(1.0) // Clamp between 10% and 100%
@@ -321,11 +375,13 @@ impl DischargeHistory {
         let now = SystemTime::now();
         let elapsed = match now.duration_since(last_time) {
             Ok(duration) => duration,
-            Err(_) => return Some(EstimatedBattery {
-                level: last_level as f32,
-                is_real_data: true,
-                confidence: 1.0,
-            }),
+            Err(_) => {
+                return Some(EstimatedBattery {
+                    level: last_level as f32,
+                    is_real_data: true,
+                    confidence: 1.0,
+                })
+            }
         };
 
         // Force estimation calculation regardless of elapsed time
@@ -387,7 +443,7 @@ mod tests {
 
         // First reading: 80%
         history.update_real_reading(80, earlier);
-        
+
         // Second reading: 70% (10% drop in 10 minutes = 1% per minute)
         history.update_real_reading(70, now);
 
@@ -399,12 +455,12 @@ mod tests {
     fn test_estimation_confidence() {
         let mut history = DischargeHistory::new();
         let now = SystemTime::now();
-        
+
         // Add some data
         history.update_real_reading(80, now - Duration::from_secs(60));
-        
+
         let estimate = history.get_estimated_level();
         assert!(estimate.confidence > 0.0);
         assert!(estimate.confidence <= 1.0);
     }
-} 
+}

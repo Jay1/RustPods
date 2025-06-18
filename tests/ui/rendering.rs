@@ -9,7 +9,7 @@ use iced::Application;
 
 use rustpods::airpods::{AirPodsBattery, AirPodsType, DetectedAirPods};
 use rustpods::bluetooth::DiscoveredDevice;
-use rustpods::ui::components::{view_circular_battery_widget, battery_icon_display};
+use rustpods::ui::components::{battery_icon_display, view_circular_battery_widget};
 use rustpods::ui::state::AppState;
 // UI rendering tests
 
@@ -58,10 +58,10 @@ fn test_device_filtering_paired_only() {
         services: Vec::new(),
         tx_power_level: None,
     };
-    
+
     let devices = vec![device1.clone(), device2];
     let paired_devices: Vec<_> = devices.into_iter().filter(|d| d.is_connected).collect();
-    
+
     // Only paired devices should be included
     assert_eq!(paired_devices.len(), 1);
     assert_eq!(paired_devices[0].address, device1.address);
@@ -101,7 +101,7 @@ fn test_airpods_battery_widget_display() {
         Some(92),
         Some(75),
     );
-    
+
     if let Some(battery) = &airpods.battery {
         if let Some(left) = battery.left {
             let _left_widget = view_circular_battery_widget(left as f32, false);
@@ -175,7 +175,7 @@ fn test_app_state_device_update_and_select() {
 #[test]
 fn test_circular_widget_battery_levels() {
     let levels = [0, 25, 50, 75, 100];
-    
+
     for &level in &levels {
         let _widget_normal = view_circular_battery_widget(level as f32, false);
         let _widget_charging = view_circular_battery_widget(level as f32, true);
@@ -186,7 +186,7 @@ fn test_circular_widget_battery_levels() {
 #[test]
 fn test_battery_icon_dimensions() {
     let dimensions = [(50.0, 20.0), (80.0, 30.0), (100.0, 40.0)];
-    
+
     for &(width, height) in &dimensions {
         let _icon = battery_icon_display(Some(75), false, width, height);
     }
@@ -198,11 +198,11 @@ fn test_widget_edge_cases() {
     // Test zero battery
     let _zero_widget = view_circular_battery_widget(0.0, false);
     let _zero_charging = view_circular_battery_widget(0.0, true);
-    
+
     // Test full battery
     let _full_widget = view_circular_battery_widget(100.0, false);
     let _full_charging = view_circular_battery_widget(100.0, true);
-    
+
     // Test battery icon with zero dimensions
     let _zero_width = battery_icon_display(Some(50), false, 0.0, 20.0);
     let _zero_height = battery_icon_display(Some(50), false, 20.0, 0.0);

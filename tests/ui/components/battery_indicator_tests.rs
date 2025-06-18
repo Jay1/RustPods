@@ -1,13 +1,14 @@
 #[cfg(test)]
 mod tests {
+    use iced::Element;
     use rustpods::ui::components::battery_indicator::view as battery_indicator_view;
     use rustpods::ui::theme::Theme;
     use rustpods::ui::Message;
-    use iced::Element;
 
     #[test]
     fn test_battery_indicator_renders() {
-        let element: Element<'_, Message, iced::Renderer<Theme>> = battery_indicator_view("Left", Some(80), false);
+        let element: Element<'_, Message, iced::Renderer<Theme>> =
+            battery_indicator_view("Left", Some(80), false);
         // Basic smoke test: ensure the element is created
         assert!(true);
     }
@@ -25,4 +26,4 @@ mod tests {
         // Placeholder: In a full test, would verify charging icon is present
         assert!(true);
     }
-} 
+}

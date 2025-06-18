@@ -313,34 +313,40 @@ fn pulse_color(pulse: f32) -> iced::Color {
 fn create_circular_battery_svg(level: f32, is_charging: bool) -> String {
     // Clamp level between 0.0 and 100.0
     let level = level.clamp(0.0, 100.0);
-    
+
     // SVG circle parameters - increased by 50%
-    let radius = 48.0;  // Was 32.0
-    let stroke_width = 12.0;  // Was 8.0, increased proportionally
+    let radius = 48.0; // Was 32.0
+    let stroke_width = 12.0; // Was 8.0, increased proportionally
     let center = 60.0; // Was 40.0, SVG center point
     let circumference = 2.0 * std::f32::consts::PI * radius;
-    
+
     // Calculate progress arc length (starting from top, clockwise)
     let progress = (level / 100.0) * circumference;
     let dash_offset = circumference - progress;
-    
+
     // Catppuccin Mocha theme colors
     let bg_color = "#45475a"; // SURFACE1 - dark, subtle color
-    let progress_color = "#cdd6f4"; // TEXT - bright, contrasting color  
+    let progress_color = "#cdd6f4"; // TEXT - bright, contrasting color
     let charging_color = "#f9e2af"; // YELLOW - bright color for lightning bolt
-    
+
     let mut svg = String::new();
     use std::fmt::Write;
-    
+
     // Start SVG - increased size from 80x80 to 120x120
-    write!(&mut svg, r#"<svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">"#).unwrap();
-    
+    write!(
+        &mut svg,
+        r#"<svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">"#
+    )
+    .unwrap();
+
     // Background circle
-    write!(&mut svg, 
+    write!(
+        &mut svg,
         r#"<circle cx="{}" cy="{}" r="{}" fill="none" stroke="{}" stroke-width="{}"/>"#,
         center, center, radius, bg_color, stroke_width
-    ).unwrap();
-    
+    )
+    .unwrap();
+
     // Progress arc (only if level > 0)
     if level > 0.0 {
         write!(&mut svg,
@@ -348,7 +354,7 @@ fn create_circular_battery_svg(level: f32, is_charging: bool) -> String {
             center, center, radius, progress_color, stroke_width, circumference, dash_offset, center, center
         ).unwrap();
     }
-    
+
     // Charging lightning bolt icon - scaled and repositioned for larger circle
     if is_charging {
         write!(&mut svg,
@@ -356,7 +362,7 @@ fn create_circular_battery_svg(level: f32, is_charging: bool) -> String {
             charging_color
         ).unwrap();
     }
-    
+
     write!(&mut svg, r#"</svg>"#).unwrap();
     svg
 }
@@ -375,7 +381,7 @@ pub fn view_circular_battery_widget<'a>(
     let svg_string = create_circular_battery_svg(level, is_charging);
     let svg_bytes = svg_string.into_bytes();
     let svg_element = Svg::new(iced::widget::svg::Handle::from_memory(svg_bytes))
-        .width(Length::Fixed(120.0))  // Increased from 80.0 to 120.0
+        .width(Length::Fixed(120.0)) // Increased from 80.0 to 120.0
         .height(Length::Fixed(120.0)); // Increased from 80.0 to 120.0
 
     // Format the level with 1 decimal place if it's not a whole number
@@ -391,15 +397,13 @@ pub fn view_circular_battery_widget<'a>(
             // Circular battery progress indicator
             svg_element,
             // Battery percentage text with fractional support
-            text(level_text)
-                .size(24)
-                .style(text_color)
+            text(level_text).size(24).style(text_color)
         ]
         .spacing(10)
-        .align_items(Alignment::Center)
+        .align_items(Alignment::Center),
     )
-    .width(Length::Fixed(200.0))     // Increased from 160.0 to accommodate larger ring
-    .height(Length::Fixed(200.0))    // Increased from 160.0 to accommodate larger ring
+    .width(Length::Fixed(200.0)) // Increased from 160.0 to accommodate larger ring
+    .height(Length::Fixed(200.0)) // Increased from 160.0 to accommodate larger ring
     .style(iced::theme::Container::Custom(Box::new(
         move |_: &iced::Theme| container::Appearance {
             background: Some(bg_color.into()),
@@ -425,23 +429,23 @@ mod tests {
         let svg_25 = create_circular_battery_svg(25.0, false);
         assert!(svg_25.contains("svg"));
         assert!(svg_25.contains("circle"));
-        
+
         let svg_75_charging = create_circular_battery_svg(75.0, true);
         assert!(svg_75_charging.contains("svg"));
         assert!(svg_75_charging.contains("circle"));
         assert!(svg_75_charging.contains("path")); // Lightning bolt
-        
+
         // Test edge cases
         let svg_0 = create_circular_battery_svg(0.0, false);
         assert!(svg_0.contains("svg"));
-        
+
         let svg_100 = create_circular_battery_svg(100.0, false);
         assert!(svg_100.contains("svg"));
-        
+
         // Test clamping
         let svg_over_100 = create_circular_battery_svg(150.0, true);
         assert!(svg_over_100.contains("svg"));
-        
+
         // Test fractional levels
         let svg_fractional = create_circular_battery_svg(67.3, false);
         assert!(svg_fractional.contains("svg"));
@@ -455,7 +459,7 @@ mod tests {
         let widget_0 = view_circular_battery_widget(0.0, false);
         let widget_100 = view_circular_battery_widget(100.0, false);
         let widget_fractional = view_circular_battery_widget(67.3, false);
-        
+
         // Widgets should be created without panicking
         let _ = widget_25;
         let _ = widget_75_charging;

@@ -257,7 +257,10 @@ pub fn handle_window_events(
                 }
                 None
             }
-            window::Event::Resized { width: _, height: _ } => {
+            window::Event::Resized {
+                width: _,
+                height: _,
+            } => {
                 // Ignore resize events to prevent unwanted size changes when moving between monitors
                 // with different DPI settings. Our window has fixed dimensions and shouldn't resize.
                 log::debug!("Window resize event ignored to prevent DPI-related sizing issues");

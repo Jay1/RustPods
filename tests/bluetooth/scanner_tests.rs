@@ -9,10 +9,12 @@ use btleplug::api::BDAddr;
 use serde_json::from_str;
 
 use rustpods::airpods::{AirPodsBattery, AirPodsChargingState, AirPodsType, DetectedAirPods};
-use rustpods::bluetooth::cli_scanner::{CliAirPodsData, CliScanner, CliScannerConfig, CliScannerResult};
-use rustpods::error::BluetoothError;
+use rustpods::bluetooth::cli_scanner::{
+    CliAirPodsData, CliScanner, CliScannerConfig, CliScannerResult,
+};
 use rustpods::bluetooth::DiscoveredDevice;
 use rustpods::config::{AppConfig, LogLevel};
+use rustpods::error::BluetoothError;
 
 /// Test helper to create a sample discovered device
 fn create_test_device(
@@ -78,7 +80,7 @@ fn test_cli_scanner_config_default() {
 fn test_cli_scanner_config_from_app_config() {
     // Create a new AppConfig using Default trait
     let mut app_config = AppConfig::default();
-    
+
     // Set the fields we need for testing
     app_config.bluetooth.battery_refresh_interval = Duration::from_secs(45);
     app_config.bluetooth.adaptive_polling = false;
@@ -129,11 +131,11 @@ fn test_parse_cli_scanner_json() {
     assert_eq!(result.total_devices, 1);
     assert_eq!(result.airpods_count, 1);
     assert_eq!(result.status, "success");
-    
+
     let device = &result.devices[0];
     assert_eq!(device.address, "00:11:22:33:44:55");
     assert_eq!(device.rssi, -60);
-    
+
     let airpods_data = device.airpods_data.as_ref().unwrap();
     assert_eq!(airpods_data.model, "AirPods Pro");
     assert_eq!(airpods_data.left_battery, 80);
@@ -165,7 +167,7 @@ fn test_manual_cli_data_conversion() {
 
     // Manual conversion logic (similar to what's in the CLI scanner)
     let device_address = "00:11:22:33:44:55".to_string();
-    
+
     // Parse MAC address
     let addr_parts: Vec<&str> = device_address.split(':').collect();
     let mut addr_bytes = [0u8; 6];
@@ -173,7 +175,7 @@ fn test_manual_cli_data_conversion() {
         addr_bytes[i] = u8::from_str_radix(part, 16).unwrap();
     }
     let address = BDAddr::from(addr_bytes);
-    
+
     // Determine device type based on model
     let device_type = match cli_data.model.as_str() {
         "AirPods Pro" => AirPodsType::AirPodsPro,
@@ -181,7 +183,7 @@ fn test_manual_cli_data_conversion() {
         "AirPods Max" => AirPodsType::AirPodsMax,
         _ => AirPodsType::Unknown,
     };
-    
+
     // Determine charging state
     let charging_state = if cli_data.left_charging && cli_data.right_charging {
         Some(AirPodsChargingState::BothBudsCharging)
@@ -194,7 +196,7 @@ fn test_manual_cli_data_conversion() {
     } else {
         Some(AirPodsChargingState::NotCharging)
     };
-    
+
     // Create battery info
     let battery = AirPodsBattery {
         left: Some(cli_data.left_battery as u8),
@@ -202,7 +204,7 @@ fn test_manual_cli_data_conversion() {
         case: Some(cli_data.case_battery as u8),
         charging: charging_state,
     };
-    
+
     // Create DetectedAirPods
     let airpods = DetectedAirPods {
         address,
@@ -213,14 +215,17 @@ fn test_manual_cli_data_conversion() {
         is_connected: true,
         last_seen: Instant::now(),
     };
-    
+
     // Assertions
     assert_eq!(airpods.address.to_string(), device_address);
     assert_eq!(airpods.device_type, AirPodsType::AirPodsPro);
     assert_eq!(airpods.battery.as_ref().unwrap().left, Some(80));
     assert_eq!(airpods.battery.as_ref().unwrap().right, Some(75));
     assert_eq!(airpods.battery.as_ref().unwrap().case, Some(90));
-    assert_eq!(airpods.battery.as_ref().unwrap().charging, Some(AirPodsChargingState::CaseCharging));
+    assert_eq!(
+        airpods.battery.as_ref().unwrap().charging,
+        Some(AirPodsChargingState::CaseCharging)
+    );
 }
 
 #[test]
@@ -255,7 +260,7 @@ fn test_significant_battery_change_detection() {
     let result1 = (prev.left_battery - curr1.left_battery).abs() >= threshold
         || (prev.right_battery - curr1.right_battery).abs() >= threshold
         || (prev.case_battery - curr1.case_battery).abs() >= threshold;
-    
+
     assert!(!result1);
 
     // Significant change (10% threshold)
@@ -269,7 +274,7 @@ fn test_significant_battery_change_detection() {
     let result2 = (prev.left_battery - curr2.left_battery).abs() >= threshold
         || (prev.right_battery - curr2.right_battery).abs() >= threshold
         || (prev.case_battery - curr2.case_battery).abs() >= threshold;
-    
+
     assert!(result2);
 }
 
@@ -299,7 +304,7 @@ fn test_charging_state_change_detection() {
     let result1 = prev.left_charging != curr1.left_charging
         || prev.right_charging != curr1.right_charging
         || prev.case_charging != curr1.case_charging;
-    
+
     assert!(!result1);
 
     // Change in charging state
@@ -311,7 +316,7 @@ fn test_charging_state_change_detection() {
     let result2 = prev.left_charging != curr2.left_charging
         || prev.right_charging != curr2.right_charging
         || prev.case_charging != curr2.case_charging;
-    
+
     assert!(result2);
 }
 
@@ -342,7 +347,7 @@ fn test_usage_state_change_detection() {
         || prev.right_in_ear != curr1.right_in_ear
         || prev.both_in_case != curr1.both_in_case
         || prev.lid_open != curr1.lid_open;
-    
+
     assert!(!result1);
 
     // Change in usage state
@@ -355,22 +360,22 @@ fn test_usage_state_change_detection() {
         || prev.right_in_ear != curr2.right_in_ear
         || prev.both_in_case != curr2.both_in_case
         || prev.lid_open != curr2.lid_open;
-    
+
     assert!(result2);
 }
 
 #[test]
 fn test_mac_address_parsing() {
     // Test our own implementation of MAC address parsing
-    
+
     // Valid MAC address
     let valid_mac = "00:11:22:33:44:55";
     let addr_parts: Vec<&str> = valid_mac.split(':').collect();
-    
+
     if addr_parts.len() != 6 {
         panic!("Invalid MAC address format: {}", valid_mac);
     }
-    
+
     let mut addr_bytes = [0u8; 6];
     for (i, part) in addr_parts.iter().enumerate() {
         match u8::from_str_radix(part, 16) {
@@ -378,7 +383,7 @@ fn test_mac_address_parsing() {
             Err(_) => panic!("Invalid hex byte in MAC address: {}", part),
         }
     }
-    
+
     let result1 = BDAddr::from(addr_bytes);
     assert_eq!(result1, BDAddr::from([0x00, 0x11, 0x22, 0x33, 0x44, 0x55]));
 
@@ -412,7 +417,7 @@ async fn test_cli_scanner_basic_initialization() {
 
     // Create CLI scanner
     let scanner = CliScanner::new(config);
-    
+
     // Get scanner stats (should be initialized with defaults)
     let stats = scanner.get_stats();
     assert_eq!(stats.total_scans, 0);
@@ -425,13 +430,13 @@ async fn test_cli_scanner_basic_initialization() {
 fn test_error_handling_with_invalid_mac() {
     // Test parsing an invalid MAC address format
     let invalid_mac = "invalid-mac-address";
-    
+
     // Split by colon
     let addr_parts: Vec<&str> = invalid_mac.split(':').collect();
-    
+
     // This should not have 6 parts
     assert_ne!(addr_parts.len(), 6);
-    
+
     // Attempting to parse would fail
     let result = if addr_parts.len() != 6 {
         Err(BluetoothError::InvalidData(format!(
@@ -441,7 +446,7 @@ fn test_error_handling_with_invalid_mac() {
     } else {
         let mut addr_bytes = [0u8; 6];
         let mut valid = true;
-        
+
         for (i, part) in addr_parts.iter().enumerate() {
             match u8::from_str_radix(part, 16) {
                 Ok(byte) => addr_bytes[i] = byte,
@@ -451,7 +456,7 @@ fn test_error_handling_with_invalid_mac() {
                 }
             }
         }
-        
+
         if valid {
             Ok(BDAddr::from(addr_bytes))
         } else {
@@ -461,9 +466,9 @@ fn test_error_handling_with_invalid_mac() {
             )))
         }
     };
-    
+
     assert!(result.is_err());
-    
+
     match result {
         Err(BluetoothError::InvalidData(msg)) => {
             assert!(msg.contains("Invalid MAC address format"));

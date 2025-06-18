@@ -19,7 +19,7 @@ pub struct SettingsView {
 impl SettingsView {
     /// Create a new settings view
     pub fn new(config: AppConfig) -> Self {
-        Self { 
+        Self {
             config,
             connected_devices: Vec::new(),
         }
@@ -67,13 +67,20 @@ impl SettingsView {
         // Device naming section - show if we have connected devices
         let device_section = if !self.connected_devices.is_empty() {
             let current_device_name = self.connected_devices.first().unwrap();
-            let display_name = self.config.bluetooth.paired_device_name
+            let display_name = self
+                .config
+                .bluetooth
+                .paired_device_name
                 .as_ref()
                 .unwrap_or(current_device_name);
-            
+
             let device_name_input = iced::widget::text_input(
                 "Enter custom device name...",
-                self.config.bluetooth.paired_device_name.as_deref().unwrap_or(""),
+                self.config
+                    .bluetooth
+                    .paired_device_name
+                    .as_deref()
+                    .unwrap_or(""),
             )
             .on_input(Message::SetDeviceName)
             .width(Length::Fill);
@@ -85,13 +92,21 @@ impl SettingsView {
                 .push(
                     Row::new()
                         .spacing(10)
-                        .push(Text::new("Custom Name:").style(ui_theme::TEXT).width(Length::Fixed(120.0)))
-                        .push(device_name_input)
+                        .push(
+                            Text::new("Custom Name:")
+                                .style(ui_theme::TEXT)
+                                .width(Length::Fixed(120.0)),
+                        )
+                        .push(device_name_input),
                 )
         } else {
             Column::new()
                 .spacing(10)
-                .push(Text::new("No Device Connected").style(ui_theme::TEXT).size(16))
+                .push(
+                    Text::new("No Device Connected")
+                        .style(ui_theme::TEXT)
+                        .size(16),
+                )
                 .push(
                     Text::new("Connect your AirPods to customize device settings")
                         .style(ui_theme::SUBTEXT1),
@@ -101,11 +116,12 @@ impl SettingsView {
         // Battery Intelligence section
         let intelligence_section = Column::new()
             .spacing(15)
-            .push(Text::new("Battery Intelligence").style(ui_theme::TEXT).size(16))
             .push(
-                Text::new("Manage battery learning profiles and data")
-                    .style(ui_theme::SUBTEXT1)
+                Text::new("Battery Intelligence")
+                    .style(ui_theme::TEXT)
+                    .size(16),
             )
+            .push(Text::new("Manage battery learning profiles and data").style(ui_theme::SUBTEXT1))
             .push(
                 Row::new()
                     .spacing(10)
@@ -118,7 +134,7 @@ impl SettingsView {
                         iced::widget::button("Purge All Profiles")
                             .on_press(Message::PurgeProfiles)
                             .style(iced::theme::Button::Destructive),
-                    )
+                    ),
             );
 
         Column::new()

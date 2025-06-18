@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     // Tests are organized in this module
-    use rustpods::ui::components::{refresh_icon_svg_string, battery_icon_svg_string};
+    use rustpods::ui::components::{battery_icon_svg_string, refresh_icon_svg_string};
 
     #[test]
     fn test_refresh_icon_generation() {
@@ -18,8 +18,8 @@ mod tests {
         // Test empty battery
         let empty_svg = battery_icon_svg_string(0.0, false);
         assert!(empty_svg.contains("viewBox=\"0 0 16 24\""));
-        assert!(!empty_svg.contains("<rect"));  // No fill rect for empty battery
-        // Test full battery
+        assert!(!empty_svg.contains("<rect")); // No fill rect for empty battery
+                                               // Test full battery
         let full_svg = battery_icon_svg_string(1.0, false);
         assert!(full_svg.contains("<rect"));
         // Test charging
@@ -34,4 +34,4 @@ mod tests {
         // For now, this is a stub.
         assert!(true);
     }
-} 
+}

@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::Duration;
 
-use crate::bluetooth::ScanConfig;
 use crate::airpods::battery_estimator::DischargeHistory;
+use crate::bluetooth::ScanConfig;
 
 /// Application configuration
 ///
@@ -536,8 +536,7 @@ impl AppConfig {
         self.validate()?;
 
         // Convert to JSON
-        let json =
-            serde_json::to_string_pretty(self).map_err(ConfigError::SerializationError)?;
+        let json = serde_json::to_string_pretty(self).map_err(ConfigError::SerializationError)?;
 
         // Write to file with error handling
         std::fs::write(path, json).map_err(|e| match e.kind() {

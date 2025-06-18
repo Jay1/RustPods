@@ -5,9 +5,9 @@
 
 use iced::Element;
 use rustpods::ui::components::AirPodsPopup;
-use rustpods::ui::state::{MergedBluetoothDevice, DeviceType};
-use rustpods::ui::Message;
+use rustpods::ui::state::{DeviceType, MergedBluetoothDevice};
 use rustpods::ui::theme::Theme;
+use rustpods::ui::Message;
 use rustpods::ui::UiComponent;
 use std::time::SystemTime;
 
@@ -86,7 +86,7 @@ fn test_airpods_popup_view_rendering() {
 
     // Verify the view method returns an Element
     let _element: Element<Message, iced::Renderer<Theme>> = popup.view();
-    
+
     // We can't easily test the actual rendering, but we can verify it doesn't panic
     assert!(true);
 }
@@ -126,7 +126,7 @@ fn test_airpods_popup_with_missing_battery_info() {
 
     // Verify the view method returns an Element even with missing battery info
     let _element: Element<Message, iced::Renderer<Theme>> = popup.view();
-    
+
     // We can't easily test the actual rendering, but we can verify it doesn't panic
     assert!(true);
-} 
+}

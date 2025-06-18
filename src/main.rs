@@ -53,7 +53,7 @@ pub struct AppArgs {
     pub command: AppCommand,
     pub debug_flags: DebugFlags,
     pub log_level: LogLevel,
-    pub verbose: bool, // Legacy verbose flag (same as --debug-all)
+    pub verbose: bool,      // Legacy verbose flag (same as --debug-all)
     pub test_battery: bool, // Enable battery estimation test mode
 }
 
@@ -70,10 +70,10 @@ fn main() {
             {
                 use std::ffi::CString;
                 use std::ptr;
-                
+
                 let title = CString::new("RustPods Error").unwrap();
                 let message = CString::new(format!("Error parsing arguments: {}", e)).unwrap();
-                
+
                 unsafe {
                     winapi::um::winuser::MessageBoxA(
                         ptr::null_mut(),
@@ -325,7 +325,10 @@ fn parse_enhanced_args() -> Result<AppArgs, String> {
         || debug_flags.bluetooth
         || debug_flags.airpods
         || debug_flags.config
-        || debug_flags.system || debug_flags.all) && log_level == LogLevel::Warn {
+        || debug_flags.system
+        || debug_flags.all)
+        && log_level == LogLevel::Warn
+    {
         log_level = LogLevel::Debug;
     }
 
@@ -598,5 +601,3 @@ fn init_logging_from_config(config: &AppConfig) {
         eprintln!("Failed to configure logging: {}", e);
     }
 }
-
-

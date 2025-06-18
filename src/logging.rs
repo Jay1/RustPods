@@ -7,13 +7,13 @@ use chrono::Local;
 use log::Level;
 use log::{LevelFilter, Metadata, Record};
 use serde::{Deserialize, Serialize};
+use serde_json;
 use std::fmt::Debug;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::{Once, RwLock};
-use serde_json;
 
 use crate::config::LogLevel;
 use crate::error::ErrorContext;
@@ -36,16 +36,15 @@ fn get_app_data_dir() -> Result<PathBuf, String> {
         .ok_or_else(|| "Failed to get local data directory".to_string())?
         .join("RustPods")
         .join("logs");
-    
+
     std::fs::create_dir_all(&data_dir)
         .map_err(|e| format!("Failed to create data directory: {}", e))?;
-    
+
     Ok(data_dir)
 }
 
 /// Debug flag categories for selective logging
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub struct DebugFlags {
     pub ui: bool,        // UI events, window management, system tray
     pub bluetooth: bool, // Bluetooth scanning, device discovery, CLI scanner
@@ -61,7 +60,6 @@ impl DebugFlags {
         self.ui || self.bluetooth || self.airpods || self.config || self.system || self.all
     }
 }
-
 
 /// Global debug flags storage
 static DEBUG_FLAGS: RwLock<DebugFlags> = RwLock::new(DebugFlags {
@@ -184,9 +182,9 @@ fn cleanup_old_log_files(log_dir: &std::path::Path) -> Result<(), String> {
         .map_err(|e| format!("Failed to read log directory: {}", e))?
         .filter_map(|entry| entry.ok())
         .filter(|entry| {
-            entry.path().is_file() && 
-            entry.file_name().to_string_lossy().starts_with("rustpods_") &&
-            entry.file_name().to_string_lossy().ends_with(".log")
+            entry.path().is_file()
+                && entry.file_name().to_string_lossy().starts_with("rustpods_")
+                && entry.file_name().to_string_lossy().ends_with(".log")
         })
         .collect();
 
@@ -197,13 +195,15 @@ fn cleanup_old_log_files(log_dir: &std::path::Path) -> Result<(), String> {
 
     // Sort by modification time (newest first)
     log_files.sort_by(|a, b| {
-        let a_modified = a.metadata()
+        let a_modified = a
+            .metadata()
             .and_then(|m| m.modified())
             .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
-        let b_modified = b.metadata()
+        let b_modified = b
+            .metadata()
             .and_then(|m| m.modified())
             .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
-        
+
         b_modified.cmp(&a_modified)
     });
 
@@ -218,13 +218,21 @@ fn cleanup_old_log_files(log_dir: &std::path::Path) -> Result<(), String> {
                 log::debug!("Removed old log file: {}", file_entry.path().display());
             }
             Err(e) => {
-                log::warn!("Failed to remove log file {}: {}", file_entry.path().display(), e);
+                log::warn!(
+                    "Failed to remove log file {}: {}",
+                    file_entry.path().display(),
+                    e
+                );
             }
         }
     }
 
     if removed_count > 0 {
-        log::info!("Cleaned up {} old log files, keeping {} most recent", removed_count, MAX_LOG_FILES);
+        log::info!(
+            "Cleaned up {} old log files, keeping {} most recent",
+            removed_count,
+            MAX_LOG_FILES
+        );
     }
 
     Ok(())
@@ -322,15 +330,16 @@ pub fn should_log_debug(module_path: &str) -> bool {
 
         // Check module path against debug categories - improved matching
         // UI category: ui module, system_tray, window management
-        if module_path.contains("ui") 
+        if module_path.contains("ui")
             || module_path.contains("system_tray")
             || module_path.contains("window")
             || module_path.contains("main_window")
-            || module_path.contains("state")  // state.rs is in ui module
+            || module_path.contains("state")
+        // state.rs is in ui module
         {
             return flags.ui;
         }
-        
+
         // Bluetooth category: bluetooth module, CLI scanner, adapters
         if module_path.contains("bluetooth")
             || module_path.contains("cli_scanner")
@@ -339,21 +348,17 @@ pub fn should_log_debug(module_path: &str) -> bool {
         {
             return flags.bluetooth;
         }
-        
+
         // AirPods category: airpods module, battery info
-        if module_path.contains("airpods") 
-            || module_path.contains("battery")
-        {
+        if module_path.contains("airpods") || module_path.contains("battery") {
             return flags.airpods;
         }
-        
+
         // Config category: config module, validation
-        if module_path.contains("config") 
-            || module_path.contains("validation")
-        {
+        if module_path.contains("config") || module_path.contains("validation") {
             return flags.config;
         }
-        
+
         // System category: lifecycle, persistence, telemetry, diagnostics
         if module_path.contains("lifecycle")
             || module_path.contains("persistence")
@@ -536,23 +541,23 @@ impl BatteryLogger {
     pub fn new() -> Result<Self, String> {
         let data_dir = get_app_data_dir()?;
         let battery_log_dir = data_dir.join("battery");
-        
+
         // Create battery directory if it doesn't exist
         std::fs::create_dir_all(&battery_log_dir)
             .map_err(|e| format!("Failed to create battery log directory: {}", e))?;
-        
+
         // Clean up old battery files
         cleanup_old_battery_files(&battery_log_dir)?;
-        
+
         Ok(Self {
             current_session: None,
             battery_log_dir,
         })
     }
-    
+
     pub fn start_session(&mut self, device_name: &str, device_address: &str) {
         let session_start = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-        
+
         self.current_session = Some(BatteryProfile {
             device_name: device_name.to_string(),
             device_address: device_address.to_string(),
@@ -572,7 +577,7 @@ impl BatteryLogger {
             },
         });
     }
-    
+
     pub fn log_battery_data(&mut self, entry: BatteryProfileEntry) {
         if let Some(ref mut session) = self.current_session {
             // Update summary statistics
@@ -584,33 +589,33 @@ impl BatteryLogger {
                 session.summary.min_battery_right = session.summary.min_battery_right.min(right);
                 session.summary.max_battery_right = session.summary.max_battery_right.max(right);
             }
-            
+
             // Detect charging events
             if entry.left_charging == Some(true) || entry.right_charging == Some(true) {
                 session.summary.charging_events += 1;
             }
-            
+
             session.entries.push(entry);
             session.summary.total_entries = session.entries.len();
-            
+
             // Auto-save every 5 entries to prevent data loss
             if session.entries.len() % 5 == 0 {
                 let _ = self.save_current_session();
             }
         }
     }
-    
+
     pub fn end_session(&mut self) -> Result<(), String> {
         if let Some(mut session) = self.current_session.take() {
             // Calculate final summary statistics
             self.calculate_session_summary(&mut session);
-            
+
             // Save the complete session
             self.save_session(&session)?;
         }
         Ok(())
     }
-    
+
     fn save_current_session(&self) -> Result<(), String> {
         if let Some(ref session) = self.current_session {
             self.save_session(session)
@@ -618,65 +623,71 @@ impl BatteryLogger {
             Ok(())
         }
     }
-    
+
     fn save_session(&self, session: &BatteryProfile) -> Result<(), String> {
         let timestamp = Local::now().format("%Y%m%d_%H%M%S").to_string();
-        let filename = format!("battery_profile_{}_{}.json", 
-            session.device_address.replace(":", ""), timestamp);
+        let filename = format!(
+            "battery_profile_{}_{}.json",
+            session.device_address.replace(":", ""),
+            timestamp
+        );
         let file_path = self.battery_log_dir.join(filename);
-        
+
         let json_data = serde_json::to_string_pretty(session)
             .map_err(|e| format!("Failed to serialize battery profile: {}", e))?;
-        
+
         std::fs::write(&file_path, json_data)
             .map_err(|e| format!("Failed to write battery profile: {}", e))?;
-        
+
         println!("Battery profile saved: {}", file_path.display());
         Ok(())
     }
-    
+
     fn calculate_session_summary(&self, session: &mut BatteryProfile) {
         if session.entries.is_empty() {
             return;
         }
-        
+
         // Calculate total duration
         if let (Some(_first), Some(_last)) = (session.entries.first(), session.entries.last()) {
             // Parse timestamps and calculate duration
             // For now, use entry count as a proxy (each entry ~10 seconds)
             session.summary.total_duration_minutes = (session.entries.len() as u32 * 10) / 60;
         }
-        
+
         // Calculate average discharge rates
-        let discharge_rates_left: Vec<f32> = session.entries
+        let discharge_rates_left: Vec<f32> = session
+            .entries
             .iter()
             .filter_map(|e| e.discharge_rate_left)
             .collect();
         if !discharge_rates_left.is_empty() {
-            session.summary.average_discharge_rate_left = 
+            session.summary.average_discharge_rate_left =
                 discharge_rates_left.iter().sum::<f32>() / discharge_rates_left.len() as f32;
         }
-        
-        let discharge_rates_right: Vec<f32> = session.entries
+
+        let discharge_rates_right: Vec<f32> = session
+            .entries
             .iter()
             .filter_map(|e| e.discharge_rate_right)
             .collect();
         if !discharge_rates_right.is_empty() {
-            session.summary.average_discharge_rate_right = 
+            session.summary.average_discharge_rate_right =
                 discharge_rates_right.iter().sum::<f32>() / discharge_rates_right.len() as f32;
         }
-        
+
         // Analyze usage patterns
         self.analyze_usage_patterns(session);
     }
-    
+
     fn analyze_usage_patterns(&self, session: &mut BatteryProfile) {
         let mut patterns = Vec::new();
-        
+
         // Detect heavy usage periods (high discharge rate)
-        let avg_discharge = (session.summary.average_discharge_rate_left + 
-                           session.summary.average_discharge_rate_right) / 2.0;
-        
+        let avg_discharge = (session.summary.average_discharge_rate_left
+            + session.summary.average_discharge_rate_right)
+            / 2.0;
+
         if avg_discharge > 15.0 {
             patterns.push("Heavy usage session".to_string());
         } else if avg_discharge > 8.0 {
@@ -684,17 +695,17 @@ impl BatteryLogger {
         } else {
             patterns.push("Light usage session".to_string());
         }
-        
+
         // Detect charging patterns
         if session.summary.charging_events > (session.summary.total_entries / 4) as u32 {
             patterns.push("Frequent charging".to_string());
         }
-        
+
         // Detect low battery warnings
         if session.summary.min_battery_left < 20 || session.summary.min_battery_right < 20 {
             patterns.push("Low battery reached".to_string());
         }
-        
+
         session.summary.usage_patterns = patterns;
     }
 }
@@ -704,44 +715,55 @@ fn cleanup_old_battery_files(battery_dir: &std::path::Path) -> Result<(), String
     if !battery_dir.exists() {
         return Ok(());
     }
-    
+
     // Get all battery profile files
     let mut battery_files: Vec<_> = std::fs::read_dir(battery_dir)
         .map_err(|e| format!("Failed to read battery directory: {}", e))?
         .filter_map(|entry| entry.ok())
         .filter(|entry| {
-            entry.path().is_file() && 
-            entry.file_name().to_string_lossy().starts_with("battery_profile_") &&
-            entry.file_name().to_string_lossy().ends_with(".json")
+            entry.path().is_file()
+                && entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("battery_profile_")
+                && entry.file_name().to_string_lossy().ends_with(".json")
         })
         .collect();
-    
+
     // If we don't have too many files, nothing to clean up
     if battery_files.len() <= MAX_BATTERY_FILES {
         return Ok(());
     }
-    
+
     // Sort by modification time (newest first)
     battery_files.sort_by(|a, b| {
-        let a_time = a.metadata()
+        let a_time = a
+            .metadata()
             .and_then(|m| m.modified())
             .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
-        let b_time = b.metadata()
+        let b_time = b
+            .metadata()
             .and_then(|m| m.modified())
             .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
         b_time.cmp(&a_time) // Newest first
     });
-    
+
     // Remove the oldest files
     for file_entry in battery_files.iter().skip(MAX_BATTERY_FILES) {
         if let Err(e) = std::fs::remove_file(file_entry.path()) {
-            eprintln!("Warning: Failed to remove old battery file {}: {}", 
-                     file_entry.path().display(), e);
+            eprintln!(
+                "Warning: Failed to remove old battery file {}: {}",
+                file_entry.path().display(),
+                e
+            );
         } else {
-            println!("Cleaned up old battery file: {}", file_entry.path().display());
+            println!(
+                "Cleaned up old battery file: {}",
+                file_entry.path().display()
+            );
         }
     }
-    
+
     Ok(())
 }
 
@@ -779,7 +801,7 @@ pub fn log_battery_data(
         if logger.current_session.is_none() {
             logger.start_session(device_name, device_address);
         }
-        
+
         let entry = BatteryProfileEntry {
             timestamp: Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string(),
             device_name: device_name.to_string(),
@@ -797,7 +819,7 @@ pub fn log_battery_data(
             usage_session_minutes: None, // Will be calculated in summary
             rssi,
         };
-        
+
         logger.log_battery_data(entry);
     }
 }

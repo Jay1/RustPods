@@ -49,5 +49,6 @@ pub mod ui {
 /// Font assets
 pub mod fonts {
     /// SpaceMono Nerd Font Regular (TTF format)
-    pub const SPACE_MONO_NERD_FONT: &[u8] = include_bytes!("../assets/fonts/SpaceMonoNerdFont-Regular.ttf");
+    pub const SPACE_MONO_NERD_FONT: &[u8] =
+        include_bytes!("../assets/fonts/SpaceMonoNerdFont-Regular.ttf");
 }

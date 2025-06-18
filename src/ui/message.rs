@@ -165,8 +165,6 @@ pub enum Message {
     /// Device detection state changed
     DeviceDetectionStateChanged(crate::ui::state::DeviceDetectionState),
 
-
-
     /// Device scan completed
     ScanCompleted,
 

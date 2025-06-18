@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use rustpods::ui::components::settings_view::{SettingsView, UiSetting};
     use rustpods::config::AppConfig;
+    use rustpods::ui::components::settings_view::{SettingsView, UiSetting};
 
     #[test]
     fn test_settings_view_construction() {
@@ -26,7 +26,10 @@ mod tests {
         let show_notifications = UiSetting::ShowNotifications(true);
         let start_minimized = UiSetting::StartMinimized(false);
         assert!(matches!(theme_setting, UiSetting::Theme(_)));
-        assert!(matches!(show_notifications, UiSetting::ShowNotifications(_)));
+        assert!(matches!(
+            show_notifications,
+            UiSetting::ShowNotifications(_)
+        ));
         assert!(matches!(start_minimized, UiSetting::StartMinimized(_)));
     }
-} 
+}

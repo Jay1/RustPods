@@ -10,24 +10,24 @@ use iced::{
 };
 use std::time::Duration;
 
-use crate::ui::{Message, UiComponent, theme::Theme};
 use crate::ui::state::DeviceDetectionState;
+use crate::ui::{theme::Theme, Message, UiComponent};
 
 /// Waiting mode component that displays when no AirPods are detected
 #[derive(Debug, Clone)]
 pub struct WaitingMode {
     /// Current device detection state
     pub detection_state: DeviceDetectionState,
-    
+
     /// Animation progress for scanning indicator (0.0-1.0)
     pub animation_progress: f32,
-    
+
     /// Time since last scan attempt
     pub time_since_last_scan: Option<Duration>,
-    
+
     /// Next scan countdown
     pub next_scan_in: Option<Duration>,
-    
+
     /// Whether manual scan is in progress
     pub manual_scan_in_progress: bool,
 }
@@ -75,13 +75,13 @@ impl WaitingMode {
     fn scanning_indicator(&self) -> Element<'_, Message, iced::Renderer<Theme>> {
         // Create a simple pulsing circle animation
         let pulse_size = 40.0 + (self.animation_progress * 20.0);
-        
+
         // Use a simple text-based animation for now (can be replaced with SVG later)
         container(
             text("⟲")
                 .size(pulse_size)
                 .style(crate::ui::theme::BLUE)
-                .horizontal_alignment(Horizontal::Center)
+                .horizontal_alignment(Horizontal::Center),
         )
         .width(Length::Fixed(80.0))
         .height(Length::Fixed(80.0))
@@ -113,19 +113,19 @@ impl WaitingMode {
                 "No AirPods found".to_string(),
                 "Make sure your AirPods are nearby, paired, and the case is open".to_string(),
             ),
-            DeviceDetectionState::Error { message, retry_count } => {
+            DeviceDetectionState::Error {
+                message,
+                retry_count,
+            } => {
                 if *retry_count > 0 {
                     (
                         "Connection error - Retrying...".to_string(),
                         format!("Attempt {} - {}", retry_count + 1, message),
                     )
                 } else {
-                    (
-                        "Connection error".to_string(),
-                        message.clone(),
-                    )
+                    ("Connection error".to_string(), message.clone())
                 }
-            },
+            }
             DeviceDetectionState::Connected { device_name, .. } => (
                 format!("Connected to {}", device_name),
                 "Loading battery information...".to_string(),
@@ -172,8 +172,6 @@ impl WaitingMode {
         Space::with_height(Length::Fixed(0.0)).into()
     }
 
-
-
     /// Create helpful tips section
     fn tips_section(&self) -> Element<'_, Message, iced::Renderer<Theme>> {
         column![
@@ -206,24 +204,18 @@ impl UiComponent for WaitingMode {
             column![
                 // Scanning animation
                 self.scanning_indicator(),
-                
                 Space::with_height(Length::Fixed(24.0)),
-                
                 // Status messages
                 self.status_message(),
-                
                 Space::with_height(Length::Fixed(16.0)),
-                
                 // Scan timing
                 self.scan_timing_display(),
-                
                 Space::with_height(Length::Fixed(32.0)),
-                
                 // Tips section
                 self.tips_section(),
             ]
             .align_items(Alignment::Center)
-            .spacing(0.0)
+            .spacing(0.0),
         )
         .width(Length::Fill)
         .height(Length::Fill)
@@ -232,4 +224,4 @@ impl UiComponent for WaitingMode {
         .padding(32.0)
         .into()
     }
-} 
+}

@@ -17,9 +17,9 @@ pub use filter::{
 };
 
 pub use battery_intelligence::{
-    BatteryIntelligence, BatteryEstimate, BatteryHealthMetrics, DeviceBatteryProfile,
-    BatteryEvent, BatteryEventType, UsageSession, UsagePattern, SessionType,
-    DischargeModel, IntelligenceSettings,
+    BatteryEstimate, BatteryEvent, BatteryEventType, BatteryHealthMetrics, BatteryIntelligence,
+    DeviceBatteryProfile, DischargeModel, IntelligenceSettings, SessionType, UsagePattern,
+    UsageSession,
 };
 
 use crate::error::{AirPodsError, ErrorContext};

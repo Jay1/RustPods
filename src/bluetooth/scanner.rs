@@ -414,7 +414,7 @@ impl BleScanner {
 
         // Get or initialize the adapter
         let adapter = self.get_or_init_adapter().await?;
-                    crate::debug_log!("bluetooth", "BleScanner adapter initialized");
+        crate::debug_log!("bluetooth", "BleScanner adapter initialized");
 
         // Create channels
         let (event_tx, _event_rx) = channel(100);
@@ -546,7 +546,10 @@ impl BleScanner {
             "{}Starting scan task with interval {:?}",
             _ctx, self.config.scan_duration
         );
-        crate::debug_log!("bluetooth", "BleScanner start_scan_task: scan task starting");
+        crate::debug_log!(
+            "bluetooth",
+            "BleScanner start_scan_task: scan task starting"
+        );
 
         // Get a clone of the devices map
         let _devices = self.devices.clone();
@@ -593,7 +596,7 @@ impl BleScanner {
                 interval.tick().await;
                 scan_count += 1;
                 info!("Scan cycle {} started", scan_count);
-                                  crate::debug_log!("bluetooth", "BleScanner scan cycle {} started", scan_count);
+                crate::debug_log!("bluetooth", "BleScanner scan cycle {} started", scan_count);
                 let scan_result = match scan_timeout {
                     Some(timeout_duration) => {
                         match tokio::time::timeout(
@@ -603,7 +606,11 @@ impl BleScanner {
                         .await
                         {
                             Ok(result) => {
-                                crate::debug_log!("bluetooth", "BleScanner adapter.start_scan returned: {:?}", result);
+                                crate::debug_log!(
+                                    "bluetooth",
+                                    "BleScanner adapter.start_scan returned: {:?}",
+                                    result
+                                );
                                 info!("[BleScanner] adapter.start_scan returned: {:?}", result);
                                 result
                             }
@@ -616,7 +623,11 @@ impl BleScanner {
                     }
                     None => {
                         let result = adapter.start_scan(filter.clone()).await;
-                        crate::debug_log!("bluetooth", "BleScanner adapter.start_scan returned: {:?}", result);
+                        crate::debug_log!(
+                            "bluetooth",
+                            "BleScanner adapter.start_scan returned: {:?}",
+                            result
+                        );
                         info!("[BleScanner] adapter.start_scan returned: {:?}", result);
                         result
                     }
@@ -627,8 +638,11 @@ impl BleScanner {
                     let _ = event_tx
                         .send(BleEvent::Error(format!("Failed to start scan: {}", _e)))
                         .await;
-                    crate::debug_log!("bluetooth", "BleScanner scan_task: sending event: {:?}",
-                        BleEvent::Error(format!("Failed to start scan: {}", _e)));
+                    crate::debug_log!(
+                        "bluetooth",
+                        "BleScanner scan_task: sending event: {:?}",
+                        BleEvent::Error(format!("Failed to start scan: {}", _e))
+                    );
                     info!("Scan cycle {} ended (error)", scan_count);
                     continue;
                 }
@@ -636,25 +650,48 @@ impl BleScanner {
                     "{}Scan started successfully, processing events...",
                     inner_ctx
                 );
-                crate::debug_log!("bluetooth", "BleScanner scan started successfully, processing events...");
+                crate::debug_log!(
+                    "bluetooth",
+                    "BleScanner scan started successfully, processing events..."
+                );
                 while let Ok(Some(event)) =
                     tokio::time::timeout(Duration::from_millis(100), event_stream.next()).await
                 {
                     match &event {
                         CentralEvent::DeviceDiscovered(address) => {
-                            crate::debug_log!("bluetooth", "BleScanner CentralEvent::DeviceDiscovered: {:?}", address);
+                            crate::debug_log!(
+                                "bluetooth",
+                                "BleScanner CentralEvent::DeviceDiscovered: {:?}",
+                                address
+                            );
                         }
                         CentralEvent::DeviceUpdated(address) => {
-                            crate::debug_log!("bluetooth", "BleScanner CentralEvent::DeviceUpdated: {:?}", address);
+                            crate::debug_log!(
+                                "bluetooth",
+                                "BleScanner CentralEvent::DeviceUpdated: {:?}",
+                                address
+                            );
                         }
                         CentralEvent::DeviceConnected(address) => {
-                            crate::debug_log!("bluetooth", "BleScanner CentralEvent::DeviceConnected: {:?}", address);
+                            crate::debug_log!(
+                                "bluetooth",
+                                "BleScanner CentralEvent::DeviceConnected: {:?}",
+                                address
+                            );
                         }
                         CentralEvent::DeviceDisconnected(address) => {
-                            crate::debug_log!("bluetooth", "BleScanner CentralEvent::DeviceDisconnected: {:?}", address);
+                            crate::debug_log!(
+                                "bluetooth",
+                                "BleScanner CentralEvent::DeviceDisconnected: {:?}",
+                                address
+                            );
                         }
                         _ => {
-                            crate::debug_log!("bluetooth", "BleScanner CentralEvent (other): {:?}", event);
+                            crate::debug_log!(
+                                "bluetooth",
+                                "BleScanner CentralEvent (other): {:?}",
+                                event
+                            );
                         }
                     }
                 }
@@ -823,7 +860,10 @@ impl BleScanner {
                     .map_err(|_| {
                         BluetoothError::Other("Failed to send device discovered event".to_string())
                     })?;
-                crate::debug_log!("bluetooth", "BleScanner process_discovered_device: sending event");
+                crate::debug_log!(
+                    "bluetooth",
+                    "BleScanner process_discovered_device: sending event"
+                );
                 info!("BleScanner::process_discovered_device: sending event");
             } else {
                 event_tx
@@ -832,7 +872,10 @@ impl BleScanner {
                     .map_err(|_| {
                         BluetoothError::Other("Failed to send device updated event".to_string())
                     })?;
-                crate::debug_log!("bluetooth", "BleScanner process_discovered_device: sending event");
+                crate::debug_log!(
+                    "bluetooth",
+                    "BleScanner process_discovered_device: sending event"
+                );
                 info!("BleScanner::process_discovered_device: sending event");
             }
         }
@@ -1047,7 +1090,11 @@ impl BleScanner {
         let adapters = manager.adapters().await.map_err(BluetoothError::from)?;
 
         // Log all discovered adapters
-        crate::debug_log!("bluetooth", "BleScanner discovered {} adapters", adapters.len());
+        crate::debug_log!(
+            "bluetooth",
+            "BleScanner discovered {} adapters",
+            adapters.len()
+        );
         info!("[BleScanner] Discovered {} adapters", adapters.len());
         for (i, adapter) in adapters.iter().enumerate() {
             let addr = adapter

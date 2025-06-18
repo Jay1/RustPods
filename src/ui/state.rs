@@ -23,7 +23,7 @@ pub enum DeviceDetectionState {
     /// Currently scanning for devices
     Scanning,
     /// Device found with details
-    DeviceFound { 
+    DeviceFound {
         device_name: String,
         device_address: String,
     },
@@ -32,12 +32,9 @@ pub enum DeviceDetectionState {
     /// No devices found (after tolerance period)
     NoDevicesFound,
     /// Connection error with retry information
-    Error { 
-        message: String, 
-        retry_count: u32,
-    },
+    Error { message: String, retry_count: u32 },
     /// Successfully connected to device
-    Connected { 
+    Connected {
         device_name: String,
         device_address: String,
     },
@@ -46,10 +43,11 @@ pub enum DeviceDetectionState {
 impl DeviceDetectionState {
     /// Check if there's an active device connection
     pub fn has_active_device(&self) -> bool {
-        matches!(self, 
-            DeviceDetectionState::DeviceFound { .. } | 
-            DeviceDetectionState::DevicesFound |
-            DeviceDetectionState::Connected { .. }
+        matches!(
+            self,
+            DeviceDetectionState::DeviceFound { .. }
+                | DeviceDetectionState::DevicesFound
+                | DeviceDetectionState::Connected { .. }
         )
     }
 }
@@ -174,12 +172,15 @@ impl AppState {
             .join("RustPods")
             .join("battery_intelligence");
         let mut battery_intelligence = BatteryIntelligence::new(battery_intelligence_dir);
-        
+
         // Load existing device profiles
         if let Err(e) = battery_intelligence.load() {
-            eprintln!("Warning: Failed to load existing battery intelligence data: {}", e);
+            eprintln!(
+                "Warning: Failed to load existing battery intelligence data: {}",
+                e
+            );
         }
-        
+
         // Print initialization message
         println!("Battery Intelligence system initialized - profiles will be created when devices are detected");
 
@@ -239,7 +240,9 @@ impl AppState {
             airpods_devices: Vec::new(),
             last_update: std::time::Instant::now(),
             battery_estimator: BatteryEstimator::new(),
-            battery_intelligence: BatteryIntelligence::new(std::path::PathBuf::from("./test_battery_intelligence")),
+            battery_intelligence: BatteryIntelligence::new(std::path::PathBuf::from(
+                "./test_battery_intelligence",
+            )),
             device_detection_state: DeviceDetectionState::Idle,
             consecutive_scan_failures: 0,
         }
@@ -277,7 +280,9 @@ impl Application for AppState {
         log::info!("Scheduling initial AirPods scan on startup");
         let initial_command = Command::perform(
             async {
-                tokio::task::spawn_blocking(get_airpods_from_cli_scanner).await.unwrap_or_else(|_| Vec::new())
+                tokio::task::spawn_blocking(get_airpods_from_cli_scanner)
+                    .await
+                    .unwrap_or_else(|_| Vec::new())
             },
             Message::AirPodsDataLoaded,
         );
@@ -294,19 +299,15 @@ impl Application for AppState {
     }
 
     fn update(&mut self, message: Message) -> Command<Message> {
-        crate::debug_log!(
-            "ui",
-            "AppState::update: instance at {:p}",
-            self as *const _
-        );
-        
+        crate::debug_log!("ui", "AppState::update: instance at {:p}", self as *const _);
+
         // Process system tray events
         if let Some(ref mut system_tray) = self.system_tray {
             if let Err(e) = system_tray.process_events() {
                 log::error!("Failed to process system tray events: {}", e);
             }
         }
-        
+
         match message {
             Message::ToggleVisibility => {
                 self.toggle_visibility();
@@ -414,11 +415,7 @@ impl Application for AppState {
                 Command::none()
             }
             Message::BluetoothError(msg) => {
-                crate::debug_log!(
-                    "ui",
-                    "AppState::update: setting toast_message = {:?}",
-                    msg
-                );
+                crate::debug_log!("ui", "AppState::update: setting toast_message = {:?}", msg);
                 self.toast_message = Some(msg);
                 Command::none()
             }
@@ -480,7 +477,6 @@ impl Application for AppState {
                 Command::perform(
                     async {
                         tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-
                     },
                     |_| Message::Tick,
                 )
@@ -519,7 +515,9 @@ impl Application for AppState {
                 // Use the continuous scanning function for periodic updates
                 Command::perform(
                     async {
-                        tokio::task::spawn_blocking(get_airpods_from_cli_scanner_continuous).await.unwrap_or_else(|_| Vec::new())
+                        tokio::task::spawn_blocking(get_airpods_from_cli_scanner_continuous)
+                            .await
+                            .unwrap_or_else(|_| Vec::new())
                     },
                     Message::AirPodsDataLoaded,
                 )
@@ -527,44 +525,68 @@ impl Application for AppState {
             Message::AirPodsDataLoaded(airpods_data) => {
                 // Handle the result of the async AirPods data loading
                 log::info!("AirPods data loaded: {} devices found", airpods_data.len());
-                crate::debug_log!("airpods", "AirPods data loaded: {} devices found", airpods_data.len());
+                crate::debug_log!(
+                    "airpods",
+                    "AirPods data loaded: {} devices found",
+                    airpods_data.len()
+                );
                 for (i, device) in airpods_data.iter().enumerate() {
-                    crate::debug_log!("airpods", "Device {}: {} - L:{}% R:{}% C:{}%", 
-                        i, device.name, device.left_battery, device.right_battery, device.case_battery);
+                    crate::debug_log!(
+                        "airpods",
+                        "Device {}: {} - L:{}% R:{}% C:{}%",
+                        i,
+                        device.name,
+                        device.left_battery,
+                        device.right_battery,
+                        device.case_battery
+                    );
                 }
 
                 // Update device detection state based on scan results with tolerance mechanism
                 if airpods_data.is_empty() {
                     // Increment consecutive failure counter
                     self.consecutive_scan_failures += 1;
-                    
-                    crate::debug_log!("airpods", "No AirPods found in scan #{} (consecutive failures: {})", 
-                        self.consecutive_scan_failures, self.consecutive_scan_failures);
-                    
+
+                    crate::debug_log!(
+                        "airpods",
+                        "No AirPods found in scan #{} (consecutive failures: {})",
+                        self.consecutive_scan_failures,
+                        self.consecutive_scan_failures
+                    );
+
                     // Only change to NoDevicesFound after 3 consecutive failures
                     // This prevents flashing when the scanner is temporarily intermittent
                     if self.consecutive_scan_failures >= 3 {
                         // Only change state if we're not already in NoDevicesFound
                         if self.device_detection_state != DeviceDetectionState::NoDevicesFound {
-                            crate::debug_log!("airpods", "Switching to NoDevicesFound state after {} consecutive failures", 
-                                self.consecutive_scan_failures);
+                            crate::debug_log!(
+                                "airpods",
+                                "Switching to NoDevicesFound state after {} consecutive failures",
+                                self.consecutive_scan_failures
+                            );
                             self.device_detection_state = DeviceDetectionState::NoDevicesFound;
                         }
                     } else {
                         // Still in tolerance period - keep current state if devices were previously found
                         if self.device_detection_state == DeviceDetectionState::DevicesFound {
-                            crate::debug_log!("airpods", "Keeping DevicesFound state during tolerance period (failure {}/3)", 
-                                self.consecutive_scan_failures);
+                            crate::debug_log!(
+                                "airpods",
+                                "Keeping DevicesFound state during tolerance period (failure {}/3)",
+                                self.consecutive_scan_failures
+                            );
                         }
                     }
                 } else {
                     // Reset consecutive failure counter when devices are found
                     if self.consecutive_scan_failures > 0 {
-                        crate::debug_log!("airpods", "Resetting consecutive failure counter (was {})", 
-                            self.consecutive_scan_failures);
+                        crate::debug_log!(
+                            "airpods",
+                            "Resetting consecutive failure counter (was {})",
+                            self.consecutive_scan_failures
+                        );
                         self.consecutive_scan_failures = 0;
                     }
-                    
+
                     // Update to DevicesFound state
                     if self.device_detection_state != DeviceDetectionState::DevicesFound {
                         crate::debug_log!("airpods", "Switching to DevicesFound state");
@@ -580,7 +602,8 @@ impl Application for AppState {
                 self.update_merged_devices();
 
                 // Update the main window's device detection state to match the AppState
-                self.main_window.update_device_detection_state(self.device_detection_state.clone());
+                self.main_window
+                    .update_device_detection_state(self.device_detection_state.clone());
 
                 Command::none()
             }
@@ -609,34 +632,45 @@ impl Application for AppState {
                     // Update both the settings window and main window with the new config
                     self.settings_window.update_config(self.config.clone());
                     self.main_window.config = self.config.clone();
-                    
+
                     // Notify BatteryIntelligence about device name change for the selected device
                     if let Some(selected_device_id) = &self.selected_device {
-                        let device_name = self.config.bluetooth.paired_device_name
+                        let device_name = self
+                            .config
+                            .bluetooth
+                            .paired_device_name
                             .as_deref()
                             .unwrap_or("AirPods Pro 2"); // Default name if none set
-                        
+
                         // This will trigger the file rename if the name changed
-                        let _profile_updated = self.battery_intelligence.ensure_device_profile(
-                            selected_device_id,
-                            device_name
-                        );
-                        
+                        let _profile_updated = self
+                            .battery_intelligence
+                            .ensure_device_profile(selected_device_id, device_name);
+
                         // Save the updated profile
                         if let Err(e) = self.battery_intelligence.save() {
-                            log::error!("Failed to save battery intelligence after device name change: {}", e);
+                            log::error!(
+                                "Failed to save battery intelligence after device name change: {}",
+                                e
+                            );
                         } else {
-                            crate::debug_log!("battery", "Updated device name for {} to {}", selected_device_id, device_name);
+                            crate::debug_log!(
+                                "battery",
+                                "Updated device name for {} to {}",
+                                selected_device_id,
+                                device_name
+                            );
                         }
                     }
-                    
+
                     self.toast_message = Some("Device name saved".to_string());
                 }
                 Command::none()
             }
             Message::OpenProfileFolder => {
-                let profile_dir = crate::airpods::battery_intelligence::get_battery_intelligence_dir();
-                
+                let profile_dir =
+                    crate::airpods::battery_intelligence::get_battery_intelligence_dir();
+
                 #[cfg(target_os = "windows")]
                 {
                     if let Err(e) = std::process::Command::new("explorer")
@@ -649,19 +683,20 @@ impl Application for AppState {
                         self.toast_message = Some("Profile folder opened".to_string());
                     }
                 }
-                
+
                 #[cfg(not(target_os = "windows"))]
                 {
                     self.toast_message = Some(format!("Profile folder: {}", profile_dir.display()));
                 }
-                
+
                 Command::none()
             }
             Message::PurgeProfiles => {
-                                    match self.battery_intelligence.purge_all_profiles() {
-                        Ok(_) => {
-                            self.toast_message = Some("Purged battery intelligence profiles".to_string());
-                            log::info!("Purged battery intelligence profiles");
+                match self.battery_intelligence.purge_all_profiles() {
+                    Ok(_) => {
+                        self.toast_message =
+                            Some("Purged battery intelligence profiles".to_string());
+                        log::info!("Purged battery intelligence profiles");
                     }
                     Err(e) => {
                         self.toast_message = Some("Failed to purge profiles".to_string());
@@ -671,21 +706,24 @@ impl Application for AppState {
                 Command::none()
             }
             _ => {
-                crate::debug_log!("ui", "Unhandled message in state.rs: {:?}", std::any::type_name::<Message>());
+                crate::debug_log!(
+                    "ui",
+                    "Unhandled message in state.rs: {:?}",
+                    std::any::type_name::<Message>()
+                );
                 Command::none()
             }
         }
     }
 
     fn view(&self) -> iced::Element<'_, Message, iced::Renderer<crate::ui::theme::Theme>> {
-        
         if !self.visible {
             iced::widget::text("").into()
         } else if self.show_settings {
             // Just show the settings content with full size - no overlays
             crate::ui::UiComponent::view(&self.settings_window)
         } else {
-            // Just show the main window content with full size - no overlays  
+            // Just show the main window content with full size - no overlays
             crate::ui::UiComponent::view(&self.main_window)
         }
     }
@@ -702,19 +740,29 @@ impl Application for AppState {
             "controller-messages",
             (),
             |_state| async move {
-                crate::debug_log!("ui", "Controller subscription: Checking for messages from system tray");
+                crate::debug_log!(
+                    "ui",
+                    "Controller subscription: Checking for messages from system tray"
+                );
                 // Access the global receiver safely
                 if let Some(receiver_arc) = CONTROLLER_RECEIVER.get() {
                     let mut guard = receiver_arc.lock().await;
                     if let Some(ref mut receiver) = *guard {
                         match receiver.recv().await {
                             Some(message) => {
-                                crate::debug_log!("ui", "Controller subscription: Received message: {:?}", message);
+                                crate::debug_log!(
+                                    "ui",
+                                    "Controller subscription: Received message: {:?}",
+                                    message
+                                );
                                 log::info!("Controller subscription received message from system tray: {:?}", message);
                                 (message, ())
                             }
                             None => {
-                                crate::debug_log!("ui", "Controller subscription: Channel closed, no more messages");
+                                crate::debug_log!(
+                                    "ui",
+                                    "Controller subscription: Channel closed, no more messages"
+                                );
                                 log::warn!(
                                     "Controller channel closed - system tray communication lost"
                                 );
@@ -942,12 +990,18 @@ impl AppState {
     }
 
     pub fn clear_status_message(&mut self) {
-        crate::debug_log!("ui", "AppState::clear_status_message: setting status_message = None");
+        crate::debug_log!(
+            "ui",
+            "AppState::clear_status_message: setting status_message = None"
+        );
         self.status_message = None;
     }
 
     pub fn clear_toast_message(&mut self) {
-        crate::debug_log!("ui", "AppState::clear_toast_message: setting toast_message = None");
+        crate::debug_log!(
+            "ui",
+            "AppState::clear_toast_message: setting toast_message = None"
+        );
         self.toast_message = None;
     }
 
@@ -1043,8 +1097,12 @@ impl AppState {
 
     /// Update the merged devices with the loaded AirPods data
     pub fn update_merged_devices(&mut self) {
-        crate::debug_log!("ui", "Updating merged devices with {} AirPods devices", self.airpods_devices.len());
-        
+        crate::debug_log!(
+            "ui",
+            "Updating merged devices with {} AirPods devices",
+            self.airpods_devices.len()
+        );
+
         // Only update merged devices if we have actual AirPods data
         // This prevents clearing devices when the CLI scanner temporarily returns empty results
         if !self.airpods_devices.is_empty() {
@@ -1054,7 +1112,11 @@ impl AppState {
             // Auto-select first device if none selected
             if self.selected_device.is_none() && !self.airpods_devices.is_empty() {
                 let first_device_id = self.generate_stable_device_id(&self.airpods_devices[0]);
-                crate::debug_log!("battery", "Auto-selecting first available device: {}", first_device_id);
+                crate::debug_log!(
+                    "battery",
+                    "Auto-selecting first available device: {}",
+                    first_device_id
+                );
                 self.selected_device = Some(first_device_id);
             }
 
@@ -1062,20 +1124,23 @@ impl AppState {
             if self.config.battery.enable_estimation {
                 // Only create and update profiles for the selected device (keep existing profiles for other devices)
                 if let Some(selected_device_id) = &self.selected_device {
-                    if let Some(selected_airpods) = self.airpods_devices.iter()
-                        .find(|airpods| self.generate_stable_device_id(airpods) == *selected_device_id) {
-                        
-                        crate::debug_log!("battery", "Updating BatteryIntelligence for selected device: {}", selected_airpods.name);
-                        
+                    if let Some(selected_airpods) = self.airpods_devices.iter().find(|airpods| {
+                        self.generate_stable_device_id(airpods) == *selected_device_id
+                    }) {
+                        crate::debug_log!(
+                            "battery",
+                            "Updating BatteryIntelligence for selected device: {}",
+                            selected_airpods.name
+                        );
+
                         // Generate stable device ID for this device (singleton pattern)
                         let stable_device_id = self.generate_stable_device_id(selected_airpods);
-                        
+
                         // Ensure device profile exists (singleton pattern - always updates the one profile)
-                        let _is_new_device = self.battery_intelligence.ensure_device_profile(
-                            &stable_device_id,
-                            &selected_airpods.name
-                        );
-                        
+                        let _is_new_device = self
+                            .battery_intelligence
+                            .ensure_device_profile(&stable_device_id, &selected_airpods.name);
+
                         // Update the BatteryIntelligence system with device data (singleton pattern)
                         self.battery_intelligence.update_device_battery(
                             &stable_device_id,
@@ -1090,12 +1155,12 @@ impl AppState {
                             selected_airpods.right_in_ear.unwrap_or(false),
                             selected_airpods.rssi.map(|r| r as i16),
                         );
-                        
+
                         // Save the BatteryIntelligence data after updates
                         if let Err(e) = self.battery_intelligence.save() {
                             eprintln!("Warning: Failed to save battery intelligence data: {}", e);
                         }
-                        
+
                         // Also update the old estimator for backward compatibility during transition
                         self.battery_estimator.update_real_data(
                             Some(selected_airpods.left_battery),
@@ -1103,54 +1168,121 @@ impl AppState {
                             Some(selected_airpods.case_battery),
                         );
                     } else {
-                        crate::debug_log!("battery", "Selected device {} not found in current AirPods scan results", selected_device_id);
+                        crate::debug_log!(
+                            "battery",
+                            "Selected device {} not found in current AirPods scan results",
+                            selected_device_id
+                        );
                     }
                 } else {
-                    crate::debug_log!("battery", "No device selected, skipping BatteryIntelligence update");
+                    crate::debug_log!(
+                        "battery",
+                        "No device selected, skipping BatteryIntelligence update"
+                    );
                 }
 
                 // Save updated battery estimator data to config (for backward compatibility)
-                let (_left_est, _right_est, _case_est) = self.battery_estimator.get_estimated_levels();
+                let (_left_est, _right_est, _case_est) =
+                    self.battery_estimator.get_estimated_levels();
                 self.config.battery.left_history = self.battery_estimator.left_history.clone();
                 self.config.battery.right_history = self.battery_estimator.right_history.clone();
                 self.config.battery.case_history = self.battery_estimator.case_history.clone();
             }
 
             // Get estimated battery levels with fractional precision for 1% increments using BatteryIntelligence
-            let (left_estimate, right_estimate, case_estimate, left_fractional, right_fractional, case_fractional) = if self.config.battery.enable_estimation && !self.airpods_devices.is_empty() {
+            let (
+                left_estimate,
+                right_estimate,
+                case_estimate,
+                left_fractional,
+                right_fractional,
+                case_fractional,
+            ) = if self.config.battery.enable_estimation && !self.airpods_devices.is_empty() {
                 // Get estimates from the singleton battery intelligence if available
                 if let Some(_selected_device_id) = &self.selected_device {
-                    if let Some((left_est, right_est, case_est)) = self.battery_intelligence.get_battery_estimates() {
+                    if let Some((left_est, right_est, case_est)) =
+                        self.battery_intelligence.get_battery_estimates()
+                    {
                         (
                             Some(left_est.level.round().max(0.0).min(100.0) as u8),
                             Some(right_est.level.round().max(0.0).min(100.0) as u8),
                             Some(case_est.level.round().max(0.0).min(100.0) as u8),
-                            Some(left_est.level.round()),  // Round fractional values to whole percentages
+                            Some(left_est.level.round()), // Round fractional values to whole percentages
                             Some(right_est.level.round()), // Round fractional values to whole percentages
-                            Some(case_est.level.round()),  // Round fractional values to whole percentages
+                            Some(case_est.level.round()), // Round fractional values to whole percentages
                         )
                     } else {
                         // Fallback to old estimator if BatteryIntelligence doesn't have data yet
-                        let (left_est, right_est, case_est) = self.battery_estimator.get_estimated_levels();
+                        let (left_est, right_est, case_est) =
+                            self.battery_estimator.get_estimated_levels();
                         (
-                            if left_est.level >= 0.0 { Some(left_est.level.round() as u8) } else { None },
-                            if right_est.level >= 0.0 { Some(right_est.level.round() as u8) } else { None },
-                            if case_est.level >= 0.0 { Some(case_est.level.round() as u8) } else { None },
-                            if left_est.level >= 0.0 { Some(left_est.level.round()) } else { None },   // Round fractional values
-                            if right_est.level >= 0.0 { Some(right_est.level.round()) } else { None }, // Round fractional values
-                            if case_est.level >= 0.0 { Some(case_est.level.round()) } else { None },   // Round fractional values
+                            if left_est.level >= 0.0 {
+                                Some(left_est.level.round() as u8)
+                            } else {
+                                None
+                            },
+                            if right_est.level >= 0.0 {
+                                Some(right_est.level.round() as u8)
+                            } else {
+                                None
+                            },
+                            if case_est.level >= 0.0 {
+                                Some(case_est.level.round() as u8)
+                            } else {
+                                None
+                            },
+                            if left_est.level >= 0.0 {
+                                Some(left_est.level.round())
+                            } else {
+                                None
+                            }, // Round fractional values
+                            if right_est.level >= 0.0 {
+                                Some(right_est.level.round())
+                            } else {
+                                None
+                            }, // Round fractional values
+                            if case_est.level >= 0.0 {
+                                Some(case_est.level.round())
+                            } else {
+                                None
+                            }, // Round fractional values
                         )
                     }
                 } else {
                     // No selected device, use fallback estimator
-                    let (left_est, right_est, case_est) = self.battery_estimator.get_estimated_levels();
+                    let (left_est, right_est, case_est) =
+                        self.battery_estimator.get_estimated_levels();
                     (
-                        if left_est.level >= 0.0 { Some(left_est.level.round() as u8) } else { None },
-                        if right_est.level >= 0.0 { Some(right_est.level.round() as u8) } else { None },
-                        if case_est.level >= 0.0 { Some(case_est.level.round() as u8) } else { None },
-                        if left_est.level >= 0.0 { Some(left_est.level.round()) } else { None },   // Round fractional values
-                        if right_est.level >= 0.0 { Some(right_est.level.round()) } else { None }, // Round fractional values
-                        if case_est.level >= 0.0 { Some(case_est.level.round()) } else { None },   // Round fractional values
+                        if left_est.level >= 0.0 {
+                            Some(left_est.level.round() as u8)
+                        } else {
+                            None
+                        },
+                        if right_est.level >= 0.0 {
+                            Some(right_est.level.round() as u8)
+                        } else {
+                            None
+                        },
+                        if case_est.level >= 0.0 {
+                            Some(case_est.level.round() as u8)
+                        } else {
+                            None
+                        },
+                        if left_est.level >= 0.0 {
+                            Some(left_est.level.round())
+                        } else {
+                            None
+                        }, // Round fractional values
+                        if right_est.level >= 0.0 {
+                            Some(right_est.level.round())
+                        } else {
+                            None
+                        }, // Round fractional values
+                        if case_est.level >= 0.0 {
+                            Some(case_est.level.round())
+                        } else {
+                            None
+                        }, // Round fractional values
                     )
                 }
             } else {
@@ -1160,16 +1292,22 @@ impl AppState {
             // Add AirPods devices to the merged devices
             self.merged_devices
                 .extend(self.airpods_devices.iter().map(|airpods| {
-                    crate::debug_log!("airpods", "Converting AirPods device: {} - L:{}% R:{}% C:{}%", 
-                        airpods.name, airpods.left_battery, airpods.right_battery, airpods.case_battery);
-                    
+                    crate::debug_log!(
+                        "airpods",
+                        "Converting AirPods device: {} - L:{}% R:{}% C:{}%",
+                        airpods.name,
+                        airpods.left_battery,
+                        airpods.right_battery,
+                        airpods.case_battery
+                    );
+
                     // Use estimated levels if available and enabled, otherwise use raw data
                     let left_battery = if self.config.battery.enable_estimation {
                         left_estimate.unwrap_or(airpods.left_battery as u8)
                     } else {
                         airpods.left_battery as u8
                     };
-                    
+
                     let right_battery = if self.config.battery.enable_estimation {
                         right_estimate.unwrap_or(airpods.right_battery as u8)
                     } else {
@@ -1182,8 +1320,13 @@ impl AppState {
                         airpods.case_battery as u8
                     };
 
-                    crate::debug_log!("airpods", "Final merged device - L:{}% R:{}% C:{}%", 
-                        left_battery, right_battery, case_battery);
+                    crate::debug_log!(
+                        "airpods",
+                        "Final merged device - L:{}% R:{}% C:{}%",
+                        left_battery,
+                        right_battery,
+                        case_battery
+                    );
 
                     // NOTE: Removed old logging system call - BatteryIntelligence handles all logging now
                     // The old log_battery_data() created file spam and is replaced by smart significance filtering
@@ -1222,39 +1365,57 @@ impl AppState {
 
             // Update the main window with the new merged devices
             self.main_window.merged_devices = self.merged_devices.clone();
-            crate::debug_log!("ui", "Updated main_window.merged_devices count: {}", self.main_window.merged_devices.len());
+            crate::debug_log!(
+                "ui",
+                "Updated main_window.merged_devices count: {}",
+                self.main_window.merged_devices.len()
+            );
 
             // Update settings window with connected device names
-            let connected_device_names: Vec<String> = self.merged_devices
+            let connected_device_names: Vec<String> = self
+                .merged_devices
                 .iter()
                 .filter(|device| device.is_connected || device.connected)
                 .map(|device| device.name.clone())
                 .collect();
-            self.settings_window.update_connected_devices(connected_device_names);
+            self.settings_window
+                .update_connected_devices(connected_device_names);
 
             // Clear status message when devices are found - only keep it for warnings/errors
             self.status_message = None;
         } else {
             // If no AirPods data, keep existing merged devices but update status
-            crate::debug_log!("ui", "No AirPods data available, preserving existing {} merged devices", self.merged_devices.len());
-            
+            crate::debug_log!(
+                "ui",
+                "No AirPods data available, preserving existing {} merged devices",
+                self.merged_devices.len()
+            );
+
             // Only set "no devices" message if we don't have any existing devices
             if self.merged_devices.is_empty() {
                 self.status_message = Some("No AirPods devices found".to_string());
             } else {
                 // Keep existing devices and status, this might be a temporary scan failure
-                crate::debug_log!("ui", "Preserving existing devices during temporary scan failure");
+                crate::debug_log!(
+                    "ui",
+                    "Preserving existing devices during temporary scan failure"
+                );
             }
         }
 
-        let estimation_note = if self.config.battery.enable_estimation && !self.merged_devices.is_empty() {
-            " (with smart estimation)"
-        } else {
-            ""
-        };
+        let estimation_note =
+            if self.config.battery.enable_estimation && !self.merged_devices.is_empty() {
+                " (with smart estimation)"
+            } else {
+                ""
+            };
 
-        crate::debug_log!("ui", "Total merged devices after async update: {}{}", 
-            self.merged_devices.len(), estimation_note);
+        crate::debug_log!(
+            "ui",
+            "Total merged devices after async update: {}{}",
+            self.merged_devices.len(),
+            estimation_note
+        );
     }
 
     /// Generate a stable device identifier that handles MAC address randomization
@@ -1263,10 +1424,11 @@ impl AppState {
     fn generate_stable_device_id(&self, airpods: &AirPodsBatteryInfo) -> String {
         // Priority 1: If user has set a custom device name, use that as the stable identifier
         if let Some(custom_name) = &self.config.bluetooth.paired_device_name {
-            if !custom_name.trim().is_empty() && 
-               !custom_name.starts_with("AirPods") && 
-               !custom_name.starts_with("Beats") &&
-               custom_name != "Unknown Device" {
+            if !custom_name.trim().is_empty()
+                && !custom_name.starts_with("AirPods")
+                && !custom_name.starts_with("Beats")
+                && custom_name != "Unknown Device"
+            {
                 // Use sanitized custom name as primary identifier
                 let sanitized_name = custom_name
                     .chars()
@@ -1277,7 +1439,7 @@ impl AppState {
                 return format!("custom_{}", sanitized_name);
             }
         }
-        
+
         // Priority 2: For default device names, use a model-based identifier
         // This assumes the user typically has one AirPods device of each model
         // If they have multiple of the same model, they should use custom names to distinguish them
@@ -1372,30 +1534,50 @@ fn get_airpods_from_cli_scanner() -> Vec<AirPodsBatteryInfo> {
     use std::process::Command as ProcessCommand;
 
     // Get the executable path and its directory
-    let exe_path = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("./rustpods.exe"));
-    let exe_dir = exe_path.parent().unwrap_or_else(|| std::path::Path::new("."));
+    let exe_path =
+        std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("./rustpods.exe"));
+    let exe_dir = exe_path
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."));
     let current_dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    
+
     crate::debug_log!("bluetooth", "CLI Scanner Path Resolution Debug");
     crate::debug_log!("bluetooth", "Executable path: {}", exe_path.display());
     crate::debug_log!("bluetooth", "Executable directory: {}", exe_dir.display());
-    crate::debug_log!("bluetooth", "Current working directory: {}", current_dir.display());
-    
+    crate::debug_log!(
+        "bluetooth",
+        "Current working directory: {}",
+        current_dir.display()
+    );
+
     // Try multiple possible locations for the CLI scanner
     let cli_paths = vec![
         // 1. Same directory as the executable (most likely when running from target/release)
         exe_dir.join("airpods_battery_cli.exe"),
-        // 2. bin folder relative to current working directory 
+        // 2. bin folder relative to current working directory
         current_dir.join("bin").join("airpods_battery_cli.exe"),
         // 3. bin folder relative to executable directory (if exe is in subdir)
         exe_dir.join("bin").join("airpods_battery_cli.exe"),
         // 4. Project root if we're in target/release (go up 2 levels)
-        exe_dir.parent().and_then(|p| p.parent()).map(|project_root| project_root.join("bin").join("airpods_battery_cli.exe")).unwrap_or_default(),
+        exe_dir
+            .parent()
+            .and_then(|p| p.parent())
+            .map(|project_root| project_root.join("bin").join("airpods_battery_cli.exe"))
+            .unwrap_or_default(),
         // 5. Development location relative to current working directory
-        current_dir.join("scripts").join("airpods_battery_cli").join("build").join("Release").join("airpods_battery_cli.exe"),
+        current_dir
+            .join("scripts")
+            .join("airpods_battery_cli")
+            .join("build")
+            .join("Release")
+            .join("airpods_battery_cli.exe"),
     ];
 
-    crate::debug_log!("bluetooth", "Trying {} possible CLI scanner locations", cli_paths.len());
+    crate::debug_log!(
+        "bluetooth",
+        "Trying {} possible CLI scanner locations",
+        cli_paths.len()
+    );
     for (i, path) in cli_paths.iter().enumerate() {
         crate::debug_log!("bluetooth", "Path {}: {}", i + 1, path.display());
         crate::debug_log!("bluetooth", "Path {} exists: {}", i + 1, path.exists());
@@ -1403,7 +1585,7 @@ fn get_airpods_from_cli_scanner() -> Vec<AirPodsBatteryInfo> {
 
     // Find the first existing CLI scanner
     let cli_path = cli_paths.into_iter().find(|path| path.exists());
-    
+
     let cli_path = match cli_path {
         Some(path) => {
             crate::debug_log!("bluetooth", "Found CLI scanner at: {}", path.display());
@@ -1418,31 +1600,35 @@ fn get_airpods_from_cli_scanner() -> Vec<AirPodsBatteryInfo> {
     // Execute CLI scanner
     let mut command = ProcessCommand::new(&cli_path);
     command.arg("--fast");
-    
+
     // Hide console window on Windows in release builds
     #[cfg(all(windows, not(debug_assertions)))]
     {
         use std::os::windows::process::CommandExt;
         command.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
-    
+
     match command.output() {
         Ok(output) => {
             if output.status.success() {
                 let stdout = String::from_utf8_lossy(&output.stdout);
-                crate::debug_log!("bluetooth", "CLI scanner output length: {} chars", stdout.len());
+                crate::debug_log!(
+                    "bluetooth",
+                    "CLI scanner output length: {} chars",
+                    stdout.len()
+                );
 
                 // Parse the JSON output
-                if let Ok(cli_result) = serde_json::from_str::<crate::bluetooth::cli_scanner::CliScannerResult>(&stdout) {
+                if let Ok(cli_result) =
+                    serde_json::from_str::<crate::bluetooth::cli_scanner::CliScannerResult>(&stdout)
+                {
                     let mut airpods_devices = Vec::new();
 
                     for device in &cli_result.devices {
                         if let Some(airpods_data) = &device.airpods_data {
                             // Create canonical address (lowercased, colon-free MAC address)
-                            let canonical_address = device.address
-                                .replace(":", "")
-                                .to_lowercase();
-                            
+                            let canonical_address = device.address.replace(":", "").to_lowercase();
+
                             // Use canonical address as the primary identifier (no decimal conversion)
                             let address = u64::from_str_radix(&canonical_address, 16).unwrap_or(0);
 
@@ -1457,15 +1643,15 @@ fn get_airpods_from_cli_scanner() -> Vec<AirPodsBatteryInfo> {
                                 left_charging: airpods_data.left_charging,
                                 right_charging: airpods_data.right_charging,
                                 case_charging: airpods_data.case_charging,
-                                left_in_ear: None, // Not provided by CLI scanner
-                                right_in_ear: None, // Not provided by CLI scanner  
+                                left_in_ear: None,   // Not provided by CLI scanner
+                                right_in_ear: None,  // Not provided by CLI scanner
                                 case_lid_open: None, // Not provided by CLI scanner
-                                side: None, // Not provided by CLI scanner
-                                both_in_case: None, // Not provided by CLI scanner
-                                color: None, // Not provided by CLI scanner
-                                switch_count: None, // Not provided by CLI scanner
-                                rssi: None, // Not provided by CLI scanner
-                                timestamp: None, // Not provided by CLI scanner
+                                side: None,          // Not provided by CLI scanner
+                                both_in_case: None,  // Not provided by CLI scanner
+                                color: None,         // Not provided by CLI scanner
+                                switch_count: None,  // Not provided by CLI scanner
+                                rssi: None,          // Not provided by CLI scanner
+                                timestamp: None,     // Not provided by CLI scanner
                                 raw_manufacturer_data: None, // Not provided by CLI scanner
                             };
 
@@ -1473,16 +1659,29 @@ fn get_airpods_from_cli_scanner() -> Vec<AirPodsBatteryInfo> {
                         }
                     }
 
-                    crate::debug_log!("bluetooth", "Parsed {} AirPods devices from CLI scanner", airpods_devices.len());
+                    crate::debug_log!(
+                        "bluetooth",
+                        "Parsed {} AirPods devices from CLI scanner",
+                        airpods_devices.len()
+                    );
                     airpods_devices
                 } else {
                     log::error!("Failed to parse CLI scanner JSON output");
-                    log::error!("Raw output preview: {}", stdout.chars().take(200).collect::<String>());
+                    log::error!(
+                        "Raw output preview: {}",
+                        stdout.chars().take(200).collect::<String>()
+                    );
                     Vec::new()
                 }
             } else {
-                log::error!("CLI scanner failed with exit code: {:?}", output.status.code());
-                log::error!("CLI scanner stderr: {}", String::from_utf8_lossy(&output.stderr));
+                log::error!(
+                    "CLI scanner failed with exit code: {:?}",
+                    output.status.code()
+                );
+                log::error!(
+                    "CLI scanner stderr: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
                 Vec::new()
             }
         }
@@ -1501,41 +1700,75 @@ fn get_airpods_from_cli_scanner_continuous() -> Vec<AirPodsBatteryInfo> {
     use std::process::Command as ProcessCommand;
 
     // Get the executable path and its directory
-    let exe_path = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("./rustpods.exe"));
-    let exe_dir = exe_path.parent().unwrap_or_else(|| std::path::Path::new("."));
+    let exe_path =
+        std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("./rustpods.exe"));
+    let exe_dir = exe_path
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."));
     let current_dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    
+
     crate::debug_log!("bluetooth", "Continuous CLI Scanner (every 10s)");
     crate::debug_log!("bluetooth", "Executable path: {}", exe_path.display());
     crate::debug_log!("bluetooth", "Executable directory: {}", exe_dir.display());
-    crate::debug_log!("bluetooth", "Current working directory: {}", current_dir.display());
-    
+    crate::debug_log!(
+        "bluetooth",
+        "Current working directory: {}",
+        current_dir.display()
+    );
+
     // Try multiple possible locations for the CLI scanner
     let cli_paths = vec![
         // 1. Same directory as the executable (most likely when running from target/release)
         exe_dir.join("airpods_battery_cli.exe"),
-        // 2. bin folder relative to current working directory 
+        // 2. bin folder relative to current working directory
         current_dir.join("bin").join("airpods_battery_cli.exe"),
         // 3. bin folder relative to executable directory (if exe is in subdir)
         exe_dir.join("bin").join("airpods_battery_cli.exe"),
         // 4. Project root if we're in target/release (go up 2 levels)
-        exe_dir.parent().and_then(|p| p.parent()).map(|project_root| project_root.join("bin").join("airpods_battery_cli.exe")).unwrap_or_default(),
+        exe_dir
+            .parent()
+            .and_then(|p| p.parent())
+            .map(|project_root| project_root.join("bin").join("airpods_battery_cli.exe"))
+            .unwrap_or_default(),
         // 5. Development location relative to current working directory
-        current_dir.join("scripts").join("airpods_battery_cli").join("build").join("Release").join("airpods_battery_cli.exe"),
+        current_dir
+            .join("scripts")
+            .join("airpods_battery_cli")
+            .join("build")
+            .join("Release")
+            .join("airpods_battery_cli.exe"),
     ];
 
-    crate::debug_log!("bluetooth", "Continuous scan - Trying {} possible CLI scanner locations", cli_paths.len());
+    crate::debug_log!(
+        "bluetooth",
+        "Continuous scan - Trying {} possible CLI scanner locations",
+        cli_paths.len()
+    );
     for (i, path) in cli_paths.iter().enumerate() {
-        crate::debug_log!("bluetooth", "Continuous scan - Path {}: {}", i + 1, path.display());
-        crate::debug_log!("bluetooth", "Continuous scan - Path {} exists: {}", i + 1, path.exists());
+        crate::debug_log!(
+            "bluetooth",
+            "Continuous scan - Path {}: {}",
+            i + 1,
+            path.display()
+        );
+        crate::debug_log!(
+            "bluetooth",
+            "Continuous scan - Path {} exists: {}",
+            i + 1,
+            path.exists()
+        );
     }
 
     // Find the first existing CLI scanner
     let cli_path = cli_paths.into_iter().find(|path| path.exists());
-    
+
     let cli_path = match cli_path {
         Some(path) => {
-            crate::debug_log!("bluetooth", "Continuous scan - Found CLI scanner at: {}", path.display());
+            crate::debug_log!(
+                "bluetooth",
+                "Continuous scan - Found CLI scanner at: {}",
+                path.display()
+            );
             path
         }
         None => {
@@ -1547,31 +1780,35 @@ fn get_airpods_from_cli_scanner_continuous() -> Vec<AirPodsBatteryInfo> {
     // Execute CLI scanner with fast argument for 2-second scan
     let mut command = ProcessCommand::new(&cli_path);
     command.arg("--fast");
-    
+
     // Hide console window on Windows in release builds
     #[cfg(all(windows, not(debug_assertions)))]
     {
         use std::os::windows::process::CommandExt;
         command.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
-    
+
     match command.output() {
         Ok(output) => {
             if output.status.success() {
                 let stdout = String::from_utf8_lossy(&output.stdout);
-                crate::debug_log!("bluetooth", "Continuous scan output length: {} chars", stdout.len());
+                crate::debug_log!(
+                    "bluetooth",
+                    "Continuous scan output length: {} chars",
+                    stdout.len()
+                );
 
                 // Parse the JSON output
-                if let Ok(cli_result) = serde_json::from_str::<crate::bluetooth::cli_scanner::CliScannerResult>(&stdout) {
+                if let Ok(cli_result) =
+                    serde_json::from_str::<crate::bluetooth::cli_scanner::CliScannerResult>(&stdout)
+                {
                     let mut airpods_devices = Vec::new();
 
                     for device in &cli_result.devices {
                         if let Some(airpods_data) = &device.airpods_data {
                             // Create canonical address (lowercased, colon-free MAC address)
-                            let canonical_address = device.address
-                                .replace(":", "")
-                                .to_lowercase();
-                            
+                            let canonical_address = device.address.replace(":", "").to_lowercase();
+
                             // Use canonical address as the primary identifier (no decimal conversion)
                             let address = u64::from_str_radix(&canonical_address, 16).unwrap_or(0);
 
@@ -1586,15 +1823,15 @@ fn get_airpods_from_cli_scanner_continuous() -> Vec<AirPodsBatteryInfo> {
                                 left_charging: airpods_data.left_charging,
                                 right_charging: airpods_data.right_charging,
                                 case_charging: airpods_data.case_charging,
-                                left_in_ear: None, // Not provided by CLI scanner
-                                right_in_ear: None, // Not provided by CLI scanner  
+                                left_in_ear: None,   // Not provided by CLI scanner
+                                right_in_ear: None,  // Not provided by CLI scanner
                                 case_lid_open: None, // Not provided by CLI scanner
-                                side: None, // Not provided by CLI scanner
-                                both_in_case: None, // Not provided by CLI scanner
-                                color: None, // Not provided by CLI scanner
-                                switch_count: None, // Not provided by CLI scanner
-                                rssi: None, // Not provided by CLI scanner
-                                timestamp: None, // Not provided by CLI scanner
+                                side: None,          // Not provided by CLI scanner
+                                both_in_case: None,  // Not provided by CLI scanner
+                                color: None,         // Not provided by CLI scanner
+                                switch_count: None,  // Not provided by CLI scanner
+                                rssi: None,          // Not provided by CLI scanner
+                                timestamp: None,     // Not provided by CLI scanner
                                 raw_manufacturer_data: None, // Not provided by CLI scanner
                             };
 
@@ -1602,16 +1839,29 @@ fn get_airpods_from_cli_scanner_continuous() -> Vec<AirPodsBatteryInfo> {
                         }
                     }
 
-                    crate::debug_log!("bluetooth", "Continuous scan found {} AirPods devices", airpods_devices.len());
+                    crate::debug_log!(
+                        "bluetooth",
+                        "Continuous scan found {} AirPods devices",
+                        airpods_devices.len()
+                    );
                     airpods_devices
                 } else {
                     log::error!("Continuous scan - Failed to parse CLI scanner JSON output");
-                    log::error!("Continuous scan - Raw output preview: {}", stdout.chars().take(200).collect::<String>());
+                    log::error!(
+                        "Continuous scan - Raw output preview: {}",
+                        stdout.chars().take(200).collect::<String>()
+                    );
                     Vec::new()
                 }
             } else {
-                log::error!("Continuous scan - CLI scanner failed with exit code: {:?}", output.status.code());
-                log::error!("Continuous scan - CLI scanner stderr: {}", String::from_utf8_lossy(&output.stderr));
+                log::error!(
+                    "Continuous scan - CLI scanner failed with exit code: {:?}",
+                    output.status.code()
+                );
+                log::error!(
+                    "Continuous scan - CLI scanner stderr: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
                 Vec::new()
             }
         }

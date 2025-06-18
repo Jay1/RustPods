@@ -26,4 +26,4 @@ mod tests {
         waiting.manual_scan_in_progress = true;
         assert!(waiting.manual_scan_in_progress);
     }
-} 
+}

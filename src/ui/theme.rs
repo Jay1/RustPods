@@ -304,7 +304,7 @@ impl button::StyleSheet for Theme {
             },
             (_, iced::theme::Button::Destructive) => button::Appearance {
                 background: Some(SURFACE2.into()), // Slightly darker background on hover
-                text_color: RED, // Keep red icon color
+                text_color: RED,                   // Keep red icon color
                 ..active
             },
             (_, _) => button::Appearance {

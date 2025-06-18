@@ -9,12 +9,19 @@ use std::time::SystemTime;
 #[test]
 fn test_battery_intelligence_initialization() {
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-    
+
     let state = AppState::new(sender);
-    
+
     // Verify that BatteryIntelligence is initialized
-    assert!(state.battery_intelligence.storage_dir.exists() || state.battery_intelligence.storage_dir.to_string_lossy().contains("battery_intelligence"));
-    
+    assert!(
+        state.battery_intelligence.storage_dir.exists()
+            || state
+                .battery_intelligence
+                .storage_dir
+                .to_string_lossy()
+                .contains("battery_intelligence")
+    );
+
     // Note: device_profiles may not be empty if there are existing profile files from previous runs
     // This is expected behavior - the system loads existing profiles on startup
 }
@@ -22,10 +29,10 @@ fn test_battery_intelligence_initialization() {
 #[test]
 fn test_battery_intelligence_device_update() {
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-    
+
     let mut state = AppState::new(sender);
     state.config.battery.enable_estimation = true;
-    
+
     // Create test AirPods data
     let airpods = AirPodsBatteryInfo {
         address: 123456789,
@@ -49,14 +56,14 @@ fn test_battery_intelligence_device_update() {
         timestamp: None,
         raw_manufacturer_data: None,
     };
-    
+
     // Update the state with AirPods data
     state.airpods_devices = vec![airpods];
     state.update_merged_devices();
-    
+
     // Verify that BatteryIntelligence received the update
     assert!(state.battery_intelligence.device_profile.is_some());
-    
+
     let profile = state.battery_intelligence.device_profile.as_ref().unwrap();
     assert_eq!(profile.device_name, "Test AirPods Pro");
     assert_eq!(profile.current_left, Some(85));
@@ -70,10 +77,10 @@ fn test_battery_intelligence_device_update() {
 #[test]
 fn test_battery_intelligence_fractional_estimates() {
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-    
+
     let mut state = AppState::new(sender);
     state.config.battery.enable_estimation = true;
-    
+
     // Create test AirPods data
     let airpods = AirPodsBatteryInfo {
         address: 987654321,
@@ -97,13 +104,15 @@ fn test_battery_intelligence_fractional_estimates() {
         timestamp: None,
         raw_manufacturer_data: None,
     };
-    
+
     // Update the state with AirPods data
     state.airpods_devices = vec![airpods];
     state.update_merged_devices();
-    
+
     // Get estimates from BatteryIntelligence
-    if let Some((left_est, right_est, case_est)) = state.battery_intelligence.get_battery_estimates() {
+    if let Some((left_est, right_est, case_est)) =
+        state.battery_intelligence.get_battery_estimates()
+    {
         // For fresh data, estimates should match real data
         assert_eq!(left_est.level, 75.0);
         assert_eq!(right_est.level, 70.0);
@@ -122,10 +131,10 @@ fn test_battery_intelligence_fractional_estimates() {
 #[test]
 fn test_battery_intelligence_significance_filtering() {
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-    
+
     let mut state = AppState::new(sender);
     state.config.battery.enable_estimation = true;
-    
+
     // Create AirPods data
     let mut airpods = AirPodsBatteryInfo {
         address: 333444555,
@@ -149,52 +158,69 @@ fn test_battery_intelligence_significance_filtering() {
         timestamp: None,
         raw_manufacturer_data: None,
     };
-    
+
     // First update
     state.airpods_devices = vec![airpods.clone()];
     state.update_merged_devices();
-    
+
     let profile = state.battery_intelligence.device_profile.as_ref().unwrap();
     let initial_event_count = profile.events.len();
-    
+
     // Update with same data (should not create new event due to significance filtering)
     state.airpods_devices = vec![airpods.clone()];
     state.update_merged_devices();
-    
+
     let profile = state.battery_intelligence.device_profile.as_ref().unwrap();
-    assert_eq!(profile.events.len(), initial_event_count, "No new event should be created for identical data");
-    
+    assert_eq!(
+        profile.events.len(),
+        initial_event_count,
+        "No new event should be created for identical data"
+    );
+
     // Simulate time passing to ensure depletion rate can be calculated
     let profile = state.battery_intelligence.device_profile.as_mut().unwrap();
     profile.last_update = Some(SystemTime::now() - std::time::Duration::from_secs(3600)); // 1 hour ago
-    
+
     // Update with very significant battery change (should create new event and depletion rate samples)
     airpods.left_battery = 60; // 30% drop from original 90%, significant enough for depletion rate calculation
     airpods.right_battery = 60; // Also drop right battery by same amount to test both channels
     state.airpods_devices = vec![airpods.clone()];
     state.update_merged_devices();
-    
+
     let profile = state.battery_intelligence.device_profile.as_ref().unwrap();
-    assert!(profile.events.len() > initial_event_count, "New event should be created for significant battery change");
-    
+    assert!(
+        profile.events.len() > initial_event_count,
+        "New event should be created for significant battery change"
+    );
+
     // Verify depletion rate samples were created
-    let left_depletion_samples = profile.depletion_rates.get_sample_count(rustpods::airpods::battery_intelligence::DepletionTarget::LeftEarbud);
-    let right_depletion_samples = profile.depletion_rates.get_sample_count(rustpods::airpods::battery_intelligence::DepletionTarget::RightEarbud);
-    
+    let left_depletion_samples = profile
+        .depletion_rates
+        .get_sample_count(rustpods::airpods::battery_intelligence::DepletionTarget::LeftEarbud);
+    let right_depletion_samples = profile
+        .depletion_rates
+        .get_sample_count(rustpods::airpods::battery_intelligence::DepletionTarget::RightEarbud);
+
     println!("Left depletion samples: {}", left_depletion_samples);
     println!("Right depletion samples: {}", right_depletion_samples);
-    
-    assert!(left_depletion_samples > 0, "Depletion rate samples should be created for 30% battery drop");
-    assert!(right_depletion_samples > 0, "Depletion rate samples should be created for 30% battery drop");
+
+    assert!(
+        left_depletion_samples > 0,
+        "Depletion rate samples should be created for 30% battery drop"
+    );
+    assert!(
+        right_depletion_samples > 0,
+        "Depletion rate samples should be created for 30% battery drop"
+    );
 }
 
 #[test]
 fn test_battery_intelligence_charging_state_detection() {
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-    
+
     let mut state = AppState::new(sender);
     state.config.battery.enable_estimation = true;
-    
+
     // Create AirPods data - not charging
     let mut airpods = AirPodsBatteryInfo {
         address: 444555666,
@@ -218,57 +244,75 @@ fn test_battery_intelligence_charging_state_detection() {
         timestamp: None,
         raw_manufacturer_data: None,
     };
-    
+
     // First update - not charging
     state.airpods_devices = vec![airpods.clone()];
     state.update_merged_devices();
-    
+
     let profile = state.battery_intelligence.device_profile.as_ref().unwrap();
     assert!(!profile.left_charging);
     assert!(!profile.right_charging);
-    
+
     // Update to charging state
     airpods.left_charging = true;
     airpods.right_charging = true;
     state.airpods_devices = vec![airpods.clone()];
     state.update_merged_devices();
-    
+
     let profile = state.battery_intelligence.device_profile.as_ref().unwrap();
     assert!(profile.left_charging);
     assert!(profile.right_charging);
-    
+
     // Verify that a charging event was created
     let has_charging_event = profile.events.iter().any(|event| {
-        matches!(event.event_type, rustpods::airpods::battery_intelligence::BatteryEventType::ChargingStarted)
+        matches!(
+            event.event_type,
+            rustpods::airpods::battery_intelligence::BatteryEventType::ChargingStarted
+        )
     });
-    assert!(has_charging_event, "Should have created a ChargingStarted event");
+    assert!(
+        has_charging_event,
+        "Should have created a ChargingStarted event"
+    );
 }
 
 #[test]
 fn test_battery_intelligence_fallback_to_old_estimator() {
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-    
+
     let mut state = AppState::new(sender);
     state.config.battery.enable_estimation = true;
-    
+
     // Don't add any AirPods devices, so BatteryIntelligence won't have data
     state.airpods_devices = vec![];
     state.update_merged_devices();
-    
+
     // The system should fall back to the old estimator when BatteryIntelligence has no data
     // This is tested by ensuring the update_merged_devices function doesn't panic
     // and that the old estimator is still being updated
-    assert!(state.battery_estimator.left_history.discharge_rates.is_empty());
-    assert!(state.battery_estimator.right_history.discharge_rates.is_empty());
-    assert!(state.battery_estimator.case_history.discharge_rates.is_empty());
+    assert!(state
+        .battery_estimator
+        .left_history
+        .discharge_rates
+        .is_empty());
+    assert!(state
+        .battery_estimator
+        .right_history
+        .discharge_rates
+        .is_empty());
+    assert!(state
+        .battery_estimator
+        .case_history
+        .discharge_rates
+        .is_empty());
 }
 
 #[test]
 fn test_battery_intelligence_storage_directory() {
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-    
+
     let state = AppState::new(sender);
-    
+
     // Verify that the storage directory is set correctly
     let expected_path = dirs::data_local_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
@@ -280,10 +324,10 @@ fn test_battery_intelligence_storage_directory() {
 #[test]
 fn test_battery_intelligence_multiple_devices() {
     let (sender, _receiver) = tokio::sync::mpsc::unbounded_channel();
-    
+
     let mut state = AppState::new(sender);
     state.config.battery.enable_estimation = true;
-    
+
     // Create multiple AirPods devices
     let airpods1 = AirPodsBatteryInfo {
         address: 111111111,
@@ -307,7 +351,7 @@ fn test_battery_intelligence_multiple_devices() {
         timestamp: None,
         raw_manufacturer_data: None,
     };
-    
+
     let airpods2 = AirPodsBatteryInfo {
         address: 222222222,
         canonical_address: "d3ec5ce".to_string(), // hex representation of 222222222
@@ -330,26 +374,28 @@ fn test_battery_intelligence_multiple_devices() {
         timestamp: None,
         raw_manufacturer_data: None,
     };
-    
+
     // Update with multiple devices
     state.airpods_devices = vec![airpods1, airpods2];
     state.update_merged_devices();
-    
+
     // Verify that only one device profile exists (singleton pattern)
     // The battery intelligence system now only tracks one device at a time
     assert!(state.battery_intelligence.device_profile.is_some());
-    
+
     let profile = state.battery_intelligence.device_profile.as_ref().unwrap();
-    
+
     // The profile should be for one of the devices (likely the selected one)
     assert!(profile.device_name == "AirPods Pro 1" || profile.device_name == "AirPods Pro 2");
-    
+
     // Note: The singleton implementation only gets estimates from the current device
     // This is the expected behavior for the simplified single-device approach
-    if let Some((left_est, right_est, case_est)) = state.battery_intelligence.get_battery_estimates() {
+    if let Some((left_est, right_est, case_est)) =
+        state.battery_intelligence.get_battery_estimates()
+    {
         // The estimates should match one of the devices' battery levels
         assert!(left_est.level == 80.0 || left_est.level == 65.0);
         assert!(right_est.level == 75.0 || right_est.level == 70.0);
         assert!(case_est.level == 90.0 || case_est.level == 85.0);
     }
-} 
+}

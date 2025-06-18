@@ -6,7 +6,7 @@ use crate::ui::theme::{self, Theme};
 use crate::ui::Message;
 use crate::ui::UiComponent;
 use iced::{
-    widget::{button, column, container, row, text, Space, scrollable},
+    widget::{button, column, container, row, scrollable, text, Space},
     Alignment, Element, Length,
 };
 
@@ -118,7 +118,7 @@ impl UiComponent for SettingsWindow {
             ]
             .spacing(15)
             .padding(25)
-            .align_items(Alignment::Start)
+            .align_items(Alignment::Start),
         );
 
         let content = column![

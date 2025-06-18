@@ -96,8 +96,6 @@ pub async fn very_long_delay() {
 
 /// Helper to create temporary test directory
 pub fn create_temp_dir() -> tempfile::TempDir {
-    
-
     // Temp directory will be automatically cleaned up when it goes out of scope
     tempfile::tempdir().expect("Failed to create temporary directory")
 }

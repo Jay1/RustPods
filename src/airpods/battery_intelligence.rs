@@ -1,8 +1,8 @@
 //! Intelligent Battery Management System for RustPods (Singleton Version)
 //!
-//! This module provides advanced battery intelligence for a single AirPods device that learns 
+//! This module provides advanced battery intelligence for a single AirPods device that learns
 //! from usage patterns and provides 1% precision estimates between Bluetooth updates.
-//! 
+//!
 //! Key Features:
 //! - Single device focus (no multi-device complexity)
 //! - Smart significance filtering (focused on 10% battery drops)
@@ -12,11 +12,11 @@
 //! - Efficient storage (95% reduction vs. logging all data)
 //! - Confidence scoring for estimates
 
+use log;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
-use log;
 
 /// Maximum number of significant events to store
 const MAX_EVENTS: usize = 200;
@@ -52,28 +52,28 @@ const INITIAL_ESTIMATE_UNCERTAINTY: f32 = 2.0; // Initial uncertainty in our est
 pub struct KalmanBatteryEstimator {
     /// Current state estimate (battery percentage)
     pub state_estimate: f32,
-    
+
     /// Current estimate uncertainty (P)
     pub estimate_uncertainty: f32,
-    
+
     /// Process noise variance (Q)
     pub process_noise: f32,
-    
+
     /// Measurement noise variance (R)
     pub measurement_noise: f32,
-    
+
     /// Discharge rate estimate (percentage per minute)
     pub discharge_rate: f32,
-    
+
     /// Last update timestamp
     pub last_update: SystemTime,
-    
+
     /// Target component (left, right, case)
     pub target: DepletionTarget,
-    
+
     /// Whether the device is currently charging
     pub is_charging: bool,
-    
+
     /// Confidence in the current estimate (0.0 to 1.0)
     pub confidence: f32,
 }
@@ -83,16 +83,16 @@ pub struct KalmanBatteryEstimator {
 pub struct DepletionRateSample {
     /// When this sample was recorded
     pub timestamp: SystemTime,
-    
+
     /// Minutes per 1% battery depletion
     pub minutes_per_percent: f32,
-    
+
     /// Which earbud this applies to (left, right, case)
     pub target: DepletionTarget,
-    
+
     /// Starting battery percentage
     pub start_percent: u8,
-    
+
     /// Ending battery percentage
     pub end_percent: u8,
 }
@@ -110,13 +110,13 @@ pub enum DepletionTarget {
 pub struct DepletionRateBuffer {
     /// Maximum number of samples to store
     pub max_samples: usize,
-    
+
     /// Samples for left earbud
     pub left_samples: VecDeque<DepletionRateSample>,
-    
+
     /// Samples for right earbud
     pub right_samples: VecDeque<DepletionRateSample>,
-    
+
     /// Samples for case
     pub case_samples: VecDeque<DepletionRateSample>,
 }
@@ -140,37 +140,37 @@ pub struct DeviceBatteryProfile {
     /// Device identification
     pub device_name: String,
     pub device_address: String,
-    
+
     /// Current battery state
     pub current_left: Option<u8>,
     pub current_right: Option<u8>,
     pub current_case: Option<u8>,
     pub last_update: Option<SystemTime>,
-    
+
     /// Charging state tracking
     pub left_charging: bool,
     pub right_charging: bool,
     pub case_charging: bool,
-    
+
     /// In-ear state tracking
     pub left_in_ear: bool,
     pub right_in_ear: bool,
-    
+
     /// Significant events history (limited to MAX_EVENTS)
     pub events: VecDeque<BatteryEvent>,
-    
+
     /// Learned discharge models for different usage patterns
     pub discharge_models: HashMap<UsagePattern, DischargeModel>,
-    
+
     /// Current active session tracking
     pub current_session: Option<UsageSession>,
-    
+
     /// Battery health metrics
     pub health_metrics: BatteryHealthMetrics,
-    
+
     /// NEW: Depletion rate buffer for the 1% precision prediction
     pub depletion_rates: DepletionRateBuffer,
-    
+
     /// Last recorded battery levels for depletion calculation
     pub last_left_level: Option<(u8, SystemTime)>,
     pub last_right_level: Option<(u8, SystemTime)>,
@@ -182,24 +182,24 @@ pub struct DeviceBatteryProfile {
 pub struct BatteryEvent {
     /// When this event occurred
     pub timestamp: SystemTime,
-    
+
     /// Type of significant event
     pub event_type: BatteryEventType,
-    
+
     /// Battery levels at time of event
     pub left_battery: Option<u8>,
     pub right_battery: Option<u8>,
     pub case_battery: Option<u8>,
-    
+
     /// Charging states
     pub left_charging: bool,
     pub right_charging: bool,
     pub case_charging: bool,
-    
+
     /// In-ear states
     pub left_in_ear: bool,
     pub right_in_ear: bool,
-    
+
     /// Additional context
     pub rssi: Option<i16>,
     pub session_duration: Option<Duration>,
@@ -231,16 +231,16 @@ pub enum BatteryEventType {
 pub struct DischargeModel {
     /// Average discharge rate (percentage per hour)
     pub discharge_rate_per_hour: f32,
-    
+
     /// Confidence in this model (0.0 to 1.0)
     pub confidence: f32,
-    
+
     /// Number of sessions this model is based on
     pub sample_count: u32,
-    
+
     /// Last time this model was updated
     pub last_updated: SystemTime,
-    
+
     /// Variance in discharge rates (for confidence calculation)
     pub rate_variance: f32,
 }
@@ -267,15 +267,15 @@ pub enum UsagePattern {
 pub struct UsageSession {
     /// When session started
     pub start_time: SystemTime,
-    
+
     /// Starting battery levels
     pub start_left: Option<u8>,
     pub start_right: Option<u8>,
     pub start_case: Option<u8>,
-    
+
     /// Session type classification
     pub session_type: SessionType,
-    
+
     /// Usage intensity
     pub usage_pattern: UsagePattern,
 }
@@ -298,16 +298,16 @@ pub struct BatteryHealthMetrics {
     pub max_observed_left: u8,
     pub max_observed_right: u8,
     pub max_observed_case: u8,
-    
+
     /// Average discharge rates over time
     pub historical_discharge_rates: VecDeque<f32>,
-    
+
     /// Charging efficiency metrics
     pub charging_efficiency: f32,
-    
+
     /// Total usage cycles approximation
     pub estimated_cycles: u32,
-    
+
     /// Health score (0.0 to 1.0)
     pub health_score: f32,
 }
@@ -317,16 +317,16 @@ pub struct BatteryHealthMetrics {
 pub struct IntelligenceSettings {
     /// Enable/disable learning
     pub learning_enabled: bool,
-    
+
     /// Confidence thresholds
     pub high_confidence_minutes: u64,
     pub medium_confidence_minutes: u64,
     pub low_confidence_minutes: u64,
-    
+
     /// Significance thresholds
     pub min_battery_change: u8,
     pub min_time_gap_minutes: u64,
-    
+
     /// Storage limits
     pub max_events: usize,
 }
@@ -336,19 +336,19 @@ pub struct IntelligenceSettings {
 pub struct BatteryEstimate {
     /// Estimated battery level (rounded to whole percentage for display)
     pub level: f32,
-    
+
     /// Whether this is real Bluetooth data or estimated
     pub is_real_data: bool,
-    
+
     /// Confidence in estimate (0.0 to 1.0)
     pub confidence: f32,
-    
+
     /// Predicted time until next 10% drop
     pub time_to_next_10_percent: Option<Duration>,
-    
+
     /// Predicted time until critical level (10%)
     pub time_to_critical: Option<Duration>,
-    
+
     /// Current usage pattern classification
     pub usage_pattern: Option<UsagePattern>,
 }
@@ -362,22 +362,25 @@ impl BatteryIntelligence {
             storage_dir,
             profile_filename: "battery_profile.json".to_string(),
         };
-        
+
         // Load existing profiles
         if let Err(e) = intelligence.load() {
-            eprintln!("Warning: Failed to load existing battery intelligence profiles: {}", e);
+            eprintln!(
+                "Warning: Failed to load existing battery intelligence profiles: {}",
+                e
+            );
         }
-        
+
         // Clean up old profile files from previous implementations
         if let Err(e) = intelligence.cleanup_old_profile_files() {
             eprintln!("Warning: Failed to clean up old profile files: {}", e);
         }
-        
+
         // Consolidate old battery data files if they exist
         if let Err(e) = intelligence.consolidate_old_battery_data() {
             eprintln!("Warning: Failed to consolidate old battery data: {}", e);
         }
-        
+
         intelligence
     }
 
@@ -388,11 +391,11 @@ impl BatteryIntelligence {
         }
 
         let mut cleaned_count = 0;
-        
+
         for entry in std::fs::read_dir(&self.storage_dir)? {
             let entry = entry?;
             let path = entry.path();
-            
+
             if path.extension().is_some_and(|ext| ext == "json") {
                 if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
                     if filename.starts_with("device_") && filename.ends_with("_profile.json") {
@@ -401,9 +404,9 @@ impl BatteryIntelligence {
                             .strip_prefix("device_")
                             .and_then(|s| s.strip_suffix("_profile.json"))
                             .unwrap_or("");
-                        
+
                         // Check if this looks like an old decimal address or test data
-                        let should_clean = 
+                        let should_clean =
                             // Decimal addresses are very long (10+ digits)
                             (device_id.len() >= 10 && device_id.chars().all(|c| c.is_ascii_digit())) ||
                             // Test data from our tests (specific known test addresses)
@@ -414,73 +417,89 @@ impl BatteryIntelligence {
                             device_id == "69f6bcf" ||  // 111111111 in hex
                             // Very short hex that's clearly test data
                             (device_id.len() <= 7 && device_id.chars().all(|c| c.is_ascii_hexdigit()));
-                        
+
                         if should_clean {
                             if let Err(e) = std::fs::remove_file(&path) {
-                                eprintln!("Warning: Failed to remove old profile file {}: {}", filename, e);
+                                eprintln!(
+                                    "Warning: Failed to remove old profile file {}: {}",
+                                    filename, e
+                                );
                             } else {
                                 cleaned_count += 1;
-                                crate::debug_log!("battery", "Cleaned up old profile file: {}", filename);
+                                crate::debug_log!(
+                                    "battery",
+                                    "Cleaned up old profile file: {}",
+                                    filename
+                                );
                             }
                         }
                     }
                 }
             }
         }
-        
+
         if cleaned_count > 0 {
             crate::debug_log!("battery", "Cleaned up {} old profile files", cleaned_count);
         }
-        
+
         Ok(())
     }
 
     /// Consolidate old battery profile files into the new intelligent system
     fn consolidate_old_battery_data(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         // Look for old battery profile files in the logs/battery directory
-        let old_battery_dir = self.storage_dir.parent()
+        let old_battery_dir = self
+            .storage_dir
+            .parent()
             .ok_or("Invalid storage directory")?
             .join("logs")
             .join("battery");
-            
+
         if !old_battery_dir.exists() {
             return Ok(()); // No old data to consolidate
         }
-        
-        println!("Consolidating old battery profile data from {:?}", old_battery_dir);
-        
+
+        println!(
+            "Consolidating old battery profile data from {:?}",
+            old_battery_dir
+        );
+
         // Read all old battery profile files
         for entry in std::fs::read_dir(&old_battery_dir)? {
             let entry = entry?;
             let path = entry.path();
-            
+
             if path.extension().and_then(|s| s.to_str()) == Some("json") {
                 if let Err(e) = self.consolidate_single_file(&path) {
                     eprintln!("Warning: Failed to consolidate {}: {}", path.display(), e);
                 }
             }
         }
-        
+
         println!("Battery data consolidation completed");
         Ok(())
     }
-    
+
     /// Consolidate a single old battery profile file
-    fn consolidate_single_file(&mut self, file_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    fn consolidate_single_file(
+        &mut self,
+        file_path: &Path,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let content = std::fs::read_to_string(file_path)?;
         let old_data: serde_json::Value = serde_json::from_str(&content)?;
-        
+
         // Extract device ID from filename (e.g., battery_profile_85524103014148_20250616_192253.json)
-        let filename = file_path.file_stem()
+        let filename = file_path
+            .file_stem()
             .and_then(|s| s.to_str())
             .ok_or("Invalid filename")?;
-            
+
         let device_id = if let Some(parts) = filename.split('_').nth(2) {
             parts.to_string()
         } else {
             return Err("Could not extract device ID from filename".into());
         };
-        
+
         // Parse old entries and convert to significant events
         if let Some(entries) = old_data.get("entries").and_then(|e| e.as_array()) {
             for entry in entries {
@@ -497,17 +516,32 @@ impl BatteryIntelligence {
                         if left >= 0 { Some(left as u8) } else { None },
                         if right >= 0 { Some(right as u8) } else { None },
                         if case >= 0 { Some(case as u8) } else { None },
-                        entry.get("left_charging").and_then(|c| c.as_bool()).unwrap_or(false),
-                        entry.get("right_charging").and_then(|c| c.as_bool()).unwrap_or(false),
-                        entry.get("case_charging").and_then(|c| c.as_bool()).unwrap_or(false),
-                        entry.get("left_in_ear").and_then(|e| e.as_bool()).unwrap_or(false),
-                        entry.get("right_in_ear").and_then(|e| e.as_bool()).unwrap_or(false),
+                        entry
+                            .get("left_charging")
+                            .and_then(|c| c.as_bool())
+                            .unwrap_or(false),
+                        entry
+                            .get("right_charging")
+                            .and_then(|c| c.as_bool())
+                            .unwrap_or(false),
+                        entry
+                            .get("case_charging")
+                            .and_then(|c| c.as_bool())
+                            .unwrap_or(false),
+                        entry
+                            .get("left_in_ear")
+                            .and_then(|e| e.as_bool())
+                            .unwrap_or(false),
+                        entry
+                            .get("right_in_ear")
+                            .and_then(|e| e.as_bool())
+                            .unwrap_or(false),
                         Some(entry.get("rssi").and_then(|r| r.as_i64()).unwrap_or(-50) as i16),
                     );
                 }
             }
         }
-        
+
         Ok(())
     }
 
@@ -515,28 +549,35 @@ impl BatteryIntelligence {
     /// Returns true if a new profile was created
     pub fn ensure_device_profile(&mut self, device_address: &str, device_name: &str) -> bool {
         let profile_exists = self.device_profile.is_some();
-        
+
         if profile_exists {
             // Check if we need to update the existing profile
             let needs_update = {
                 let existing_profile = self.device_profile.as_ref().unwrap();
-                existing_profile.device_name != device_name || existing_profile.device_address != device_address
+                existing_profile.device_name != device_name
+                    || existing_profile.device_address != device_address
             };
-            
+
             if needs_update {
                 let old_name = self.device_profile.as_ref().unwrap().device_name.clone();
                 let old_address = self.device_profile.as_ref().unwrap().device_address.clone();
-                
-                crate::debug_log!("battery", "Updating singleton profile from {} ({}) to {} ({})", 
-                    old_name, old_address, device_name, device_address);
-                
+
+                crate::debug_log!(
+                    "battery",
+                    "Updating singleton profile from {} ({}) to {} ({})",
+                    old_name,
+                    old_address,
+                    device_name,
+                    device_address
+                );
+
                 // Update the profile
                 {
                     let existing_profile = self.device_profile.as_mut().unwrap();
                     existing_profile.device_name = device_name.to_string();
                     existing_profile.device_address = device_address.to_string();
                 }
-                
+
                 // Save the updated profile (uses fixed filename, no renaming needed)
                 if let Some(profile) = self.device_profile.as_ref() {
                     if let Err(e) = self.save_device_profile(profile) {
@@ -547,17 +588,22 @@ impl BatteryIntelligence {
             false // Profile already existed
         } else {
             // Create new profile
-            crate::debug_log!("battery", "Creating new singleton profile for {} ({})", device_name, device_address);
+            crate::debug_log!(
+                "battery",
+                "Creating new singleton profile for {} ({})",
+                device_name,
+                device_address
+            );
             let profile = DeviceBatteryProfile::new(device_name, device_address);
             self.device_profile = Some(profile);
-            
+
             // Save the new profile
             if let Some(new_profile) = self.device_profile.as_ref() {
                 if let Err(e) = self.save_device_profile(new_profile) {
                     eprintln!("Warning: Failed to save new singleton profile: {}", e);
                 }
             }
-            
+
             true // New profile was created
         }
     }
@@ -585,7 +631,17 @@ impl BatteryIntelligence {
         // Check if this update is significant enough to log
         let is_significant = {
             let profile = self.device_profile.as_ref().unwrap();
-            self.is_significant_update(profile, left, right, case, left_charging, right_charging, case_charging, left_in_ear, right_in_ear)
+            self.is_significant_update(
+                profile,
+                left,
+                right,
+                case,
+                left_charging,
+                right_charging,
+                case_charging,
+                left_in_ear,
+                right_in_ear,
+            )
         };
 
         // Now get mutable reference to profile
@@ -593,7 +649,15 @@ impl BatteryIntelligence {
 
         if is_significant {
             let event_type = Self::classify_event_type_from_data(
-                profile, left, right, case, left_charging, right_charging, case_charging, left_in_ear, right_in_ear
+                profile,
+                left,
+                right,
+                case,
+                left_charging,
+                right_charging,
+                case_charging,
+                left_in_ear,
+                right_in_ear,
             );
 
             let event = BatteryEvent {
@@ -608,9 +672,11 @@ impl BatteryIntelligence {
                 left_in_ear,
                 right_in_ear,
                 rssi,
-                session_duration: profile.current_session.as_ref().map(|s| 
-                    SystemTime::now().duration_since(s.start_time).unwrap_or(Duration::ZERO)
-                ),
+                session_duration: profile.current_session.as_ref().map(|s| {
+                    SystemTime::now()
+                        .duration_since(s.start_time)
+                        .unwrap_or(Duration::ZERO)
+                }),
             };
 
             profile.add_event(event);
@@ -618,13 +684,24 @@ impl BatteryIntelligence {
         }
 
         // Always update current state
-        profile.update_current_state(left, right, case, left_charging, right_charging, case_charging, left_in_ear, right_in_ear);
+        profile.update_current_state(
+            left,
+            right,
+            case,
+            left_charging,
+            right_charging,
+            case_charging,
+            left_in_ear,
+            right_in_ear,
+        );
     }
 
     /// Get intelligent battery estimates with 1% precision (singleton version)
-    pub fn get_battery_estimates(&self) -> Option<(BatteryEstimate, BatteryEstimate, BatteryEstimate)> {
+    pub fn get_battery_estimates(
+        &self,
+    ) -> Option<(BatteryEstimate, BatteryEstimate, BatteryEstimate)> {
         let profile = self.device_profile.as_ref()?;
-        
+
         Some((
             profile.estimate_left_battery(),
             profile.estimate_right_battery(),
@@ -632,14 +709,26 @@ impl BatteryIntelligence {
         ))
     }
 
-    /// Get simple display levels (rounded to integers) 
+    /// Get simple display levels (rounded to integers)
     pub fn get_display_levels(&self) -> Option<(Option<u8>, Option<u8>, Option<u8>)> {
         let (left, right, case) = self.get_battery_estimates()?;
-        
+
         Some((
-            if left.level >= 0.0 { Some(left.level.round() as u8) } else { None },
-            if right.level >= 0.0 { Some(right.level.round() as u8) } else { None },
-            if case.level >= 0.0 { Some(case.level.round() as u8) } else { None },
+            if left.level >= 0.0 {
+                Some(left.level.round() as u8)
+            } else {
+                None
+            },
+            if right.level >= 0.0 {
+                Some(right.level.round() as u8)
+            } else {
+                None
+            },
+            if case.level >= 0.0 {
+                Some(case.level.round() as u8)
+            } else {
+                None
+            },
         ))
     }
 
@@ -657,7 +746,7 @@ impl BatteryIntelligence {
         right_in_ear: bool,
     ) -> bool {
         let now = SystemTime::now();
-        
+
         // Always log first update
         if profile.last_update.is_none() {
             return true;
@@ -665,7 +754,7 @@ impl BatteryIntelligence {
 
         let last_update = profile.last_update.unwrap();
         let time_since_last = now.duration_since(last_update).unwrap_or(Duration::ZERO);
-        
+
         // Log if significant time gap (e.g., device reconnected after being out of range)
         if time_since_last >= Duration::from_secs(self.settings.min_time_gap_minutes * 60) {
             return true;
@@ -697,28 +786,35 @@ impl BatteryIntelligence {
         // Log smaller changes (5%) only if they're separated by at least MIN_SIGNIFICANT_TIME_GAP
         if time_since_last >= Duration::from_secs(self.settings.min_time_gap_minutes * 60) {
             if let (Some(left), Some(current_left)) = (left, profile.current_left) {
-                if (left as i16 - current_left as i16).abs() >= self.settings.min_battery_change as i16 {
+                if (left as i16 - current_left as i16).abs()
+                    >= self.settings.min_battery_change as i16
+                {
                     return true;
                 }
             }
 
             if let (Some(right), Some(current_right)) = (right, profile.current_right) {
-                if (right as i16 - current_right as i16).abs() >= self.settings.min_battery_change as i16 {
+                if (right as i16 - current_right as i16).abs()
+                    >= self.settings.min_battery_change as i16
+                {
                     return true;
                 }
             }
 
             if let (Some(case), Some(current_case)) = (case, profile.current_case) {
-                if (case as i16 - current_case as i16).abs() >= self.settings.min_battery_change as i16 {
+                if (case as i16 - current_case as i16).abs()
+                    >= self.settings.min_battery_change as i16
+                {
                     return true;
                 }
             }
         }
 
         // Log if charging state changed
-        if left_charging != profile.left_charging || 
-           right_charging != profile.right_charging || 
-           case_charging != profile.case_charging {
+        if left_charging != profile.left_charging
+            || right_charging != profile.right_charging
+            || case_charging != profile.case_charging
+        {
             return true;
         }
 
@@ -743,15 +839,17 @@ impl BatteryIntelligence {
         right_in_ear: bool,
     ) -> BatteryEventType {
         // Check for charging state changes
-        if (left_charging && !profile.left_charging) || 
-           (right_charging && !profile.right_charging) || 
-           (case_charging && !profile.case_charging) {
+        if (left_charging && !profile.left_charging)
+            || (right_charging && !profile.right_charging)
+            || (case_charging && !profile.case_charging)
+        {
             return BatteryEventType::ChargingStarted;
         }
 
-        if (!left_charging && profile.left_charging) || 
-           (!right_charging && profile.right_charging) || 
-           (!case_charging && profile.case_charging) {
+        if (!left_charging && profile.left_charging)
+            || (!right_charging && profile.right_charging)
+            || (!case_charging && profile.case_charging)
+        {
             return BatteryEventType::ChargingStopped;
         }
 
@@ -771,8 +869,11 @@ impl BatteryIntelligence {
 
         // Check for reconnection after gap
         if let Some(last_update) = profile.last_update {
-            let time_since = SystemTime::now().duration_since(last_update).unwrap_or(Duration::ZERO);
-            if time_since >= Duration::from_secs(300) { // 5 minutes
+            let time_since = SystemTime::now()
+                .duration_since(last_update)
+                .unwrap_or(Duration::ZERO);
+            if time_since >= Duration::from_secs(300) {
+                // 5 minutes
                 return BatteryEventType::ReconnectedAfterGap;
             }
         }
@@ -789,15 +890,18 @@ impl BatteryIntelligence {
             // Check if current profile is for the active device
             if let Some(profile) = &self.device_profile {
                 if profile.device_address != active_address {
-                    println!("🧹 Removing Battery Intelligence profile for inactive device: {} ({})", 
-                        profile.device_name, profile.device_address);
-                    
+                    println!(
+                        "🧹 Removing Battery Intelligence profile for inactive device: {} ({})",
+                        profile.device_name, profile.device_address
+                    );
+
                     // Remove the file from disk
-                    let device_filename = format!("device_{}_profile.json", 
+                    let device_filename = format!(
+                        "device_{}_profile.json",
                         profile.device_address.chars().take(8).collect::<String>()
                     );
                     let file_path = self.storage_dir.join(device_filename);
-                    
+
                     if file_path.exists() {
                         if let Err(e) = std::fs::remove_file(&file_path) {
                             eprintln!("⚠️  Warning: Failed to remove profile file for inactive device {}: {}", profile.device_address, e);
@@ -805,25 +909,33 @@ impl BatteryIntelligence {
                             println!("   Profile file removed: {:?}", file_path);
                         }
                     }
-                    
+
                     self.device_profile = None;
                 }
             }
         } else {
             // No active device - remove all profiles
             if self.device_profile.is_some() {
-                println!("🧹 No active device selected - cleaning up all Battery Intelligence profiles");
+                println!(
+                    "🧹 No active device selected - cleaning up all Battery Intelligence profiles"
+                );
                 self.device_profile = None;
-                
+
                 // Remove all profile files
                 if let Ok(entries) = std::fs::read_dir(&self.storage_dir) {
                     for entry in entries.flatten() {
                         let path = entry.path();
                         if path.extension().is_some_and(|ext| ext == "json") {
                             if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
-                                if filename.starts_with("device_") && filename.ends_with("_profile.json") {
+                                if filename.starts_with("device_")
+                                    && filename.ends_with("_profile.json")
+                                {
                                     if let Err(e) = std::fs::remove_file(&path) {
-                                        eprintln!("⚠️  Warning: Failed to remove profile file {}: {}", path.display(), e);
+                                        eprintln!(
+                                            "⚠️  Warning: Failed to remove profile file {}: {}",
+                                            path.display(),
+                                            e
+                                        );
                                     }
                                 }
                             }
@@ -839,7 +951,7 @@ impl BatteryIntelligence {
         if self.device_profile.is_none() {
             return Ok(());
         }
-        
+
         // Save the single device profile
         if let Some(profile) = self.device_profile.as_ref() {
             if let Err(e) = self.save_device_profile(profile) {
@@ -852,7 +964,7 @@ impl BatteryIntelligence {
     /// Purge all battery intelligence profiles (reset all data)
     pub fn purge_all_profiles(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         self.device_profile = None;
-        
+
         // Remove all profile files from disk
         if self.storage_dir.exists() {
             let mut removed_count = 0;
@@ -868,19 +980,26 @@ impl BatteryIntelligence {
                     }
                 }
             }
-            println!("🗑️ Purged {} battery intelligence profile files", removed_count);
+            println!(
+                "🗑️ Purged {} battery intelligence profile files",
+                removed_count
+            );
         }
-        
+
         Ok(())
     }
 
     /// Load device profile from disk (singleton version - fixed filename)
     pub fn load(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let file_path = self.storage_dir.join(&self.profile_filename);
-        
+
         if file_path.exists() {
             if let Err(e) = self.load_device_profile(&file_path) {
-                eprintln!("Warning: Failed to load singleton profile from {}: {}", file_path.display(), e);
+                eprintln!(
+                    "Warning: Failed to load singleton profile from {}: {}",
+                    file_path.display(),
+                    e
+                );
             }
         } else {
             // Migration: Look for old profile files and migrate first one found
@@ -888,11 +1007,18 @@ impl BatteryIntelligence {
                 for entry in std::fs::read_dir(&self.storage_dir)? {
                     let entry = entry?;
                     let path = entry.path();
-                    
+
                     if path.extension().is_some_and(|ext| ext == "json") {
                         if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
-                            if filename.starts_with("device_") && filename.ends_with("_profile.json") && filename != &self.profile_filename {
-                                crate::debug_log!("battery", "Migrating old profile file {} to singleton format", filename);
+                            if filename.starts_with("device_")
+                                && filename.ends_with("_profile.json")
+                                && filename != &self.profile_filename
+                            {
+                                crate::debug_log!(
+                                    "battery",
+                                    "Migrating old profile file {} to singleton format",
+                                    filename
+                                );
                                 if self.load_device_profile(&path).is_ok() {
                                     // Save using new format
                                     if let Some(profile) = self.device_profile.as_ref() {
@@ -908,7 +1034,7 @@ impl BatteryIntelligence {
                 }
             }
         }
-        
+
         Ok(())
     }
 
@@ -921,13 +1047,16 @@ impl BatteryIntelligence {
     }
 
     /// Save a device profile to disk (singleton version - fixed filename)
-    fn save_device_profile(&self, profile: &DeviceBatteryProfile) -> Result<(), Box<dyn std::error::Error>> {
+    fn save_device_profile(
+        &self,
+        profile: &DeviceBatteryProfile,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // Ensure storage directory exists
         std::fs::create_dir_all(&self.storage_dir)?;
-        
+
         // Use fixed filename for singleton profile - no more renaming chaos
         let file_path = self.storage_dir.join(&self.profile_filename);
-        
+
         let json = serde_json::to_string_pretty(profile)?;
         std::fs::write(file_path, json)?;
         Ok(())
@@ -955,7 +1084,7 @@ impl DeviceBatteryProfile {
             health_metrics: BatteryHealthMetrics::default(),
             depletion_rates: DepletionRateBuffer::new(MAX_DEPLETION_SAMPLES),
             last_left_level: None,
-            last_right_level: None, 
+            last_right_level: None,
             last_case_level: None,
         }
     }
@@ -963,7 +1092,7 @@ impl DeviceBatteryProfile {
     /// Add a significant event to history
     pub fn add_event(&mut self, event: BatteryEvent) {
         self.events.push_back(event);
-        
+
         // Limit history size
         while self.events.len() > MAX_EVENTS {
             self.events.pop_front();
@@ -983,13 +1112,13 @@ impl DeviceBatteryProfile {
         right_in_ear: bool,
     ) {
         let now = SystemTime::now();
-        
+
         // --- Process left earbud depletion data ---
         if let Some(level) = left {
             // If charging, reset last level tracking
             if left_charging {
                 self.last_left_level = None;
-            } 
+            }
             // If not charging, track depletion rate
             else if let Some((last_level, last_time)) = self.last_left_level {
                 // Only process if battery is discharging and we have >= 10% drop
@@ -998,10 +1127,10 @@ impl DeviceBatteryProfile {
                     if let Ok(elapsed) = now.duration_since(last_time) {
                         let minutes = elapsed.as_secs() as f32 / 60.0;
                         let percent_drop = last_level - level;
-                        
+
                         // Calculate minutes per 1% depletion
                         let minutes_per_percent = minutes / percent_drop as f32;
-                        
+
                         // Create and add the sample
                         let sample = DepletionRateSample {
                             timestamp: now,
@@ -1010,16 +1139,18 @@ impl DeviceBatteryProfile {
                             start_percent: last_level,
                             end_percent: level,
                         };
-                        
+
                         self.depletion_rates.add_sample(sample);
-                        
+
                         // Debug logging of rate change
                         log::debug!(
                             "Left earbud depletion rate sample: {}% to {}% at {:.1} minutes per 1%",
-                            last_level, level, minutes_per_percent
+                            last_level,
+                            level,
+                            minutes_per_percent
                         );
                     }
-                    
+
                     // Update last level to current level after significant drop
                     self.last_left_level = Some((level, now));
                 }
@@ -1028,13 +1159,13 @@ impl DeviceBatteryProfile {
                 self.last_left_level = Some((level, now));
             }
         }
-        
+
         // --- Process right earbud depletion data ---
         if let Some(level) = right {
             // If charging, reset last level tracking
             if right_charging {
                 self.last_right_level = None;
-            } 
+            }
             // If not charging, track depletion rate
             else if let Some((last_level, last_time)) = self.last_right_level {
                 // Only process if battery is discharging and we have >= 10% drop
@@ -1043,10 +1174,10 @@ impl DeviceBatteryProfile {
                     if let Ok(elapsed) = now.duration_since(last_time) {
                         let minutes = elapsed.as_secs() as f32 / 60.0;
                         let percent_drop = last_level - level;
-                        
+
                         // Calculate minutes per 1% depletion
                         let minutes_per_percent = minutes / percent_drop as f32;
-                        
+
                         // Create and add the sample
                         let sample = DepletionRateSample {
                             timestamp: now,
@@ -1055,16 +1186,16 @@ impl DeviceBatteryProfile {
                             start_percent: last_level,
                             end_percent: level,
                         };
-                        
+
                         self.depletion_rates.add_sample(sample);
-                        
+
                         // Debug logging of rate change
                         log::debug!(
                             "Right earbud depletion rate sample: {}% to {}% at {:.1} minutes per 1%",
                             last_level, level, minutes_per_percent
                         );
                     }
-                    
+
                     // Update last level to current level after significant drop
                     self.last_right_level = Some((level, now));
                 }
@@ -1073,13 +1204,13 @@ impl DeviceBatteryProfile {
                 self.last_right_level = Some((level, now));
             }
         }
-        
+
         // --- Process case depletion data ---
         if let Some(level) = case {
             // If charging, reset last level tracking
             if case_charging {
                 self.last_case_level = None;
-            } 
+            }
             // If not charging, track depletion rate
             else if let Some((last_level, last_time)) = self.last_case_level {
                 // Only process if battery is discharging and we have >= 10% drop
@@ -1088,10 +1219,10 @@ impl DeviceBatteryProfile {
                     if let Ok(elapsed) = now.duration_since(last_time) {
                         let minutes = elapsed.as_secs() as f32 / 60.0;
                         let percent_drop = last_level - level;
-                        
+
                         // Calculate minutes per 1% depletion
                         let minutes_per_percent = minutes / percent_drop as f32;
-                        
+
                         // Create and add the sample
                         let sample = DepletionRateSample {
                             timestamp: now,
@@ -1100,16 +1231,18 @@ impl DeviceBatteryProfile {
                             start_percent: last_level,
                             end_percent: level,
                         };
-                        
+
                         self.depletion_rates.add_sample(sample);
-                        
+
                         // Debug logging of rate change
                         log::debug!(
                             "Case depletion rate sample: {}% to {}% at {:.1} minutes per 1%",
-                            last_level, level, minutes_per_percent
+                            last_level,
+                            level,
+                            minutes_per_percent
                         );
                     }
-                    
+
                     // Update last level to current level after significant drop
                     self.last_case_level = Some((level, now));
                 }
@@ -1118,7 +1251,7 @@ impl DeviceBatteryProfile {
                 self.last_case_level = Some((level, now));
             }
         }
-        
+
         // Update current state
         self.current_left = left;
         self.current_right = right;
@@ -1129,7 +1262,7 @@ impl DeviceBatteryProfile {
         self.left_in_ear = left_in_ear;
         self.right_in_ear = right_in_ear;
         self.last_update = Some(now);
-        
+
         // Update session data
         if left_in_ear || right_in_ear {
             // Start or continue a session
@@ -1147,20 +1280,20 @@ impl DeviceBatteryProfile {
             // End session
             self.current_session = None;
         }
-        
+
         // Update max observed values for health tracking
         if let Some(left_level) = left {
             if !left_charging && left_level > self.health_metrics.max_observed_left {
                 self.health_metrics.max_observed_left = left_level;
             }
         }
-        
+
         if let Some(right_level) = right {
             if !right_charging && right_level > self.health_metrics.max_observed_right {
                 self.health_metrics.max_observed_right = right_level;
             }
         }
-        
+
         if let Some(case_level) = case {
             if !case_charging && case_level > self.health_metrics.max_observed_case {
                 self.health_metrics.max_observed_case = case_level;
@@ -1171,13 +1304,19 @@ impl DeviceBatteryProfile {
     /// Update discharge models based on recent events
     pub fn update_models(&mut self) {
         // Analyze recent discharge events to update models
-        let discharge_events: Vec<_> = self.events.iter()
+        let discharge_events: Vec<_> = self
+            .events
+            .iter()
             .filter(|e| e.event_type == BatteryEventType::Discharge)
             .collect();
 
         if discharge_events.len() >= 2 {
             // Calculate discharge rates for different usage patterns
-            for pattern in [UsagePattern::Light, UsagePattern::Moderate, UsagePattern::Heavy] {
+            for pattern in [
+                UsagePattern::Light,
+                UsagePattern::Moderate,
+                UsagePattern::Heavy,
+            ] {
                 if let Some(model) = self.calculate_discharge_model(&pattern) {
                     self.discharge_models.insert(pattern, model);
                 }
@@ -1187,7 +1326,9 @@ impl DeviceBatteryProfile {
 
     /// Calculate discharge model for a specific usage pattern
     fn calculate_discharge_model(&self, pattern: &UsagePattern) -> Option<DischargeModel> {
-        let relevant_events: Vec<_> = self.events.iter()
+        let relevant_events: Vec<_> = self
+            .events
+            .iter()
             .filter(|e| self.classify_usage_pattern(e) == *pattern)
             .collect();
 
@@ -1196,11 +1337,11 @@ impl DeviceBatteryProfile {
         }
 
         let mut rates = Vec::new();
-        
+
         for window in relevant_events.windows(2) {
             let prev = &window[0];
             let curr = &window[1];
-            
+
             if let (Some(prev_left), Some(curr_left)) = (prev.left_battery, curr.left_battery) {
                 if let Ok(duration) = curr.timestamp.duration_since(prev.timestamp) {
                     let hours = duration.as_secs_f32() / 3600.0;
@@ -1217,7 +1358,8 @@ impl DeviceBatteryProfile {
         }
 
         let avg_rate = rates.iter().sum::<f32>() / rates.len() as f32;
-        let variance = rates.iter().map(|r| (r - avg_rate).powi(2)).sum::<f32>() / rates.len() as f32;
+        let variance =
+            rates.iter().map(|r| (r - avg_rate).powi(2)).sum::<f32>() / rates.len() as f32;
         let confidence = (1.0 / (1.0 + variance)).min(1.0);
 
         Some(DischargeModel {
@@ -1243,7 +1385,8 @@ impl DeviceBatteryProfile {
         // Classify based on session duration and battery drain
         if let Some(duration) = event.session_duration {
             let hours = duration.as_secs_f32() / 3600.0;
-            if hours > 0.1 { // At least 6 minutes
+            if hours > 0.1 {
+                // At least 6 minutes
                 // Estimate discharge rate from session
                 // This is simplified - real implementation would track session start/end
                 return UsagePattern::Moderate;
@@ -1254,14 +1397,18 @@ impl DeviceBatteryProfile {
     }
 
     /// Create a new Kalman filter estimator for a specific target
-    fn create_kalman_estimator(&self, target: DepletionTarget, initial_level: f32) -> KalmanBatteryEstimator {
+    fn create_kalman_estimator(
+        &self,
+        target: DepletionTarget,
+        initial_level: f32,
+    ) -> KalmanBatteryEstimator {
         // Determine if the device is currently charging
         let is_charging = match target {
             DepletionTarget::LeftEarbud => self.left_charging,
             DepletionTarget::RightEarbud => self.right_charging,
             DepletionTarget::Case => self.case_charging,
         };
-        
+
         // Get the initial discharge rate from historical data if available
         let discharge_rate = if let Some(rate) = self.depletion_rates.get_median_rate(target) {
             // Convert from minutes per 1% to percentage per minute
@@ -1277,7 +1424,7 @@ impl DeviceBatteryProfile {
                 DepletionTarget::Case => 0.01, // ~1% per hour when idle
             }
         };
-        
+
         KalmanBatteryEstimator {
             state_estimate: initial_level,
             estimate_uncertainty: INITIAL_ESTIMATE_UNCERTAINTY,
@@ -1290,30 +1437,30 @@ impl DeviceBatteryProfile {
             confidence: 0.8, // Start with reasonable confidence
         }
     }
-    
+
     /// Update Kalman filter with new measurement
     fn update_kalman_estimator(
         &mut self,
         estimator: &mut KalmanBatteryEstimator,
         measurement: Option<u8>,
         is_charging: bool,
-        in_use: bool
+        in_use: bool,
     ) {
         let now = SystemTime::now();
-        
+
         // Handle charging state change
         if estimator.is_charging != is_charging {
             estimator.is_charging = is_charging;
             estimator.estimate_uncertainty += 1.0; // Increase uncertainty on charging state change
         }
-        
+
         // Initialize minutes_elapsed outside the if block so it's available throughout the function
         let mut minutes_elapsed = 0.0;
-        
+
         // Time update (prediction step)
         if let Ok(elapsed) = now.duration_since(estimator.last_update) {
             minutes_elapsed = elapsed.as_secs() as f32 / 60.0;
-            
+
             // Only apply discharge prediction if not charging
             if !estimator.is_charging {
                 // Adjust discharge rate based on usage and target
@@ -1328,11 +1475,11 @@ impl DeviceBatteryProfile {
                         DepletionTarget::Case => 0.1, // Idle case drains very slowly
                     }
                 };
-                
+
                 // Apply more accurate prediction based on minutes per percent model
                 // Convert discharge_rate from percentage per minute to predicted drop
                 let predicted_drop = estimator.discharge_rate * minutes_elapsed * usage_factor;
-                
+
                 // Update state prediction with clamping
                 estimator.state_estimate -= predicted_drop;
                 estimator.state_estimate = estimator.state_estimate.max(0.0).min(100.0);
@@ -1343,46 +1490,47 @@ impl DeviceBatteryProfile {
                     DepletionTarget::LeftEarbud | DepletionTarget::RightEarbud => 1.0, // 1% per minute
                     DepletionTarget::Case => 0.3, // Case charges slower
                 };
-                
+
                 let predicted_increase = charging_rate * minutes_elapsed;
                 estimator.state_estimate += predicted_increase;
                 estimator.state_estimate = estimator.state_estimate.min(100.0);
-                
+
                 // Charging has its own uncertainty
                 estimator.estimate_uncertainty += 0.02 * minutes_elapsed;
             }
-            
+
             // Process noise increases with time
             estimator.estimate_uncertainty += estimator.process_noise * minutes_elapsed;
         }
-        
+
         // Measurement update (correction step)
         if let Some(measured_level) = measurement {
             // Convert to float
             let measured_level_f32 = measured_level as f32;
-            
+
             // Calculate Kalman gain
-            let kalman_gain = estimator.estimate_uncertainty / 
-                (estimator.estimate_uncertainty + estimator.measurement_noise);
-            
+            let kalman_gain = estimator.estimate_uncertainty
+                / (estimator.estimate_uncertainty + estimator.measurement_noise);
+
             // Update state estimate with measurement
             let innovation = measured_level_f32 - estimator.state_estimate;
             estimator.state_estimate += kalman_gain * innovation;
-            
+
             // Update estimate uncertainty
             estimator.estimate_uncertainty *= 1.0 - kalman_gain;
-            
+
             // Update confidence based on uncertainty
             estimator.confidence = (1.0 / (1.0 + estimator.estimate_uncertainty)).min(1.0);
-            
+
             // Update discharge rate if not charging and we have enough data
             if !estimator.is_charging && innovation < -1.0 && minutes_elapsed > 5.0 {
                 // Calculate new discharge rate (percentage per minute)
                 let new_rate = -innovation / minutes_elapsed;
-                
+
                 // Blend with existing rate (exponential smoothing)
                 // Use more weight on new observations for faster adaptation
-                if new_rate > 0.0 && new_rate < 1.0 { // Sanity check
+                if new_rate > 0.0 && new_rate < 1.0 {
+                    // Sanity check
                     estimator.discharge_rate = 0.7 * estimator.discharge_rate + 0.3 * new_rate;
                 }
             }
@@ -1391,16 +1539,16 @@ impl DeviceBatteryProfile {
             estimator.estimate_uncertainty += 0.5;
             estimator.confidence *= 0.95; // Gradually reduce confidence
         }
-        
+
         // Clamp values to valid ranges
         estimator.state_estimate = estimator.state_estimate.max(0.0).min(100.0);
         estimator.estimate_uncertainty = estimator.estimate_uncertainty.max(0.1);
         estimator.confidence = estimator.confidence.max(0.1).min(1.0);
-        
+
         // Update timestamp
         estimator.last_update = now;
     }
-    
+
     /// Get battery estimate using Kalman filter
     fn get_kalman_battery_estimate(
         &self,
@@ -1408,24 +1556,33 @@ impl DeviceBatteryProfile {
         last_update: Option<SystemTime>,
         target: DepletionTarget,
         is_charging: bool,
-        in_use: bool
+        in_use: bool,
     ) -> BatteryEstimate {
         // If we have a very recent measurement, just use it directly
         if let (Some(measured_level), Some(update_time)) = (level, last_update) {
             if let Ok(time_since) = SystemTime::now().duration_since(update_time) {
-                if time_since < Duration::from_secs(30) { // Very recent (30 seconds)
+                if time_since < Duration::from_secs(30) {
+                    // Very recent (30 seconds)
                     return BatteryEstimate {
                         level: measured_level as f32,
                         is_real_data: true,
                         confidence: 1.0,
-                        time_to_next_10_percent: self.predict_time_until_drop(measured_level, 10, target),
+                        time_to_next_10_percent: self.predict_time_until_drop(
+                            measured_level,
+                            10,
+                            target,
+                        ),
                         time_to_critical: self.predict_time_until_level(measured_level, 10, target),
-                        usage_pattern: Some(if is_charging { UsagePattern::Charging } else { UsagePattern::Moderate }),
+                        usage_pattern: Some(if is_charging {
+                            UsagePattern::Charging
+                        } else {
+                            UsagePattern::Moderate
+                        }),
                     };
                 }
             }
         }
-        
+
         // Create a temporary Kalman estimator based on the current state
         let mut estimator = if let Some(level_value) = level {
             self.create_kalman_estimator(target, level_value as f32)
@@ -1438,45 +1595,57 @@ impl DeviceBatteryProfile {
             };
             self.create_kalman_estimator(target, default_level as f32)
         };
-        
+
         // If we have a last update time, simulate time passing
         if let Some(update_time) = last_update {
             estimator.last_update = update_time;
-            
+
             // We can't call self.update_kalman_estimator here because self is not mutable
             // Instead, we'll perform a simplified update directly
-            
+
             let now = SystemTime::now();
-            
+
             // Simple time update (prediction only, no measurement update)
             if let Ok(elapsed) = now.duration_since(update_time) {
                 let minutes_elapsed = elapsed.as_secs() as f32 / 60.0;
-                
+
                 // Only apply discharge prediction if not charging
                 if !estimator.is_charging {
                     // Adjust discharge rate based on usage
                     let usage_factor = if in_use { 1.0 } else { 0.5 };
                     let predicted_drop = estimator.discharge_rate * minutes_elapsed * usage_factor;
-                    
+
                     // Update state prediction
                     estimator.state_estimate -= predicted_drop;
                     estimator.state_estimate = estimator.state_estimate.max(0.0).min(100.0);
                 }
-                
+
                 // Update confidence based on time elapsed
                 let time_factor = (1.0 / (1.0 + minutes_elapsed / 60.0)).min(1.0); // Reduce confidence as time passes
                 estimator.confidence *= time_factor;
             }
         }
-        
+
         // Create battery estimate from Kalman state
         BatteryEstimate {
             level: estimator.state_estimate,
             is_real_data: false,
             confidence: estimator.confidence,
-            time_to_next_10_percent: self.predict_time_until_drop(estimator.state_estimate as u8, 10, target),
-            time_to_critical: self.predict_time_until_level(estimator.state_estimate as u8, 10, target),
-            usage_pattern: Some(if is_charging { UsagePattern::Charging } else { UsagePattern::Moderate }),
+            time_to_next_10_percent: self.predict_time_until_drop(
+                estimator.state_estimate as u8,
+                10,
+                target,
+            ),
+            time_to_critical: self.predict_time_until_level(
+                estimator.state_estimate as u8,
+                10,
+                target,
+            ),
+            usage_pattern: Some(if is_charging {
+                UsagePattern::Charging
+            } else {
+                UsagePattern::Moderate
+            }),
         }
     }
 
@@ -1488,7 +1657,7 @@ impl DeviceBatteryProfile {
             self.last_update,
             DepletionTarget::LeftEarbud,
             self.left_charging,
-            in_use
+            in_use,
         )
     }
 
@@ -1500,7 +1669,7 @@ impl DeviceBatteryProfile {
             self.last_update,
             DepletionTarget::RightEarbud,
             self.right_charging,
-            in_use
+            in_use,
         )
     }
 
@@ -1513,12 +1682,17 @@ impl DeviceBatteryProfile {
             self.last_update,
             DepletionTarget::Case,
             self.case_charging,
-            in_use
+            in_use,
         )
     }
 
     /// Predict time until battery drops by a specified percentage
-    fn predict_time_until_drop(&self, current: u8, percent_drop: u8, target: DepletionTarget) -> Option<Duration> {
+    fn predict_time_until_drop(
+        &self,
+        current: u8,
+        percent_drop: u8,
+        target: DepletionTarget,
+    ) -> Option<Duration> {
         if current <= percent_drop {
             return None; // Can't drop below 0%
         }
@@ -1532,7 +1706,12 @@ impl DeviceBatteryProfile {
     }
 
     /// Predict time until battery reaches a specific level
-    fn predict_time_until_level(&self, current: u8, target_level: u8, target: DepletionTarget) -> Option<Duration> {
+    fn predict_time_until_level(
+        &self,
+        current: u8,
+        target_level: u8,
+        target: DepletionTarget,
+    ) -> Option<Duration> {
         if current <= target_level {
             return None; // Already at or below target level
         }
@@ -1580,7 +1759,7 @@ impl DepletionRateBuffer {
             case_samples: VecDeque::with_capacity(max_samples),
         }
     }
-    
+
     /// Add a new depletion rate sample to the appropriate buffer
     pub fn add_sample(&mut self, sample: DepletionRateSample) {
         let target_buffer = match sample.target {
@@ -1588,14 +1767,14 @@ impl DepletionRateBuffer {
             DepletionTarget::RightEarbud => &mut self.right_samples,
             DepletionTarget::Case => &mut self.case_samples,
         };
-        
+
         if target_buffer.len() >= self.max_samples {
             target_buffer.pop_front(); // Remove oldest sample
         }
-        
+
         target_buffer.push_back(sample);
     }
-    
+
     /// Get the median depletion rate for a specific target
     pub fn get_median_rate(&self, target: DepletionTarget) -> Option<f32> {
         let samples = match target {
@@ -1603,18 +1782,16 @@ impl DepletionRateBuffer {
             DepletionTarget::RightEarbud => &self.right_samples,
             DepletionTarget::Case => &self.case_samples,
         };
-        
+
         if samples.is_empty() {
             return None;
         }
-        
+
         // Get a copy of all the rates so we can sort them
-        let mut rates: Vec<f32> = samples.iter()
-            .map(|s| s.minutes_per_percent)
-            .collect();
-        
+        let mut rates: Vec<f32> = samples.iter().map(|s| s.minutes_per_percent).collect();
+
         rates.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-        
+
         // Return median rate
         let mid = rates.len() / 2;
         if rates.len() % 2 == 0 && rates.len() >= 2 {
@@ -1627,7 +1804,7 @@ impl DepletionRateBuffer {
             None
         }
     }
-    
+
     /// Get the mean depletion rate for a specific target
     pub fn get_mean_rate(&self, target: DepletionTarget) -> Option<f32> {
         let samples = match target {
@@ -1635,15 +1812,15 @@ impl DepletionRateBuffer {
             DepletionTarget::RightEarbud => &self.right_samples,
             DepletionTarget::Case => &self.case_samples,
         };
-        
+
         if samples.is_empty() {
             return None;
         }
-        
+
         let sum: f32 = samples.iter().map(|s| s.minutes_per_percent).sum();
         Some(sum / samples.len() as f32)
     }
-    
+
     /// Get the number of samples for a specific target
     pub fn get_sample_count(&self, target: DepletionTarget) -> usize {
         match target {
@@ -1652,7 +1829,7 @@ impl DepletionRateBuffer {
             DepletionTarget::Case => self.case_samples.len(),
         }
     }
-    
+
     /// Calculate confidence based on sample count
     pub fn get_confidence(&self, target: DepletionTarget) -> f32 {
         let count = self.get_sample_count(target) as f32;
@@ -1680,43 +1857,61 @@ mod tests {
     fn test_significance_filtering() {
         let temp_dir = TempDir::new().unwrap();
         let mut intelligence = BatteryIntelligence::new(temp_dir.path().to_path_buf());
-        
+
         // Create a device profile
         intelligence.ensure_device_profile("test_device", "Test Device");
-        
+
         // First update - should be significant (new device)
         intelligence.update_device_battery(
-            "test_device", "Test Device",
-            Some(80), Some(75), Some(90),
-            false, false, false,
-            true, true,
-            Some(-45)
+            "test_device",
+            "Test Device",
+            Some(80),
+            Some(75),
+            Some(90),
+            false,
+            false,
+            false,
+            true,
+            true,
+            Some(-45),
         );
-        
+
         let profile = &intelligence.device_profile.as_ref().unwrap();
         assert_eq!(profile.events.len(), 1);
-        
+
         // Second update with same values - should not be significant
         intelligence.update_device_battery(
-            "test_device", "Test Device",
-            Some(80), Some(75), Some(90),
-            false, false, false,
-            true, true,
-            Some(-45)
+            "test_device",
+            "Test Device",
+            Some(80),
+            Some(75),
+            Some(90),
+            false,
+            false,
+            false,
+            true,
+            true,
+            Some(-45),
         );
-        
+
         let profile = &intelligence.device_profile.as_ref().unwrap();
         assert_eq!(profile.events.len(), 1); // No new event added
-        
+
         // Update with significant battery change - should be significant
         intelligence.update_device_battery(
-            "test_device", "Test Device",
-            Some(70), Some(65), Some(80), // 10% drop
-            false, false, false,
-            true, true,
-            Some(-45)
+            "test_device",
+            "Test Device",
+            Some(70),
+            Some(65),
+            Some(80), // 10% drop
+            false,
+            false,
+            false,
+            true,
+            true,
+            Some(-45),
         );
-        
+
         let profile = &intelligence.device_profile.as_ref().unwrap();
         assert_eq!(profile.events.len(), 2); // New event added
     }
@@ -1725,23 +1920,29 @@ mod tests {
     fn test_battery_estimation() {
         let temp_dir = TempDir::new().unwrap();
         let mut intelligence = BatteryIntelligence::new(temp_dir.path().to_path_buf());
-        
+
         // Create a device profile
         intelligence.ensure_device_profile("test_device", "Test Device");
-        
+
         // Add some battery data
         intelligence.update_device_battery(
-            "test_device", "Test Device",
-            Some(80), Some(75), Some(90),
-            false, false, false,
-            true, true,
-            Some(-45)
+            "test_device",
+            "Test Device",
+            Some(80),
+            Some(75),
+            Some(90),
+            false,
+            false,
+            false,
+            true,
+            true,
+            Some(-45),
         );
-        
+
         // Get estimates
         let estimates = intelligence.get_battery_estimates();
         assert!(estimates.is_some());
-        
+
         let (left, right, case) = estimates.unwrap();
         assert_eq!(left.level.round() as u8, 80);
         assert_eq!(right.level.round() as u8, 75);
@@ -1755,22 +1956,31 @@ mod tests {
     fn test_event_classification() {
         let temp_dir = TempDir::new().unwrap();
         let mut intelligence = BatteryIntelligence::new(temp_dir.path().to_path_buf());
-        
+
         // Create a device profile
         intelligence.ensure_device_profile("test_device", "Test Device");
-        
+
         // Test charging started event
         intelligence.update_device_battery(
-            "test_device", "Test Device",
-            Some(50), Some(50), Some(50),
-            true, true, true, // Charging started
-            false, false,
-            Some(-45)
+            "test_device",
+            "Test Device",
+            Some(50),
+            Some(50),
+            Some(50),
+            true,
+            true,
+            true, // Charging started
+            false,
+            false,
+            Some(-45),
         );
-        
+
         let profile = &intelligence.device_profile.as_ref().unwrap();
         assert_eq!(profile.events.len(), 1);
-        assert_eq!(profile.events[0].event_type, BatteryEventType::ChargingStarted);
+        assert_eq!(
+            profile.events[0].event_type,
+            BatteryEventType::ChargingStarted
+        );
     }
 
     #[test]
@@ -1779,40 +1989,40 @@ mod tests {
         // Ensure storage directory exists
         std::fs::create_dir_all(temp_dir.path()).unwrap();
         let mut intelligence = BatteryIntelligence::new(temp_dir.path().to_path_buf());
-        
+
         // Create a device profile with default name
         intelligence.ensure_device_profile("635a3f0e3d1d", "AirPods Pro 2");
-        
+
         // Save the profile to create the initial file
         intelligence.save().unwrap();
-        
+
         // Check that the singleton file exists (fixed filename)
         let profile_file = temp_dir.path().join("battery_profile.json");
         assert!(profile_file.exists());
-        
+
         // Verify initial content
         let content = fs::read_to_string(&profile_file).unwrap();
         assert!(content.contains("\"device_name\": \"AirPods Pro 2\""));
         assert!(content.contains("\"device_address\": \"635a3f0e3d1d\""));
-        
+
         // Change the device name to a custom name (singleton adapts in-place)
         intelligence.ensure_device_profile("635a3f0e3d1d", "Jay AirPods Pro");
-        
+
         // Save again (same file, no renaming)
         intelligence.save().unwrap();
-        
+
         // Same file should still exist (no file renaming in singleton pattern)
         assert!(profile_file.exists());
-        
+
         // Verify the content has the updated name (same file, updated content)
         let content = fs::read_to_string(&profile_file).unwrap();
         assert!(content.contains("\"device_name\": \"Jay AirPods Pro\""));
         assert!(content.contains("\"device_address\": \"635a3f0e3d1d\""));
-        
+
         // Change to a different device entirely (singleton adapts to new device)
         intelligence.ensure_device_profile("aa:bb:cc:dd:ee:ff", "Different AirPods");
         intelligence.save().unwrap();
-        
+
         // Same file should still exist, but now contains different device data
         assert!(profile_file.exists());
         let content = fs::read_to_string(&profile_file).unwrap();
@@ -1825,35 +2035,35 @@ mod tests {
         // Create a temporary directory for testing
         let temp_dir = TempDir::new().unwrap();
         let mut intelligence = BatteryIntelligence::new(temp_dir.path().to_path_buf());
-        
+
         // Ensure we have a device profile
         intelligence.ensure_device_profile("test_device", "Test AirPods");
-        
+
         // Get the profile
         let profile = intelligence.device_profile.as_mut().unwrap();
-        
+
         // Create a Kalman estimator
         let mut estimator = profile.create_kalman_estimator(DepletionTarget::LeftEarbud, 80.0);
-        
+
         // Initial state
         assert_eq!(estimator.state_estimate, 80.0);
         assert!(estimator.confidence > 0.0);
-        
+
         // Test prediction step (time update)
         // Simulate 30 minutes passing
         let now = SystemTime::now();
         estimator.last_update = now - Duration::from_secs(30 * 60);
-        
+
         // Update with no measurement
         profile.update_kalman_estimator(&mut estimator, None, false, true);
-        
+
         // Should have predicted some battery drop
         assert!(estimator.state_estimate < 80.0);
         assert!(estimator.confidence < 0.8); // Confidence should decrease
-        
+
         // Test correction step (measurement update)
         profile.update_kalman_estimator(&mut estimator, Some(75), false, true);
-        
+
         // Should have corrected toward the measurement
         assert!(estimator.state_estimate >= 74.0 && estimator.state_estimate <= 76.0);
         assert!(estimator.confidence > 0.5); // Confidence should increase with measurement
@@ -1864,34 +2074,37 @@ mod tests {
         // Create a temporary directory for testing
         let temp_dir = TempDir::new().unwrap();
         let mut intelligence = BatteryIntelligence::new(temp_dir.path().to_path_buf());
-        
+
         // Ensure we have a device profile
         intelligence.ensure_device_profile("test_device", "Test AirPods");
-        
+
         // Get the profile
         let profile = intelligence.device_profile.as_mut().unwrap();
-        
+
         // Create a Kalman estimator with initial charging state
         let mut estimator = profile.create_kalman_estimator(DepletionTarget::LeftEarbud, 50.0);
         estimator.is_charging = true;
-        
+
         // Initial state
         assert_eq!(estimator.state_estimate, 50.0);
-        
+
         // Test prediction step while charging
         // Simulate 30 minutes passing
         let now = SystemTime::now();
         estimator.last_update = now - Duration::from_secs(30 * 60);
-        
+
         // Update with no measurement (charging)
         profile.update_kalman_estimator(&mut estimator, None, true, false);
-        
+
         // Should have predicted battery increase while charging (about 30 minutes * 1% per minute = ~30%)
-        assert!(estimator.state_estimate > 50.0, "Battery level should increase while charging");
-        
+        assert!(
+            estimator.state_estimate > 50.0,
+            "Battery level should increase while charging"
+        );
+
         // Test with charging state change
         profile.update_kalman_estimator(&mut estimator, Some(80), false, false);
-        
+
         // Should have updated state and recognized charging state change
         assert!(!estimator.is_charging);
         assert_eq!(estimator.state_estimate, 80.0); // Updated to match the actual measurement
@@ -1902,42 +2115,54 @@ mod tests {
         // Create a temporary directory for testing
         let temp_dir = TempDir::new().unwrap();
         let mut intelligence = BatteryIntelligence::new(temp_dir.path().to_path_buf());
-        
+
         // Add initial battery data
         intelligence.update_device_battery(
-            "test_device", "Test AirPods",
-            Some(80), Some(75), Some(90),
-            false, false, false,
-            true, true,
-            Some(-45)
+            "test_device",
+            "Test AirPods",
+            Some(80),
+            Some(75),
+            Some(90),
+            false,
+            false,
+            false,
+            true,
+            true,
+            Some(-45),
         );
-        
+
         // Get estimates immediately (should be close to actual values)
         let estimates = intelligence.get_battery_estimates().unwrap();
         assert!((estimates.0.level - 80.0).abs() < 1.0);
         assert!((estimates.1.level - 75.0).abs() < 1.0);
         assert!((estimates.2.level - 90.0).abs() < 1.0);
-        
+
         // Simulate time passing without updates
         let profile = intelligence.device_profile.as_mut().unwrap();
         profile.last_update = Some(SystemTime::now() - Duration::from_secs(60 * 60)); // 1 hour
-        
+
         // Get estimates again (should predict some battery drop)
         let estimates = intelligence.get_battery_estimates().unwrap();
         assert!(estimates.0.level < 80.0);
         assert!(estimates.1.level < 75.0);
         assert!(estimates.2.level < 90.0);
         assert!(!estimates.0.is_real_data);
-        
+
         // Update with new measurements
         intelligence.update_device_battery(
-            "test_device", "Test AirPods",
-            Some(70), Some(65), Some(85),
-            false, false, false,
-            true, true,
-            Some(-45)
+            "test_device",
+            "Test AirPods",
+            Some(70),
+            Some(65),
+            Some(85),
+            false,
+            false,
+            false,
+            true,
+            true,
+            Some(-45),
         );
-        
+
         // Get estimates again (should be close to new values)
         let estimates = intelligence.get_battery_estimates().unwrap();
         assert!((estimates.0.level - 70.0).abs() < 1.0);

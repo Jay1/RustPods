@@ -295,7 +295,8 @@ fn test_mixed_battery_levels() {
         .battery
         .as_ref()
         .unwrap()
-        .charging {
+        .charging
+    {
         assert!(!state.is_left_charging(), "Left should not be charging");
         assert!(state.is_right_charging(), "Right should be charging");
         assert!(!state.is_case_charging(), "Case should not be charging");
@@ -422,7 +423,8 @@ fn test_all_combinations_charging() {
         .battery
         .as_ref()
         .unwrap()
-        .charging {
+        .charging
+    {
         assert!(
             !state.is_left_charging(),
             "Combination 1: Left should not be charging"
@@ -445,7 +447,8 @@ fn test_all_combinations_charging() {
         .battery
         .as_ref()
         .unwrap()
-        .charging {
+        .charging
+    {
         assert!(
             state.is_left_charging(),
             "Combination 2: Left should be charging"
@@ -468,7 +471,8 @@ fn test_all_combinations_charging() {
         .battery
         .as_ref()
         .unwrap()
-        .charging {
+        .charging
+    {
         assert!(
             !state.is_left_charging(),
             "Combination 3: Left should not be charging"
@@ -491,7 +495,8 @@ fn test_all_combinations_charging() {
         .battery
         .as_ref()
         .unwrap()
-        .charging {
+        .charging
+    {
         assert!(
             state.is_left_charging(),
             "Combination 4: Left should be charging"
@@ -514,7 +519,8 @@ fn test_all_combinations_charging() {
         .battery
         .as_ref()
         .unwrap()
-        .charging {
+        .charging
+    {
         assert!(
             !state.is_left_charging(),
             "Combination 5: Left should not be charging"
@@ -537,7 +543,8 @@ fn test_all_combinations_charging() {
         .battery
         .as_ref()
         .unwrap()
-        .charging {
+        .charging
+    {
         assert!(
             state.is_left_charging(),
             "Combination 6: Left should be charging"
@@ -560,7 +567,8 @@ fn test_all_combinations_charging() {
         .battery
         .as_ref()
         .unwrap()
-        .charging {
+        .charging
+    {
         assert!(
             !state.is_left_charging(),
             "Combination 7: Left should not be charging"
@@ -583,7 +591,8 @@ fn test_all_combinations_charging() {
         .battery
         .as_ref()
         .unwrap()
-        .charging {
+        .charging
+    {
         assert!(
             state.is_left_charging(),
             "Combination 8: Left should be charging"

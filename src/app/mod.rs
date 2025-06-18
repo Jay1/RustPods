@@ -125,10 +125,16 @@ impl App {
         );
 
         // TEMP: Debug WinRT device query
-                    crate::debug_log!("bluetooth", "About to call get_connected_bluetooth_devices()");
+        crate::debug_log!(
+            "bluetooth",
+            "About to call get_connected_bluetooth_devices()"
+        );
         // WinRT async device enumeration is currently disabled due to interop issues.
         // Use the Win32 SetupAPI fallback or comment out this block for now.
-                    crate::debug_log!("bluetooth", "Finished call to get_connected_bluetooth_devices()");
+        crate::debug_log!(
+            "bluetooth",
+            "Finished call to get_connected_bluetooth_devices()"
+        );
 
         // TEMP: Query and print connected AirPods using WinRT
         // WinRT async AirPods enumeration is currently disabled due to interop issues.
@@ -245,7 +251,9 @@ impl App {
             // Check if we got valid battery information
             if !status.has_battery_info() {
                 // No battery info available, might indicate connection issue
-                std::mem::drop(error_tx.send(Message::ShowToast("Reconnection attempt".to_string())));
+                std::mem::drop(
+                    error_tx.send(Message::ShowToast("Reconnection attempt".to_string())),
+                );
                 return;
             }
 
